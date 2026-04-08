@@ -18,18 +18,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.storage.TokenManager
 
 @Composable
-fun PinUnlockScreen(navController: NavHostController) {
+fun PinUnlockScreen(navController: NavHostController, isSetup: Boolean = false) {
     var pin by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val maxPin = 4
     val navy = Color(0xFF1E2240)
 
     LaunchedEffect(pin) {
         if (pin.length == maxPin) {
-            // TODO: Validate PIN
-            navController.navigate(Routes.Dashboard.route) {
-                popUpTo(Routes.PinUnlock.route) { inclusive = true }
+            val savedPin = if (isSetup) null else TokenManager.getPin()
+            if (isSetup) {
+                TokenManager.savePin(pin)
+                navController.navigate(Routes.Dashboard.route) {
+                    popUpTo(Routes.LockSetup.route) { inclusive = true }
+                }
+            } else if (savedPin == pin) {
+                navController.navigate(Routes.Dashboard.route) {
+                    popUpTo(Routes.PinUnlock.route) { inclusive = true }
+                }
+            } else {
+                errorMessage = "Incorrect PIN"
+                pin = ""
             }
         }
     }
@@ -60,6 +72,11 @@ fun PinUnlockScreen(navController: NavHostController) {
                     )
                 }
             }
+        }
+
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = errorMessage!!, color = Color(0xFFE74C3C), fontSize = 14.sp)
         }
 
         Spacer(modifier = Modifier.weight(1f))

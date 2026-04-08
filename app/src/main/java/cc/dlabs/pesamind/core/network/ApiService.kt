@@ -1,16 +1,24 @@
 package cc.dlabs.pesamind.core.network
-
+import cc.dlabs.pesamind.core.network.models.Account
+import cc.dlabs.pesamind.core.network.models.AnalyticsResponse
+import cc.dlabs.pesamind.core.network.models.AuthResponse
+import cc.dlabs.pesamind.core.network.models.Budget
+import cc.dlabs.pesamind.core.network.models.LoginRequest
+import cc.dlabs.pesamind.core.network.models.RefreshRequest
+import cc.dlabs.pesamind.core.network.models.RegisterRequest
+import cc.dlabs.pesamind.core.network.models.Transaction
+import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 
 interface ApiService {
-    @POST("users/register")
-    suspend fun register(@Body body: RegisterRequest): Response<AuthResponse>
-
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): Response<AuthResponse>
+
+    @POST("users/register")
+    suspend fun register(@Body body: RegisterRequest): Response<AuthResponse>
 
     @POST("auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): Response<AuthResponse>

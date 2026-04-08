@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.features.splash
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -14,21 +15,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.storage.TokenManager
+import cc.dlabs.pesamind.core.storage.TokenManager.LockState
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(navController: NavHostController) {
     val alpha by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = tween(durationMillis = 1000),
-        label = "splash_alpha"
+        animationSpec = tween(1000),
+        label = "alpha"
     )
 
     LaunchedEffect(Unit) {
-        delay(2000)
-        // TODO: Check if user is logged in
-        // If logged in → PinUnlock, else → Login
-        navController.navigate(Routes.Login.route) {
+        delay(1800)
+
+        val destination = when (TokenManager.getLockState()) {
+            LockState.NONE -> if (TokenManager.isLoggedIn()) Routes.LockSetup.route else Routes.Login.route
+            LockState.PIN -> Routes.PinUnlock.route
+            LockState.PATTERN -> Routes.PatternUnlock.route
+        }
+
+        navController.navigate(destination) {
             popUpTo(Routes.Splash.route) { inclusive = true }
         }
     }
@@ -43,24 +51,18 @@ fun SplashScreen(navController: NavHostController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.alpha(alpha)
         ) {
-            // Replace with your actual logo image when ready
+            Text("▲▲▲", color = Color(0xFF2ECC71), fontSize = 48.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
             Text(
-                text = "▲▲▲",
-                color = Color(0xFF2ECC71),
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Pesa\nMind",
+                "Pesa\nMind",
                 color = Color.White,
                 fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
                 lineHeight = 40.sp
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "Empowering Your Prosperity Path",
+                "Empowering Your Prosperity Path",
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 14.sp
             )

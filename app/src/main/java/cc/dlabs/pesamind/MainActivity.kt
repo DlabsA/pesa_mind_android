@@ -6,8 +6,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.navigation.compose.rememberNavController
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
+import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
+import android.app.Application
 
+class PesaMindApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        TokenManager.init(this)
+    }
+}
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

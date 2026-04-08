@@ -1,4 +1,6 @@
-package cc.dlabs.pesamind.core.network
+package cc.dlabs.pesamind.core.network.models
+
+import com.google.gson.annotations.SerializedName
 
 data class RegisterRequest(
     val name: String = "",
@@ -12,11 +14,14 @@ data class LoginRequest(
 )
 
 data class RefreshRequest(
+    @SerializedName("refresh_token")
     val refreshToken: String = ""
 )
 
 data class AuthResponse(
+    @SerializedName("access_token")
     val accessToken: String? = null,
+    @SerializedName("refresh_token")
     val refreshToken: String? = null,
     val message: String? = null
 )

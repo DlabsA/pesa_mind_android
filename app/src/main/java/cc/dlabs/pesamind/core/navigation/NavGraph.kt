@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import cc.dlabs.pesamind.features.auth.LockSetupScreen
 import cc.dlabs.pesamind.features.splash.SplashScreen
 import cc.dlabs.pesamind.features.auth.LoginScreen
 import cc.dlabs.pesamind.features.auth.PatternUnlockScreen
@@ -15,6 +16,9 @@ fun PesaMindNavGraph(navController: NavHostController) {
     NavHost(navController, startDestination = Routes.Splash.route) {
         composable(Routes.Splash.route) { SplashScreen(navController) }
         composable(Routes.Login.route) { LoginScreen(navController) }
+        composable(Routes.LockSetup.route) { LockSetupScreen(navController) }
+        composable(Routes.PinSetup.route) { PinUnlockScreen(navController, isSetup = true) }
+        composable(Routes.PatternSetup.route) { PatternUnlockScreen(navController, isSetup = true) }
         composable(Routes.PinUnlock.route) { PinUnlockScreen(navController) }
         composable(Routes.PatternUnlock.route) { PatternUnlockScreen(navController) }
         composable(Routes.Dashboard.route) { MainScreen(navController) }

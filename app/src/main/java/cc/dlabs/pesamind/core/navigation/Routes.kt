@@ -7,11 +7,14 @@ sealed class Routes(val route: String) {
     object Register : Routes("register")
     object PinUnlock : Routes("pin_unlock")
     object PatternUnlock : Routes("pattern_unlock")
+    object LockSetup : Routes("lock_setup")
+    object PinSetup : Routes("pin_setup")
+    object PatternSetup : Routes("pattern_setup")
 
     // Main (bottom nav)
     object Dashboard : Routes("dashboard")
     object Analytics : Routes("analytics")
-    object Tools : Routes("tools")       // budget
+    object Tools : Routes("tools")
     object Settings : Routes("settings")
     object Home : Routes("home")
 

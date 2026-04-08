@@ -18,17 +18,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
-import kotlin.math.pow
-import kotlin.math.sqrt
+import cc.dlabs.pesamind.core.storage.TokenManager
+import kotlinx.coroutines.launch
 
 @Composable
-fun PatternUnlockScreen(navController: NavHostController) {
+fun PatternUnlockScreen(navController: NavHostController, isSetup: Boolean = false) {
     val navy = Color(0xFF1E2240)
     val teal = Color(0xFF1A9E8F)
-    val dotCount = 9
     val selectedDots = remember { mutableStateListOf<Int>() }
     var currentDragPos by remember { mutableStateOf<Offset?>(null) }
     val dotPositions = remember { mutableStateMapOf<Int, Offset>() }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun patternKey(): String = selectedDots.joinToString(",")
 
     Column(
         modifier = Modifier
@@ -45,6 +48,7 @@ fun PatternUnlockScreen(navController: NavHostController) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
+                            errorMessage = null
                             selectedDots.clear()
                             currentDragPos = offset
                             dotPositions.entries.forEach { (index, pos) ->
@@ -66,9 +70,21 @@ fun PatternUnlockScreen(navController: NavHostController) {
                         onDragEnd = {
                             currentDragPos = null
                             if (selectedDots.size >= 4) {
-                                // TODO: Validate pattern
-                                navController.navigate(Routes.Dashboard.route) {
-                                    popUpTo(Routes.PatternUnlock.route) { inclusive = true }
+                                val enteredPattern = patternKey()
+                                scope.launch {
+                                    if (isSetup) {
+                                        TokenManager.savePattern(enteredPattern)
+                                        navController.navigate(Routes.Dashboard.route) {
+                                            popUpTo(Routes.LockSetup.route) { inclusive = true }
+                                        }
+                                    } else if (TokenManager.getPattern() == enteredPattern) {
+                                        navController.navigate(Routes.Dashboard.route) {
+                                            popUpTo(Routes.PatternUnlock.route) { inclusive = true }
+                                        }
+                                    } else {
+                                        errorMessage = "Incorrect pattern"
+                                        selectedDots.clear()
+                                    }
                                 }
                             } else {
                                 selectedDots.clear()
@@ -132,8 +148,12 @@ fun PatternUnlockScreen(navController: NavHostController) {
 
         Text("Draw your pattern", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
 
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(errorMessage!!, color = Color(0xFFE74C3C), fontSize = 14.sp)
+        }
+
         Spacer(modifier = Modifier.weight(1f))
     }
 }
 
-private fun Offset.getDistance(): Float = sqrt(x.pow(2) + y.pow(2))
