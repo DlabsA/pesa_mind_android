@@ -1,3 +1,10 @@
+package cc.dlabs.pesamind.core.network
+
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
 object ApiClient {
     private const val BASE_URL = "http://YOUR_SERVER_IP:8080/"
 
@@ -10,12 +17,11 @@ object ApiClient {
                     level = HttpLoggingInterceptor.Level.BODY
                 })
                 .addInterceptor { chain ->
-                    // Attach JWT token to every request
-                    val token = TokenManager.getToken()
-                    val request = chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer $token")
-                        .build()
-                    chain.proceed(request)
+                    val requestBuilder = chain.request().newBuilder()
+                    TokenManager.getToken()
+                        .takeIf { it.isNotBlank() }
+                        ?.let { requestBuilder.addHeader("Authorization", "Bearer $it") }
+                    chain.proceed(requestBuilder.build())
                 }
                 .build()
         )

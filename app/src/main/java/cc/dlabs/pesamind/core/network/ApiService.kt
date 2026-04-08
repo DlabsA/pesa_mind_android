@@ -1,3 +1,10 @@
+package cc.dlabs.pesamind.core.network
+
+import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+
 interface ApiService {
     @POST("users/register")
     suspend fun register(@Body body: RegisterRequest): Response<AuthResponse>
@@ -25,4 +32,4 @@ interface ApiService {
 
     @GET("health")
     suspend fun health(): Response<Unit>
-
+}
