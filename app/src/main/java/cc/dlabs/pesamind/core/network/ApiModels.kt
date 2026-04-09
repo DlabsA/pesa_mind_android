@@ -57,3 +57,23 @@ data class Budget(
     val limit: Double = 0.0,
     val spent: Double = 0.0
 )
+
+data class UpdateProfileRequest(
+    val username: String? = null,
+    val email: String? = null
+)
+
+data class ChangePasswordRequest(
+    val current_password: String,
+    val new_password: String,
+    val confirm_password: String
+)
+
+data class UserResponse(
+    val id: String,
+    @SerializedName("name")
+    val username: String,
+    val email: String,
+    val balance: Double,
+    val type: String
+)

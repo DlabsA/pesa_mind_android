@@ -102,6 +102,15 @@ object TokenManager {
         return appContext.dataStore.data.first()[PATTERN_KEY]
     }
 
+    suspend fun clearLock() {
+        appContext.dataStore.edit {
+            it[PIN_ENABLED] = false
+            it[PATTERN_ENABLED] = false
+            it.remove(PIN_KEY)
+            it.remove(PATTERN_KEY)
+        }
+    }
+
     suspend fun isPatternEnabled(): Boolean =
         if (!isInitialized()) false else appContext.dataStore.data.first()[PATTERN_ENABLED] ?: false
 }

@@ -10,6 +10,11 @@ import cc.dlabs.pesamind.features.auth.LoginScreen
 import cc.dlabs.pesamind.features.auth.PatternUnlockScreen
 import cc.dlabs.pesamind.features.auth.PinUnlockScreen
 import cc.dlabs.pesamind.features.home.MainScreen
+import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
+import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
+import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
+import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
+import cc.dlabs.pesamind.features.settings.security.SetPinScreen
 
 @Composable
 fun PesaMindNavGraph(navController: NavHostController) {
@@ -22,5 +27,12 @@ fun PesaMindNavGraph(navController: NavHostController) {
         composable(Routes.PinUnlock.route) { PinUnlockScreen(navController) }
         composable(Routes.PatternUnlock.route) { PatternUnlockScreen(navController) }
         composable(Routes.Dashboard.route) { MainScreen(navController) }
+
+        composable(Routes.SecuritySettings.route) { SecuritySettingsScreen(navController) }
+        composable(Routes.SetPin.route) { SetPinScreen(navController) }
+        composable(Routes.SetPattern.route) { SetPatternScreen(navController) }
+
+        composable(Routes.AccountSettings.route) { AccountSettingsScreen(navController) }
+        composable(Routes.ChangePassword.route) { ChangePasswordScreen(navController) }
     }
 }

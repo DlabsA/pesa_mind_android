@@ -78,7 +78,7 @@ fun MainScreen(rootNav: NavHostController) {
             composable(Routes.Home.route) { DashboardScreen() }
             composable(Routes.Analytics.route) { AnalyticsScreen() }
             composable(Routes.Tools.route) { BudgetScreen() }
-            composable(Routes.Settings.route) { SettingsScreen() }
+            composable(Routes.Settings.route) { SettingsScreen(rootNav) }
         }
     }
 }

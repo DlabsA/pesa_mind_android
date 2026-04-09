@@ -22,4 +22,13 @@ sealed class Routes(val route: String) {
     object AddTransaction : Routes("add_transaction")
     object Accounts : Routes("accounts")
     object BudgetDetail : Routes("budget_detail")
+
+    // Security in account settings
+    object SecuritySettings : Routes("security_settings")
+    object SetPin : Routes("set_pin")
+    object SetPattern : Routes("set_pattern")
+
+    //
+    object AccountSettings : Routes("account_settings")
+    object ChangePassword : Routes("change_password")
 }
