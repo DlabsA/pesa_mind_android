@@ -34,14 +34,22 @@ fun SettingsScreen(rootNav: NavHostController) {
 
     LaunchedEffect(Unit) {
         try {
-            account = AccountManager.getAccount()
-        } catch (e: Exception) {
-            accountError = e.message
+            val storedAccount = AccountManager.getAccount()
+            if (storedAccount.username.isBlank() && storedAccount.email.isBlank()) {
+                account = null
+                accountError = "Account details not found. Please sign in again."
+            } else {
+                account = storedAccount
+                accountError = null
+            }
+        } catch (_: Exception) {
+            account = null
+            accountError = "Failed to load account details"
         }
     }
 
-    val displayName = account?.username?.takeIf { it.isNotBlank() } ?: "User"
-    val displayEmail = account?.email?.takeIf { it.isNotBlank() } ?: "No email"
+    val displayName = account?.username.orEmpty()
+    val displayEmail = account?.email.orEmpty()
     val initial = displayName.firstOrNull()?.uppercase() ?: "U"
 
     // Logout confirmation dialog
@@ -55,6 +63,8 @@ fun SettingsScreen(rootNav: NavHostController) {
                     onClick = {
                         scope.launch {
                             TokenManager.clearTokens()
+                            TokenManager.clearLock()
+                            AccountManager.clearAccount()
                             rootNav.navigate(Routes.Login.route) {
                                 popUpTo(0) { inclusive = true }
                             }
@@ -94,7 +104,7 @@ fun SettingsScreen(rootNav: NavHostController) {
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = "J", // TODO: replace with real initial from user state
+                            text = initial,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = teal
@@ -102,16 +112,25 @@ fun SettingsScreen(rootNav: NavHostController) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "John Doe", // TODO: replace with real username
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                )
-                Text(
-                    text = "kk@gmail.com", // TODO: replace with real email
-                    fontSize = 13.sp,
-                    color = Color.Gray
-                )
+                if (accountError == null) {
+                    Text(
+                        text = displayName,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = displayEmail,
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                } else {
+                    Text(
+                        text = accountError ?: "",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
 

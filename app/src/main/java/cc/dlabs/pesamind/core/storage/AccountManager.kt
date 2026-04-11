@@ -25,6 +25,7 @@ object AccountManager {
     }
 
     suspend fun saveAccount(id: String, email: String, username: String, balance: String, type: String) {
+        if (!isInitialized()) return
         appContext.dataStore.edit {
             it[ID] = id
             it[Email] = email
@@ -33,16 +34,21 @@ object AccountManager {
             it[Type] = type
         }
     }
+
     suspend fun getAccount(): Account {
+        if (!isInitialized()) {
+            throw IllegalStateException("Account storage not initialized")
+        }
         val data = appContext.dataStore.data.first()
         return Account(
-            data[ID] ?: "",
-            data[Username] ?: "",
-            data[Email] ?: "",
-            data[Type] ?: "",
-            data[Balance]?.toDouble() ?: 0.0
+            id = data[ID] ?: "",
+            username = data[Username] ?: "",
+            email = data[Email] ?: "",
+            type = data[Type] ?: "",
+            balance = data[Balance]?.toDoubleOrNull() ?: 0.0
         )
     }
+
     suspend fun clearAccount() {
         if (!isInitialized()) return
         appContext.dataStore.edit {
