@@ -27,7 +27,7 @@ fun AccountSettingsScreen(
     vm: AccountViewModel = viewModel()
 ) {
     val state by vm.state.collectAsState()
-    val teal = Color(0xFF1A9E8F)
+    val teal = MaterialTheme.colorScheme.primary
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show success or error in snackbar

@@ -15,7 +15,9 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.network.models.AuthProfile
 import cc.dlabs.pesamind.core.network.models.LoginRequest
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.storage.TokenManager.LockState
 import kotlinx.coroutines.launch
@@ -46,6 +48,16 @@ fun LoginScreen(navController: NavHostController) {
                         // Save tokens
                         TokenManager.saveTokens(body.accessToken, body.refreshToken)
 
+                         if (body.profile != null) {
+                             AccountManager.saveAccount(
+                                 body.profile.id ?: "",
+                                 email = email.trim(),
+                                 body.profile.username ?: "",
+                                 body.profile.balance?.toString() ?: "",
+                                 body.profile.type ?: ""
+                             )
+                         }
+
                         // Check if user has set PIN or pattern
                         val destination = when (TokenManager.getLockState()) {
                             LockState.NONE -> Routes.LockSetup.route
@@ -56,7 +68,7 @@ fun LoginScreen(navController: NavHostController) {
                             popUpTo(Routes.Login.route) { inclusive = true }
                         }
                     } else {
-                        errorMessage = body?.message ?: "Invalid email or password"
+                        errorMessage = body?.error ?: "Invalid email or password"
                     }
                 } else {
                     errorMessage = when (response.code()) {

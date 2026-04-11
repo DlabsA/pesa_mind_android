@@ -9,11 +9,13 @@ import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import android.app.Application
+import cc.dlabs.pesamind.core.storage.AccountManager
 
 class PesaMindApp : Application() {
     override fun onCreate() {
         super.onCreate()
         TokenManager.init(this)
+        AccountManager.init(this)
     }
 }
 class MainActivity : ComponentActivity() {

@@ -23,7 +23,17 @@ data class AuthResponse(
     val accessToken: String? = null,
     @SerializedName("refresh_token")
     val refreshToken: String? = null,
-    val message: String? = null
+    val error: String? = null,
+    val profile: AuthProfile? = null
+)
+
+data class AuthProfile(
+    val id: String? = null,
+    @SerializedName("user_id")
+    val userId: String? = null,
+    val username: String? = null,
+    val type: String? = null,
+    val balance: Double? = null
 )
 
 data class AuthRegisterResponse(
@@ -34,7 +44,9 @@ data class AuthRegisterResponse(
 
 data class Account(
     val id: String = "",
-    val name: String = "",
+    val username: String = "",
+    val email: String = "",
+    val type: String = "",
     val balance: Double = 0.0
 )
 

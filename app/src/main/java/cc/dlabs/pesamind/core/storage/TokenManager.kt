@@ -23,7 +23,7 @@ object TokenManager {
     private val PIN_ENABLED = booleanPreferencesKey("pin_enabled")
     private val PATTERN_ENABLED = booleanPreferencesKey("pattern_enabled")
 
-    private lateinit var appContext: Context
+    lateinit var appContext: Context
 
     private fun isInitialized(): Boolean = ::appContext.isInitialized
 

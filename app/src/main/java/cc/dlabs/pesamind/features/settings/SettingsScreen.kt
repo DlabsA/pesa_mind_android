@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.network.models.Account
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.launch
 
@@ -26,6 +28,21 @@ fun SettingsScreen(rootNav: NavHostController) {
     val teal = Color(0xFF1A9E8F)
     val scope = rememberCoroutineScope()
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    var account by remember { mutableStateOf<Account?>(null) }
+    var accountError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        try {
+            account = AccountManager.getAccount()
+        } catch (e: Exception) {
+            accountError = e.message
+        }
+    }
+
+    val displayName = account?.username?.takeIf { it.isNotBlank() } ?: "User"
+    val displayEmail = account?.email?.takeIf { it.isNotBlank() } ?: "No email"
+    val initial = displayName.firstOrNull()?.uppercase() ?: "U"
 
     // Logout confirmation dialog
     if (showLogoutDialog) {
