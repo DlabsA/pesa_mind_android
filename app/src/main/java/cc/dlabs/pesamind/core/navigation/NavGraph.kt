@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.features.splash.SplashScreen
 import cc.dlabs.pesamind.features.auth.LoginScreen
 import cc.dlabs.pesamind.features.auth.PatternUnlockScreen
 import cc.dlabs.pesamind.features.auth.PinUnlockScreen
+import cc.dlabs.pesamind.features.auth.RegisterScreen
 import cc.dlabs.pesamind.features.home.MainScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
 import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
@@ -21,6 +22,7 @@ fun PesaMindNavGraph(navController: NavHostController) {
     NavHost(navController, startDestination = Routes.Splash.route) {
         composable(Routes.Splash.route) { SplashScreen(navController) }
         composable(Routes.Login.route) { LoginScreen(navController) }
+        composable(Routes.Register.route) { RegisterScreen(navController) }
         composable(Routes.LockSetup.route) { LockSetupScreen(navController) }
         composable(Routes.PinSetup.route) { PinUnlockScreen(navController, isSetup = true) }
         composable(Routes.PatternSetup.route) { PatternUnlockScreen(navController, isSetup = true) }

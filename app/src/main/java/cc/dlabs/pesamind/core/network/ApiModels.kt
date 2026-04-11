@@ -3,7 +3,7 @@ package cc.dlabs.pesamind.core.network.models
 import com.google.gson.annotations.SerializedName
 
 data class RegisterRequest(
-    val name: String = "",
+    val username: String = "",
     val email: String = "",
     val password: String = ""
 )
@@ -24,6 +24,12 @@ data class AuthResponse(
     @SerializedName("refresh_token")
     val refreshToken: String? = null,
     val message: String? = null
+)
+
+data class AuthRegisterResponse(
+    val id: String? = null,
+    val email: String? = null,
+    val error: String? = null,
 )
 
 data class Account(

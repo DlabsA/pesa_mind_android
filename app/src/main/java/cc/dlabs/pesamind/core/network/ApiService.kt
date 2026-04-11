@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.core.network
 import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.network.models.AnalyticsResponse
+import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.Budget
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -22,7 +23,7 @@ interface ApiService {
     suspend fun login(@Body body: LoginRequest): Response<AuthResponse>
 
     @POST("users/register")
-    suspend fun register(@Body body: RegisterRequest): Response<AuthResponse>
+    suspend fun register(@Body body: RegisterRequest): Response<AuthRegisterResponse>
 
     @POST("auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): Response<AuthResponse>
