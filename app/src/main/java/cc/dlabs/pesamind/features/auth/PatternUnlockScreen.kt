@@ -1,3 +1,4 @@
+// Updated PatternUnlockScreen.kt
 package cc.dlabs.pesamind.features.auth
 
 import androidx.compose.foundation.Canvas
@@ -16,20 +17,23 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
-import cc.dlabs.pesamind.core.storage.TokenManager
-import kotlinx.coroutines.launch
 
 @Composable
-fun PatternUnlockScreen(navController: NavHostController, isSetup: Boolean = false) {
+fun PatternUnlockScreen(
+    navController: NavHostController,
+    isSetup: Boolean = false,
+    vm: UnlockViewModel = viewModel()
+) {
     val navy = Color(0xFF1E2240)
     val teal = Color(0xFF1A9E8F)
     val selectedDots = remember { mutableStateListOf<Int>() }
     var currentDragPos by remember { mutableStateOf<Offset?>(null) }
     val dotPositions = remember { mutableStateMapOf<Int, Offset>() }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    val state by vm.state.collectAsState()
 
     fun patternKey(): String = selectedDots.joinToString(",")
 
@@ -71,20 +75,25 @@ fun PatternUnlockScreen(navController: NavHostController, isSetup: Boolean = fal
                             currentDragPos = null
                             if (selectedDots.size >= 4) {
                                 val enteredPattern = patternKey()
-                                scope.launch {
-                                    if (isSetup) {
-                                        TokenManager.savePattern(enteredPattern)
+                                if (isSetup) {
+                                    vm.setupPattern(enteredPattern) {
                                         navController.navigate(Routes.Dashboard.route) {
                                             popUpTo(Routes.LockSetup.route) { inclusive = true }
                                         }
-                                    } else if (TokenManager.getPattern() == enteredPattern) {
-                                        navController.navigate(Routes.Dashboard.route) {
-                                            popUpTo(Routes.PatternUnlock.route) { inclusive = true }
-                                        }
-                                    } else {
-                                        errorMessage = "Incorrect pattern"
-                                        selectedDots.clear()
                                     }
+                                } else {
+                                    vm.unlockWithPattern(
+                                        enteredPattern = enteredPattern,
+                                        onSuccess = {
+                                            navController.navigate(Routes.Dashboard.route) {
+                                                popUpTo(Routes.PatternUnlock.route) { inclusive = true }
+                                            }
+                                        },
+                                        onError = { error ->
+                                            errorMessage = error
+                                            selectedDots.clear()
+                                        }
+                                    )
                                 }
                             } else {
                                 selectedDots.clear()
@@ -148,12 +157,13 @@ fun PatternUnlockScreen(navController: NavHostController, isSetup: Boolean = fal
 
         Text("Draw your pattern", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
 
-        if (errorMessage != null) {
+        // Show error from viewmodel or local state
+        val displayError = errorMessage ?: state.errorMessage
+        if (displayError != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text(errorMessage!!, color = Color(0xFFE74C3C), fontSize = 14.sp)
+            Text(displayError, color = Color(0xFFE74C3C), fontSize = 14.sp)
         }
 
         Spacer(modifier = Modifier.weight(1f))
     }
 }
-

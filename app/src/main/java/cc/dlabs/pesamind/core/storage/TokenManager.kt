@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
+import kotlin.text.get
 
 private val Context.dataStore by preferencesDataStore("pesamind_prefs")
 
@@ -43,6 +44,11 @@ object TokenManager {
     suspend fun getToken(): String? {
         if (!isInitialized()) return null
         return appContext.dataStore.data.first()[TOKEN_KEY]
+    }
+
+    suspend fun getRefreshToken(): String? {
+        if (!isInitialized()) return null
+        return appContext.dataStore.data.first()[REFRESH_KEY]
     }
 
     suspend fun clearTokens() {

@@ -35,6 +35,25 @@ object AccountManager {
         }
     }
 
+    suspend fun saveEmail(email: String) {
+        if (!isInitialized()) return
+        appContext.dataStore.edit {
+            it[Email] = email
+        }
+    }
+    suspend fun saveUsername(username: String) {
+        if (!isInitialized()) return
+        appContext.dataStore.edit {
+            it[Username] = username
+        }
+    }
+    suspend fun saveBalance(balance: String) {
+        if (!isInitialized()) return
+        appContext.dataStore.edit {
+            it[Balance] = balance
+        }
+    }
+
     suspend fun getAccount(): Account {
         if (!isInitialized()) {
             throw IllegalStateException("Account storage not initialized")

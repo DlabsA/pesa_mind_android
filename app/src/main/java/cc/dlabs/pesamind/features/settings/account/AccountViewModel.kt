@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,6 +128,8 @@ class AccountViewModel : ViewModel() {
                         isSaving = false,
                         successMessage = "Profile updated successfully"
                     )
+                    AccountManager.saveEmail(current.email)
+                    AccountManager.saveUsername(current.username)
                 } else {
                     _state.value = _state.value.copy(
                         isSaving = false,
