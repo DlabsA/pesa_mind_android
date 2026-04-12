@@ -27,6 +27,9 @@ fun AccountSettingsScreen(
     vm: AccountViewModel = viewModel()
 ) {
     val state by vm.state.collectAsState()
+    val displayName = state.username
+    val displayEmail = state.email
+
     val teal = MaterialTheme.colorScheme.primary
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -96,8 +99,8 @@ fun AccountSettingsScreen(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(state.username, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                    Text(state.email, fontSize = 13.sp, color = Color.Gray)
+                    Text(displayName, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(displayEmail, fontSize = 13.sp, color = Color.Gray)
                 }
             }
 
@@ -112,7 +115,7 @@ fun AccountSettingsScreen(
 
             // ── Username field ───────────────────────────────
             OutlinedTextField(
-                value = state.username,
+                value = displayName,
                 onValueChange = { vm.onUsernameChange(it) },
                 label = { Text("Username") },
                 leadingIcon = {
@@ -125,7 +128,7 @@ fun AccountSettingsScreen(
 
             // ── Email field ──────────────────────────────────
             OutlinedTextField(
-                value = state.email,
+                value = displayEmail,
                 onValueChange = { vm.onEmailChange(it) },
                 label = { Text("Email") },
                 leadingIcon = {

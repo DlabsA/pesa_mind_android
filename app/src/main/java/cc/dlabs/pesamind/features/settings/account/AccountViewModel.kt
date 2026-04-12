@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
+import cc.dlabs.pesamind.core.storage.AccountManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.toString
 
 data class AccountState(
     val username: String = "",
@@ -31,17 +33,53 @@ class AccountViewModel : ViewModel() {
 
     private fun loadProfile() {
         viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
+
             try {
-                val response = ApiClient.api.getProfile()
-                if (response.isSuccessful) {
-                    val user = response.body()!!
+                val cachedAccount = AccountManager.getAccount()
+
+                val hasCachedData =
+                    cachedAccount.id.isNotBlank() ||
+                            cachedAccount.username.isNotBlank() ||
+                            cachedAccount.email.isNotBlank()
+
+                if (hasCachedData) {
                     _state.value = AccountState(
-                        username = user.username,
-                        email = user.email,
-                        balance = user.balance,
-                        type = user.type,
+                        username = cachedAccount.username,
+                        email = cachedAccount.email,
+                        balance = cachedAccount.balance,
+                        type = cachedAccount.type,
                         isLoading = false
                     )
+                    return@launch
+                }
+
+                val response = ApiClient.api.getProfile()
+                if (response.isSuccessful) {
+                    val user = response.body()
+
+                    if (user != null) {
+                        AccountManager.saveAccount(
+                            id = user.id,
+                            email = user.email,
+                            username = user.username,
+                            balance = user.balance.toString(),
+                            type = user.type
+                        )
+
+                        _state.value = AccountState(
+                            username = user.username,
+                            email = user.email,
+                            balance = user.balance,
+                            type = user.type,
+                            isLoading = false
+                        )
+                    } else {
+                        _state.value = _state.value.copy(
+                            isLoading = false,
+                            error = "Empty profile response"
+                        )
+                    }
                 } else {
                     _state.value = _state.value.copy(
                         isLoading = false,
@@ -51,12 +89,11 @@ class AccountViewModel : ViewModel() {
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isLoading = false,
-                    error = "Cannot reach server ${e.message}"
+                    error = "Cannot reach server: ${e.message}"
                 )
             }
         }
     }
-
     fun onUsernameChange(value: String) {
         _state.value = _state.value.copy(username = value, error = null)
     }
