@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -235,7 +237,7 @@ fun SettingsScreen(rootNav: NavHostController) {
         SettingsDivider()
 
         SettingsRow(
-            icon = Icons.Filled.HelpOutline,
+            icon = Icons.AutoMirrored.Filled.HelpOutline,
             iconTint = Color.Gray,
             title = "Help & Support",
             subtitle = null,
@@ -254,7 +256,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             horizontalArrangement = Arrangement.Center
         ) {
             Icon(
-                Icons.Filled.Logout,
+                Icons.AutoMirrored.Filled.Logout,
                 contentDescription = "Log Out",
                 tint = Color(0xFFE74C3C),
                 modifier = Modifier.size(20.dp)
