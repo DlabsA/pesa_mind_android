@@ -20,8 +20,8 @@ sealed class Routes(val route: String) {
 
     // Sub-screens
     object AddTransaction : Routes("add_transaction")
-    object Accounts : Routes("accounts")
-    object BudgetDetail : Routes("budget_detail")
+//    object Accounts : Routes("accounts")
+//    object BudgetDetail : Routes("budget_detail")
 
     // Security in account settings
     object SecuritySettings : Routes("security_settings")
@@ -31,4 +31,5 @@ sealed class Routes(val route: String) {
     //
     object AccountSettings : Routes("account_settings")
     object ChangePassword : Routes("change_password")
+    object Channels : Routes("channels")
 }

@@ -165,6 +165,16 @@ fun SettingsScreen(rootNav: NavHostController) {
             onClick = { /* TODO: navController.navigate(Routes.NotificationSettings.route) */ }
         )
 
+        SettingsDivider()
+
+        SettingsRow(
+            icon = Icons.Filled.Money,
+            iconTint = teal,
+            title = "Financial Channel",
+            subtitle = "Configure financial channels",
+            onClick = { rootNav.navigate(Routes.Channels.route) }
+        )
+
         Spacer(Modifier.height(8.dp))
 
         // ── Section: Preferences ─────────────────────────────

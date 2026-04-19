@@ -95,3 +95,34 @@ data class UserResponse(
     val balance: Double,
     val type: String
 )
+
+data class ChannelDetails(
+    val id: String = "",
+    @SerializedName("user_id")
+    val userId: String = "",
+    val name: String = "",
+    @SerializedName("channel_type")
+    val channelType: String = "",
+    val description: String = "",
+    @SerializedName("status")
+    val status: Boolean = false
+)
+
+data class CreateChannelRequest(
+    val name: String,
+    @SerializedName("channel_type")
+    val channelType: String,
+    val description: String,
+    val status: Boolean
+)
+
+data class UpdateChannelRequest(
+    val name: String,
+    val description: String,
+    val status: Boolean
+)
+
+data class ApiMessageResponse(
+    val message: String? = null,
+    val error: String? = null
+)

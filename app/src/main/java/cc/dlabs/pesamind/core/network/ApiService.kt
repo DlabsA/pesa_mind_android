@@ -17,6 +17,15 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import cc.dlabs.pesamind.core.network.models.ApiMessageResponse
+import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
+import retrofit2.http.DELETE
+import retrofit2.http.PUT
+import retrofit2.http.Path
+import retrofit2.http.Query
+
 
 interface ApiService {
     @POST("auth/login")
@@ -38,22 +47,49 @@ interface ApiService {
     @POST("users/me/change-password")
     suspend fun changePassword(@Body body: ChangePasswordRequest): Response<Unit>
 
-    @GET("accounts")
-    suspend fun getAccounts(): Response<List<Account>>
+//    @GET("accounts")
+//    suspend fun getAccounts(): Response<List<Account>>
+//
+//    @POST("transactions")
+//    suspend fun createTransaction(@Body body: TransactionRequest): Response<Transaction>
+//
+//    @GET("transactions")
+//    suspend fun getTransactions(): Response<List<Transaction>>
+//
+//    @GET("analytics")
+//    suspend fun getAnalytics(): Response<AnalyticsResponse>
+//
+//    @GET("budgets")
+//    suspend fun getBudgets(): Response<List<Budget>>
+//
+//    @GET("health")
+//    suspend fun health(): Response<Unit>
 
-    @POST("transactions")
-    suspend fun createTransaction(@Body body: TransactionRequest): Response<Transaction>
+    @GET("categories")
+    suspend fun getChannels(): Response<List<ChannelDetails>>
 
-    @GET("transactions")
-    suspend fun getTransactions(): Response<List<Transaction>>
+    @POST("categories")
+    suspend fun createChannel(@Body body: CreateChannelRequest): Response<ChannelDetails>
 
-    @GET("analytics")
-    suspend fun getAnalytics(): Response<AnalyticsResponse>
+    @GET("categories/channel-type")
+    suspend fun getChannelsByType(
+        @Query("channel_type") channelType: String
+    ): Response<List<ChannelDetails>>
 
-    @GET("budgets")
-    suspend fun getBudgets(): Response<List<Budget>>
+    @GET("categories/status")
+    suspend fun getChannelsByStatus(
+        @Query("status") status: Boolean
+    ): Response<List<ChannelDetails>>
 
-    @GET("health")
-    suspend fun health(): Response<Unit>
+    @PUT("categories/{id}")
+    suspend fun updateChannel(
+        @Path("id") id: String,
+        @Body body: UpdateChannelRequest
+    ): Response<ApiMessageResponse>
+
+    @DELETE("categories/{id}")
+    suspend fun deleteChannel(
+        @Path("id") id: String
+    ): Response<ApiMessageResponse>
 }
 

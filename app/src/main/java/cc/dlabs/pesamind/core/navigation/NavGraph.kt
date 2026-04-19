@@ -13,6 +13,7 @@ import cc.dlabs.pesamind.features.auth.RegisterScreen
 import cc.dlabs.pesamind.features.home.MainScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
 import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
+import cc.dlabs.pesamind.features.settings.channels.ChannelScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
@@ -36,5 +37,6 @@ fun PesaMindNavGraph(navController: NavHostController) {
 
         composable(Routes.AccountSettings.route) { AccountSettingsScreen(navController) }
         composable(Routes.ChangePassword.route) { ChangePasswordScreen(navController) }
+        composable(Routes.Channels.route) { ChannelScreen(navController) }
     }
 }
