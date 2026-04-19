@@ -2,7 +2,9 @@
 
 ## Getting Started
 
-After cloning, install repository Git hooks so branch protections run locally:
+Git hooks are installed automatically when you run common Gradle tasks (for example dependency resolution/build tasks).
+
+If you need to install or refresh them manually:
 
 ```bash
 ./.githooks/install-hooks.sh

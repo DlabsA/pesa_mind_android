@@ -2,7 +2,9 @@
 
 ## Onboarding (Required)
 
-Install Git hooks once after cloning:
+Git hooks are installed automatically when you run common Gradle tasks (for example dependency resolution/build tasks).
+
+If you want to install them immediately after cloning, run:
 
 ```bash
 ./.githooks/install-hooks.sh
