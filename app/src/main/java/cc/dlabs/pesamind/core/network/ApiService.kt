@@ -8,8 +8,6 @@ import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
-import cc.dlabs.pesamind.core.network.models.Transaction
-import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.network.models.UserResponse
 import retrofit2.Response
@@ -22,7 +20,6 @@ import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
 import retrofit2.http.DELETE
-import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -81,7 +78,7 @@ interface ApiService {
         @Query("status") status: Boolean
     ): Response<List<ChannelDetails>>
 
-    @PUT("categories/{id}")
+    @PATCH("categories/{id}")
     suspend fun updateChannel(
         @Path("id") id: String,
         @Body body: UpdateChannelRequest
