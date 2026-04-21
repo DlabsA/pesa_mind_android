@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,6 +69,7 @@ fun ChannelScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var showTypeFilterDialog by remember { mutableStateOf(false) }
     var currentTypeFilter by remember { mutableStateOf("") }
+    var currentStatusFilter by remember { mutableStateOf(ChannelStatusFilter.ALL) }
     var pendingDelete by remember { mutableStateOf<ChannelDetails?>(null) }
     var editingChannel by remember { mutableStateOf<ChannelDetails?>(null) }
 
@@ -110,22 +113,48 @@ fun ChannelScreen(
         ) {
             ChannelFilters(
                 currentTypeFilter = currentTypeFilter,
+                currentStatusFilter = currentStatusFilter,
                 onAll = {
                     currentTypeFilter = ""
+                    currentStatusFilter = ChannelStatusFilter.ALL
                     vm.loadChannels()
                 },
                 onActive = {
                     currentTypeFilter = ""
+                    currentStatusFilter = ChannelStatusFilter.ACTIVE
                     vm.loadChannelsByStatus(true)
                 },
                 onInactive = {
                     currentTypeFilter = ""
+                    currentStatusFilter = ChannelStatusFilter.INACTIVE
                     vm.loadChannelsByStatus(false)
                 },
                 onType = { showTypeFilterDialog = true }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            if (currentTypeFilter.isNotBlank() || currentStatusFilter != ChannelStatusFilter.ALL) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = activeFilterLabel(currentTypeFilter, currentStatusFilter),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = {
+                        currentTypeFilter = ""
+                        currentStatusFilter = ChannelStatusFilter.ALL
+                        vm.loadChannels()
+                    }) {
+                        Text("Clear filters")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (state.isLoading && state.channels.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -231,22 +260,44 @@ fun ChannelScreen(
 @Composable
 private fun ChannelFilters(
     currentTypeFilter: String,
+    currentStatusFilter: ChannelStatusFilter,
     onAll: () -> Unit,
     onActive: () -> Unit,
     onInactive: () -> Unit,
     onType: () -> Unit
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AssistChip(onClick = onAll, label = { Text("All") })
-        AssistChip(onClick = onActive, label = { Text("Active") })
-        AssistChip(onClick = onInactive, label = { Text("Inactive") })
-        AssistChip(
-            onClick = onType,
-            label = {
-                val label = if (currentTypeFilter.isBlank()) "By Type" else "Type: $currentTypeFilter"
-                Text(label)
-            }
-        )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        item {
+            FilterChip(
+                selected = currentStatusFilter == ChannelStatusFilter.ALL && currentTypeFilter.isBlank(),
+                onClick = onAll,
+                label = { Text("All") }
+            )
+        }
+        item {
+            FilterChip(
+                selected = currentStatusFilter == ChannelStatusFilter.ACTIVE,
+                onClick = onActive,
+                label = { Text("Active") }
+            )
+        }
+        item {
+            FilterChip(
+                selected = currentStatusFilter == ChannelStatusFilter.INACTIVE,
+                onClick = onInactive,
+                label = { Text("Inactive") }
+            )
+        }
+        item {
+            FilterChip(
+                selected = currentTypeFilter.isNotBlank(),
+                onClick = onType,
+                label = {
+                    val label = if (currentTypeFilter.isBlank()) "By Type" else "Type: ${displayChannelType(currentTypeFilter)}"
+                    Text(label)
+                }
+            )
+        }
     }
 }
 
@@ -258,21 +309,38 @@ private fun ChannelCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(item.name, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Type: ${displayChannelType(item.channelType)}", style = MaterialTheme.typography.bodySmall)
-            Text(
-                text = if (item.status) "Status: Active" else "Status: Inactive",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            if (item.description.isNotBlank()) {
-                Text(item.description, style = MaterialTheme.typography.bodyMedium)
-                Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(item.name, fontWeight = FontWeight.SemiBold)
+                AssistChip(
+                    onClick = {},
+                    enabled = false,
+                    label = { Text(if (item.status) "Active" else "Inactive") }
+                )
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Type: ${displayChannelType(item.channelType)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (item.description.isNotBlank()) {
+                Text(
+                    text = item.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = "No description",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
 
             HorizontalDivider()
             Spacer(modifier = Modifier.height(6.dp))
@@ -297,6 +365,26 @@ private fun ChannelCard(
     }
 }
 
+private enum class ChannelStatusFilter {
+    ALL,
+    ACTIVE,
+    INACTIVE
+}
+
+private fun activeFilterLabel(typeFilter: String, statusFilter: ChannelStatusFilter): String {
+    val statusLabel = when (statusFilter) {
+        ChannelStatusFilter.ALL -> "All statuses"
+        ChannelStatusFilter.ACTIVE -> "Active"
+        ChannelStatusFilter.INACTIVE -> "Inactive"
+    }
+
+    return if (typeFilter.isBlank()) {
+        "Showing: $statusLabel"
+    } else {
+        "Showing: $statusLabel, ${displayChannelType(typeFilter)}"
+    }
+}
+
 @Composable
 private fun ChannelFormDialog(
     title: String,
@@ -318,6 +406,7 @@ private fun ChannelFormDialog(
     }
     var status by remember(title, initialStatus) { mutableStateOf(initialStatus) }
     var typeMenuExpanded by remember(title) { mutableStateOf(false) }
+    var statusMenuExpanded by remember(title, initialStatus) { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -371,15 +460,36 @@ private fun ChannelFormDialog(
                 }
 
                 if (showStatusField) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AssistChip(
-                            onClick = { status = true },
-                            label = { Text("Active") }
-                        )
-                        AssistChip(
-                            onClick = { status = false },
-                            label = { Text("Inactive") }
-                        )
+                    Text("Status", style = MaterialTheme.typography.labelLarge)
+                    Box {
+                        OutlinedButton(
+                            onClick = { statusMenuExpanded = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (status) "Active" else "Inactive")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                        }
+
+                        DropdownMenu(
+                            expanded = statusMenuExpanded,
+                            onDismissRequest = { statusMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Active") },
+                                onClick = {
+                                    status = true
+                                    statusMenuExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Inactive") },
+                                onClick = {
+                                    status = false
+                                    statusMenuExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }

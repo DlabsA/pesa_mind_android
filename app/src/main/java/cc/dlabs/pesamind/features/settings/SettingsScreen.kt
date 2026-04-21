@@ -160,16 +160,6 @@ fun SettingsScreen(rootNav: NavHostController) {
         SettingsDivider()
 
         SettingsRow(
-            icon = Icons.Filled.Notifications,
-            iconTint = teal,
-            title = "Notifications",
-            subtitle = "Manage alerts and reminders",
-            onClick = { /* TODO: navController.navigate(Routes.NotificationSettings.route) */ }
-        )
-
-        SettingsDivider()
-
-        SettingsRow(
             icon = Icons.Filled.Money,
             iconTint = teal,
             title = "Financial Channel",
@@ -177,7 +167,18 @@ fun SettingsScreen(rootNav: NavHostController) {
             onClick = { rootNav.navigate(Routes.Channels.route) }
         )
 
-        Spacer(Modifier.height(8.dp))
+        SettingsDivider()
+
+        SettingsRow(
+            icon = Icons.Filled.Notifications,
+            iconTint = teal,
+            title = "Notifications",
+            subtitle = "Manage alerts and reminders",
+            onClick = { /* TODO: navController.navigate(Routes.NotificationSettings.route) */ }
+        )
+
+
+
 
         // ── Section: Preferences ─────────────────────────────
         SettingsSectionHeader(title = "Preferences")
