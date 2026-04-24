@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.settings.channels
 
+import android.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
@@ -143,9 +144,11 @@ class ChannelViewModel : ViewModel() {
         name: String,
         description: String,
         channelType: String,
+        channelDescription: String = "",
         status: Boolean = true
     ) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
+        val normalizedChannelDesc = ChannelDescMobileMoney.normalizeOrNull(channelDescription) ?: ChannelDescBank.normalizeOrNull(channelDescription)
         when {
             name.isBlank() -> {
                 _state.value = _state.value.copy(error = "Name is required")
@@ -161,6 +164,10 @@ class ChannelViewModel : ViewModel() {
                 )
                 return
             }
+            normalizedType != ChannelTypes.CASH && (channelDescription.isBlank() || normalizedChannelDesc == null) -> {
+                _state.value = _state.value.copy(error = "Valid channel description is required for this type")
+                return
+            }
         }
 
         viewModelScope.launch {
@@ -170,7 +177,8 @@ class ChannelViewModel : ViewModel() {
                     CreateChannelRequest(
                         name = name.trim(),
                         description = description.trim(),
-                        channelType = normalizedType,
+                        channelType = normalizedType!!,
+                        channelDesc = normalizedChannelDesc ?: channelDescription.trim(),
                         status = status
                     )
                 )

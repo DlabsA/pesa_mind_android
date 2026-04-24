@@ -106,6 +106,8 @@ data class ChannelDetails(
     val description: String = "",
     @SerializedName("status")
     val status: Boolean = true,
+    @SerializedName("channel_desc")
+    val channelDesc: String = "",
     // Local-only field: SMS notification flag (not sent to backend)
     @Transient
     val smsNotificationEnabled: Boolean = true
@@ -116,6 +118,8 @@ data class CreateChannelRequest(
     @SerializedName("channel_type")
     val channelType: String,
     val description: String,
+    @SerializedName("channel_desc")
+    val channelDesc: String,
     val status: Boolean
 )
 
