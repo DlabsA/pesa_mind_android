@@ -36,46 +36,18 @@ class PesaMindApp : Application() {
 class MainActivity : ComponentActivity() {
 
     companion object {
-        private const val TAG = "MainActivity"
-
-        /**
-         * Permissions required for SMS reading + SIM identification.
-         *
-         * READ_PHONE_STATE  → needed for getActiveSubscriptionInfo() (all APIs)
-         * READ_PHONE_NUMBERS → needed for getPhoneNumber() on API 31+
-         *
-         * We build the list dynamically so we never request a permission
-         * that doesn't exist on the running API level.
-         */
-        fun buildRequiredPermissions(): Array<String> {
-            val permissions = mutableListOf(
-                Manifest.permission.RECEIVE_SMS,
-                Manifest.permission.READ_SMS,
-                Manifest.permission.READ_PHONE_STATE
-            )
-            // READ_PHONE_NUMBERS only exists on API 26+, only meaningful on 31+
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                permissions.add(Manifest.permission.READ_PHONE_NUMBERS)
+        private const val TAG = "PESAMIND"
+    }
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            val denied = results.filterValues { !it }.keys
+            if (denied.isNotEmpty()) {
+                handleDeniedPermissions(denied)
+            } else {
+                Log.d(TAG, "All permissions granted")
+                // Permissions granted – continue with SMS monitoring
             }
-            return permissions.toTypedArray()
         }
-    }
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val granted = results.filterValues { it }.keys
-        val denied = results.filterValues { !it }.keys
-
-        if (granted.isNotEmpty()) {
-            Log.d(TAG, "Permissions granted: $granted")
-        }
-        if (denied.isNotEmpty()) {
-            Log.w(TAG, "Permissions denied: $denied")
-            // TODO: Show a dialog explaining why these permissions are needed
-            // and guide the user to Settings if permanently denied
-            handleDeniedPermissions(denied)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
