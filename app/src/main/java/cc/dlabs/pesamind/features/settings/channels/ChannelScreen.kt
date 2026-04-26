@@ -862,16 +862,7 @@ private fun ChannelFormDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                // Description
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 3,
-                    shape = RoundedCornerShape(10.dp)
-                )
+
 
                 // Channel type
                 FormSectionLabel("Channel Type")
@@ -931,6 +922,16 @@ private fun ChannelFormDialog(
                         )
                     }
                 }
+                // Description
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 3,
+                    shape = RoundedCornerShape(10.dp)
+                )
 
                 // Channel sub-description (only for non-cash with editable type)
                 if (type != ChannelTypes.CASH && type.isNotBlank()) {
