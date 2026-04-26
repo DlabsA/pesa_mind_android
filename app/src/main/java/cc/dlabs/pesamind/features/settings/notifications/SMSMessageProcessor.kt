@@ -21,7 +21,9 @@ class SMSMessageProcessor(private val context: Context) {
     suspend fun processMessage(
         senderId: String,
         content: String,
-        timestamp: Long
+        timestamp: Long,
+        receivingSimSlot: Int,
+        receivingSimNumber: String
     ) = withContext(Dispatchers.IO) {
         try {
             // Step 1: Validate sender and content
@@ -31,6 +33,8 @@ class SMSMessageProcessor(private val context: Context) {
             }
 
             Log.d("SMSMessageProcessor", "Processing SMS from $senderId")
+            Log.d("SMSMessageProcessor", "Content: $content")
+            Log.d("SMSMessageProcessor", "Timestamp: $timestamp")
 
             // Step 2: Check if this sender/channel has SMS notifications enabled
             ChannelManager.init(context)
