@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -81,7 +82,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsProperties.ImeAction
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -95,6 +100,7 @@ import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
+
 
 private enum class FilterType { ALL, ACTIVE, INACTIVE, BY_TYPE }
 
@@ -922,17 +928,6 @@ private fun ChannelFormDialog(
                         )
                     }
                 }
-                // Description
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 3,
-                    shape = RoundedCornerShape(10.dp)
-                )
-
                 // Channel sub-description (only for non-cash with editable type)
                 if (type != ChannelTypes.CASH && type.isNotBlank()) {
                     FormSectionLabel("Provider")
@@ -981,6 +976,35 @@ private fun ChannelFormDialog(
                             }
                         }
                     }
+                }
+
+                // Description
+                if (type == ChannelTypes.MOBILE_MONEY){
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Mobile Number") },
+                        placeholder = { Text("07X XXX XXXX") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Phone
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 3,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+                else {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Description") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 3,
+                        shape = RoundedCornerShape(10.dp)
+                    )
                 }
 
                 // Status toggle (Switch instead of dropdown)
