@@ -1,11 +1,13 @@
 package cc.dlabs.pesamind.features.settings.channels
 
+import android.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
+import cc.dlabs.pesamind.core.storage.ChannelManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,15 +31,40 @@ class ChannelViewModel : ViewModel() {
         loadChannels()
     }
 
+    /**
+     * Load channels: first from local cache, then sync with backend
+     */
     fun loadChannels() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
+                // Step 1: Load from local cache first
+                val cachedChannels = ChannelManager.getChannels()
+                if (cachedChannels.isNotEmpty()) {
+                    _state.value = _state.value.copy(channels = cachedChannels)
+                }
+
+                // Step 2: Sync with backend
                 val response = ApiClient.api.getChannels()
                 if (response.isSuccessful) {
+                    val channels = response.body().orEmpty()
+                    
+                    // Restore SMS notification flags from local storage before saving
+                    val channelsWithFlags = channels.map { channel ->
+                        if (channel.channelType != "CASH") {
+                            val localFlag = ChannelManager.isSmsNotificationEnabled(channel.id)
+                            channel.copy(smsNotificationEnabled = localFlag)
+                        } else {
+                            channel
+                        }
+                    }
+
+                    // Save to local storage
+                    ChannelManager.saveChannels(channelsWithFlags)
+
                     _state.value = _state.value.copy(
                         isLoading = false,
-                        channels = response.body().orEmpty(),
+                        channels = channelsWithFlags,
                         error = null
                     )
                 } else {
@@ -117,9 +144,11 @@ class ChannelViewModel : ViewModel() {
         name: String,
         description: String,
         channelType: String,
+        channelDescription: String = "",
         status: Boolean = true
     ) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
+        val normalizedChannelDesc = ChannelDescMobileMoney.normalizeOrNull(channelDescription) ?: ChannelDescBank.normalizeOrNull(channelDescription)
         when {
             name.isBlank() -> {
                 _state.value = _state.value.copy(error = "Name is required")
@@ -135,6 +164,10 @@ class ChannelViewModel : ViewModel() {
                 )
                 return
             }
+            normalizedType != ChannelTypes.CASH && (channelDescription.isBlank() || normalizedChannelDesc == null) -> {
+                _state.value = _state.value.copy(error = "Valid channel description is required for this type")
+                return
+            }
         }
 
         viewModelScope.launch {
@@ -144,7 +177,8 @@ class ChannelViewModel : ViewModel() {
                     CreateChannelRequest(
                         name = name.trim(),
                         description = description.trim(),
-                        channelType = normalizedType,
+                        channelType = normalizedType!!,
+                        channelDesc = normalizedChannelDesc ?: channelDescription.trim(),
                         status = status
                     )
                 )
@@ -242,6 +276,44 @@ class ChannelViewModel : ViewModel() {
                     isDeleting = false,
                     error = "Cannot reach server: ${e.message ?: "Unknown error"}"
                 )
+            }
+        }
+    }
+
+    /**
+     * Toggle SMS notification flag for a channel (non-CASH only)
+     */
+    fun toggleSmsNotification(channelId: String) {
+        viewModelScope.launch {
+            try {
+                val currentChannels = _state.value.channels
+                val targetChannel = currentChannels.find { it.id == channelId } ?: return@launch
+
+                if (targetChannel.channelType == "CASH") {
+                    _state.value = _state.value.copy(error = "SMS notifications not available for CASH channels")
+                    return@launch
+                }
+
+                val newFlag = !targetChannel.smsNotificationEnabled
+
+                // Update local storage
+                ChannelManager.updateChannelSmsNotification(channelId, newFlag)
+
+                // Update state
+                val updatedChannels = currentChannels.map { channel ->
+                    if (channel.id == channelId) {
+                        channel.copy(smsNotificationEnabled = newFlag)
+                    } else {
+                        channel
+                    }
+                }
+
+                _state.value = _state.value.copy(
+                    channels = updatedChannels,
+                    message = "SMS notifications ${if (newFlag) "enabled" else "disabled"} for this channel"
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = "Failed to update notification setting: ${e.message}")
             }
         }
     }

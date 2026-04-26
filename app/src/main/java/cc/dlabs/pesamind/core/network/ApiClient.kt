@@ -9,7 +9,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object ApiClient {
     // ← Replace with your actual server IP
-    private const val BASE_URL = "http://173.212.219.227:8080/api/v1/"
+    const val BASE_URL = "http://173.212.219.227:8080/api/v1/"
 
     private val client = OkHttpClient.Builder()
         .addInterceptor(HttpLoggingInterceptor().apply {
@@ -22,6 +22,8 @@ object ApiClient {
             }.build()
             chain.proceed(request)
         }
+        // Add token refresh interceptor to handle 401 responses
+        .addInterceptor(TokenRefreshInterceptor())
         .build()
 
     val api: ApiService = Retrofit.Builder()
