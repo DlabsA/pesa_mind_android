@@ -98,6 +98,7 @@ import cc.dlabs.pesamind.core.theme.ExpenseRed
 import cc.dlabs.pesamind.core.theme.PesaMindGreen
 import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.features.settings.channels.COUNTRY_CODES
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 
@@ -248,7 +249,8 @@ fun ChannelScreen(
                             ChannelCard(
                                 item = channel,
                                 onEdit = { editingChannel = channel },
-                                onDelete = { pendingDelete = channel }
+                                onDelete = { pendingDelete = channel },
+                                onToggleSms = { vm.toggleSmsNotification(channel.id) }
                             )
                         }
                     }
@@ -578,7 +580,8 @@ private fun ChannelEmptyState(onAddClick: () -> Unit) {
 fun ChannelCard(
     item: ChannelDetails,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleSms: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -713,6 +716,29 @@ fun ChannelCard(
 
                 Spacer(Modifier.height(14.dp))
 
+                // SMS Notification Toggle (only for non-CASH channels)
+                if (item.channelType != "CASH") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "SMS Notifications",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                        )
+                        Switch(
+                            checked = item.smsNotificationEnabled,
+                            onCheckedChange = { onToggleSms() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = PesaMindTeal,
+                                uncheckedThumbColor = Color.LightGray
+                            )
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
                 // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -844,6 +870,8 @@ private fun ChannelFormDialog(
     var status by remember(title, initialStatus) { mutableStateOf(initialStatus) }
     var typeMenuExpanded by remember(title) { mutableStateOf(false) }
     var descMenuExpanded by remember(title) { mutableStateOf(false) }
+    var mobileNumber by remember { mutableStateOf("") }
+    var selectedCountry by remember { mutableStateOf(COUNTRY_CODES[0]) }
 
     val isFormValid = name.isNotBlank()
 
@@ -977,23 +1005,19 @@ private fun ChannelFormDialog(
                         }
                     }
                 }
-
+                    else{
+                    channelDescription = "Cash"
+                }
                 // Description
                 if (type == ChannelTypes.MOBILE_MONEY){
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Mobile Number") },
-                        placeholder = { Text("07X XXX XXXX") },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Phone
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        maxLines = 3,
-                        shape = RoundedCornerShape(10.dp)
+                    MobileMoneyNumberField(
+                        phoneNumber = mobileNumber,
+                        onPhoneNumberChange = { mobileNumber = it },
+                        selectedCountry = selectedCountry,
+                        onCountryChange = { selectedCountry = it },
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    description = "${selectedCountry.code}${mobileNumber.filter { it.isDigit() }}"
                 }
                 else {
                     OutlinedTextField(

@@ -82,6 +82,7 @@ class TokenRefreshInterceptor : Interceptor {
                     val authResponse = response.body()!!
                     
                     // Save new tokens
+                    TokenManager.clearTokens()
                     TokenManager.saveTokens(authResponse.accessToken, authResponse.refreshToken)
                     true
                 } else {

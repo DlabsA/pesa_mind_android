@@ -172,9 +172,9 @@ fun SettingsScreen(rootNav: NavHostController) {
         SettingsRow(
             icon = Icons.Filled.Notifications,
             iconTint = teal,
-            title = "Notifications",
-            subtitle = "Manage alerts and reminders",
-            onClick = { /* TODO: navController.navigate(Routes.NotificationSettings.route) */ }
+            title = "Transactions",
+            subtitle = "View recent Transactions",
+            onClick = { rootNav.navigate(Routes.TransactionList.route) }
         )
 
 

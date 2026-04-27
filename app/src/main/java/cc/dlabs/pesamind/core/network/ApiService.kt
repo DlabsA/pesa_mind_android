@@ -1,9 +1,6 @@
 package cc.dlabs.pesamind.core.network
-import cc.dlabs.pesamind.core.network.models.Account
-import cc.dlabs.pesamind.core.network.models.AnalyticsResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
-import cc.dlabs.pesamind.core.network.models.Budget
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
@@ -18,6 +15,8 @@ import retrofit2.http.POST
 import cc.dlabs.pesamind.core.network.models.ApiMessageResponse
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.core.network.models.TransactionDetails
+import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
 import retrofit2.http.DELETE
 import retrofit2.http.Path
@@ -43,24 +42,6 @@ interface ApiService {
 
     @POST("users/me/change-password")
     suspend fun changePassword(@Body body: ChangePasswordRequest): Response<Unit>
-
-//    @GET("accounts")
-//    suspend fun getAccounts(): Response<List<Account>>
-//
-//    @POST("transactions")
-//    suspend fun createTransaction(@Body body: TransactionRequest): Response<Transaction>
-//
-//    @GET("transactions")
-//    suspend fun getTransactions(): Response<List<Transaction>>
-//
-//    @GET("analytics")
-//    suspend fun getAnalytics(): Response<AnalyticsResponse>
-//
-//    @GET("budgets")
-//    suspend fun getBudgets(): Response<List<Budget>>
-//
-//    @GET("health")
-//    suspend fun health(): Response<Unit>
 
     @GET("categories")
     suspend fun getChannels(): Response<List<ChannelDetails>>
@@ -88,5 +69,11 @@ interface ApiService {
     suspend fun deleteChannel(
         @Path("id") id: String
     ): Response<ApiMessageResponse>
+
+    @GET("transactions")
+    suspend fun getTransactions(): Response<List<TransactionDetails>>
+
+    @POST("transactions")
+    suspend fun createTransaction(@Body body: TransactionRequest): Response<TransactionDetails>
 }
 

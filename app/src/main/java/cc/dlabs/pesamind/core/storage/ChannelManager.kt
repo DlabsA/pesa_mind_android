@@ -127,18 +127,24 @@ object ChannelManager {
     /**
      * Check if any channel with this sender ID has SMS notifications enabled
      */
-    suspend fun isSmsAllowedForSender(senderId: String): Boolean {
-        if (!isInitialized()) return false
+    data class ChannelInfo(val channel: ChannelDetails, val enabled: Boolean)
+    suspend fun isSmsAllowedForSender(receivingSimNumber: String): ChannelInfo {
+        if (!isInitialized()) {
+            return ChannelInfo(ChannelDetails(), false)
+        }
+
         try {
             val channels = getChannels()
             val matchingChannel = channels.find { 
-                it.channelType != "CASH" && 
-                (it.name.equals(senderId, ignoreCase = true) || 
-                 it.description.contains(senderId, ignoreCase = true))
+                it.channelType != "CASH" &&
+                 it.description.equals(receivingSimNumber, ignoreCase = true)
             }
-            return matchingChannel?.smsNotificationEnabled ?: false
+            return ChannelInfo(
+                channel = matchingChannel ?: ChannelDetails(),
+                enabled = matchingChannel?.smsNotificationEnabled ?: true
+            )
         } catch (e: Exception) {
-            return false
+            return ChannelInfo(ChannelDetails(), false)
         }
     }
 
