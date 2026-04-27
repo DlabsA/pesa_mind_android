@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -82,11 +81,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.SemanticsProperties.ImeAction
-import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -98,7 +93,6 @@ import cc.dlabs.pesamind.core.theme.ExpenseRed
 import cc.dlabs.pesamind.core.theme.PesaMindGreen
 import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
-import cc.dlabs.pesamind.features.settings.channels.COUNTRY_CODES
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.settings.notifications
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -110,7 +111,8 @@ private fun TransactionCard(tx: cc.dlabs.pesamind.core.network.models.Transactio
     val amountPrefix = if (tx.type.equals("income", ignoreCase = true)) "+" else "-"
     val formattedAmount = try {
         NumberFormat.getNumberInstance(Locale.getDefault()).format(tx.amount)
-    } catch (e: Exception) { tx.amount.toString() }
+    } catch (e: Exception) { tx.amount.toString()
+    Log.e("This is an error ", e.toString())}
     // No timestamp in TransactionDetails, so we skip date for now
     Card(
         modifier = Modifier
