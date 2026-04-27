@@ -32,15 +32,11 @@ class SMSMessageProcessor(private val context: Context) {
                 return@withContext
             }
 
-            Log.d("SMSMessageProcessor", "Processing SMS from $senderId")
-            Log.d("SMSMessageProcessor", "Content: $content")
-            Log.d("SMSMessageProcessor", "Timestamp: $timestamp")
-
             // Step 2: Check if this sender/channel has SMS notifications enabled
             ChannelManager.init(context)
-            val isAllowed = ChannelManager.isSmsAllowedForSender(senderId)
+            val channelInfo = ChannelManager.isSmsAllowedForSender(receivingSimNumber)
             
-            if (!isAllowed) {
+            if (!channelInfo.enabled) {
                 Log.d("SMSMessageProcessor", "Message from $senderId blocked - SMS notifications disabled for this channel")
                 return@withContext
             }

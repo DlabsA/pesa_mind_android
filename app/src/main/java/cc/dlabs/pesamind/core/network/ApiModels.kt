@@ -51,16 +51,21 @@ data class Account(
 )
 
 data class TransactionRequest(
-    val accountId: String = "",
     val amount: Double = 0.0,
-    val description: String = ""
+    val type: String = "",
+    val note: String = "",
+    @SerializedName("channel_details_id")
+    val channelId: String = ""
 )
 
-data class Transaction(
+data class TransactionDetails(
     val id: String = "",
-    val accountId: String = "",
     val amount: Double = 0.0,
-    val description: String = ""
+    val type: String = "",
+    val note: String = "",
+    @SerializedName("channel_details_name")
+    val channelDetailsName: String = "",
+    val username: String = "",
 )
 
 data class AnalyticsResponse(

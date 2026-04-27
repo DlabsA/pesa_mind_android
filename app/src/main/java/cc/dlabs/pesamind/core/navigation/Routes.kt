@@ -32,4 +32,6 @@ sealed class Routes(val route: String) {
     object AccountSettings : Routes("account_settings")
     object ChangePassword : Routes("change_password")
     object Channels : Routes("channels")
+
+    object TransactionList : Routes("transaction_list")
 }

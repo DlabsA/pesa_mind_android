@@ -34,18 +34,12 @@ class SmsReceiver : BroadcastReceiver() {
                 return
             }
 
-            // ✅ Resolve which SIM card received this SMS
             val receivingSimInfo = getReceivingSimInfo(context, intent)
 
             for (message in messages) {
                 val senderNumber = message.originatingAddress ?: "Unknown"
                 val messageBody = message.messageBody
                 val timestamp = message.timestampMillis
-
-                Log.d(TAG, "SMS received from: $senderNumber at $timestamp")
-                Log.d(TAG, "SMS body: $messageBody")   // ✅ Was logging wrong variable
-                Log.d(TAG, "Received on SIM slot: ${receivingSimInfo.slotIndex}, " +
-                        "number: ${receivingSimInfo.phoneNumber}")
 
                 scope.launch {
                     try {
@@ -60,11 +54,10 @@ class SmsReceiver : BroadcastReceiver() {
                             receivingSimNumber = receivingSimInfo.phoneNumber
                         )
 
-                        Log.d(TAG, "SMS processing completed for: $senderNumber")
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing SMS: ${e.message}", e)
                     } finally {
-                        pendingResult.finish() // ✅ Always release the wake lock
+                        pendingResult.finish()
                     }
                 }
             }

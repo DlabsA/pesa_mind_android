@@ -1,6 +1,5 @@
 package cc.dlabs.pesamind.features.settings.channels
 
-import android.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
@@ -177,7 +176,7 @@ class ChannelViewModel : ViewModel() {
                     CreateChannelRequest(
                         name = name.trim(),
                         description = description.trim(),
-                        channelType = normalizedType!!,
+                        channelType = normalizedType,
                         channelDesc = normalizedChannelDesc ?: channelDescription.trim(),
                         status = status
                     )
