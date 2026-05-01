@@ -64,6 +64,8 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.androidx.compose.animation.core)
     implementation(libs.androidx.foundation)
+    implementation(libs.androidx.compose.ui.text)
+    implementation(libs.foundation)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

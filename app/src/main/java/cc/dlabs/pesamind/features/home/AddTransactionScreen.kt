@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.navigation.NavHostController
 import java.text.NumberFormat
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Colours — income = green tint, expense = red tint, neutral = surface
@@ -163,16 +164,12 @@ fun AddTransactionScreen(
                         text = if (amountText.isEmpty()) {
                             "0"
                         } else {
-                            try {
                                 val number = amountText.toBigInteger()
-                                NumberFormat.getNumberInstance(Locale.getDefault())
+                                NumberFormat.getNumberInstance(LocalLocale.current.platformLocale)
                                     .apply<NumberFormat> {
                                         this.minimumFractionDigits = 0
                                         this.maximumFractionDigits = 0
                                     }.format(number)
-                            } catch (e: NumberFormatException) {
-                                amountText
-                            }
                         },
                         fontSize = 52.sp,
                         fontWeight = FontWeight.Black,
