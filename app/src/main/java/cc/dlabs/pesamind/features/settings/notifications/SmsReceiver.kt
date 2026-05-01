@@ -9,6 +9,7 @@ import android.provider.Telephony
 import android.telephony.SubscriptionManager
 import android.util.Log
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,12 +46,11 @@ class SmsReceiver : BroadcastReceiver() {
                     try {
                         NotificationStorage.init(context)
 
-                        val processor = SMSMessageProcessor(context)
+                        val processor = SMSMessageProcessor(context, TransactionViewModel())
                         processor.processMessage(
                             senderId = senderNumber,
                             content = messageBody,
                             timestamp = timestamp,
-                            receivingSimSlot = receivingSimInfo.slotIndex,
                             receivingSimNumber = receivingSimInfo.phoneNumber
                         )
 

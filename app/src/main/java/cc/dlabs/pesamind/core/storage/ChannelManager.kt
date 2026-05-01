@@ -141,7 +141,7 @@ object ChannelManager {
             }
             return ChannelInfo(
                 channel = matchingChannel ?: ChannelDetails(),
-                enabled = matchingChannel?.smsNotificationEnabled ?: true
+                enabled = matchingChannel?.smsNotificationEnabled ?: false
             )
         } catch (e: Exception) {
             return ChannelInfo(ChannelDetails(), false)

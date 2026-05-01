@@ -50,8 +50,8 @@ private val NeutralGray  = Color(0xFFF2F4F7)
 // ─────────────────────────────────────────────────────────────────────────────
 //  Transaction type constants — align with TransactionTypes.valid in ViewModel
 // ─────────────────────────────────────────────────────────────────────────────
-private const val TYPE_INCOME  = "income"
-private const val TYPE_EXPENSE = "expense"
+public const val TYPE_INCOME  = "income"
+public const val TYPE_EXPENSE = "expense"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
