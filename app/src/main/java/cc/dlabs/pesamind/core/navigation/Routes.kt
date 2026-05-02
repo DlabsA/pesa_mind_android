@@ -36,4 +36,5 @@ sealed class Routes(val route: String) {
     object TransactionList : Routes("transaction_list")
 
     object SetMonthlyBudget : Routes("set_monthly_budget")
+    object SetYearlyBudget : Routes("set_yearly_budget")
 }

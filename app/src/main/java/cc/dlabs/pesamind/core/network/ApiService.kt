@@ -115,6 +115,12 @@ interface ApiService {
     @GET("budgets/yearly")
     suspend fun getYearlyBudgets(): Response<List<YearlyBudgetResponse>>
 
+    @GET("budgets/yearly/by-year")
+    suspend fun getYearlyBudgetsByYear(
+        @Query("year") year: Long
+    ): Response<YearlyBudgetResponse>
+
+
     @POST("budgets/yearly")
     suspend fun createYearlyBudget(@Body body: CreateYearlyBudgetRequest): Response<YearlyBudgetResponse>
 

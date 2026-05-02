@@ -20,6 +20,8 @@ import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
 import cc.dlabs.pesamind.features.tools.SetMonthlyBudgetScreen
+import cc.dlabs.pesamind.features.tools.YearlyBudgetDetailScreen
+import java.util.Calendar
 
 @Composable
 fun PesaMindNavGraph(navController: NavHostController) {
@@ -47,6 +49,12 @@ fun PesaMindNavGraph(navController: NavHostController) {
             AddTransactionScreen(navController)
         }
         composable(Routes.TransactionList.route) { TransactionListScreen(navController) }
-        composable( Routes.SetMonthlyBudget.route) { SetMonthlyBudgetScreen(2,4,) }
+        composable( Routes.SetMonthlyBudget.route) {
+            SetMonthlyBudgetScreen(
+                Calendar.getInstance().get(Calendar.MONTH),
+                Calendar.getInstance().get(Calendar.YEAR),) }
+        composable( Routes.SetYearlyBudget.route) {
+            YearlyBudgetDetailScreen(navController, Calendar.getInstance().get(Calendar.YEAR))
+        }
     }
 }

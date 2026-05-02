@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
@@ -201,6 +202,7 @@ fun BudgetScreen(
                             yearly = state.yearlyBudget,
                             isLoading = state.isLoadingYearly,
                             year = state.displayYear,
+                            navController = navController,
                             onDetails = {
                                 state.yearlyBudget?.id?.let(onNavigateToYearlyDetail)
                             }
@@ -335,7 +337,8 @@ private fun YearlyBudgetCard(
     yearly: YearlyBudgetResponse?,
     isLoading: Boolean,
     year: Int,
-    onDetails: () -> Unit
+    onDetails: () -> Unit,
+    navController: NavHostController
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -433,12 +436,12 @@ private fun YearlyBudgetCard(
             } else {
                 // No yearly budget
                 EmptyBudgetHint(text = "No yearly budget for $year yet.")
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(18.dp))
                 Button(
-                    onClick = onDetails,
-                    shape = RoundedCornerShape(12.dp),
+                    onClick = {navController.navigate(Routes.SetYearlyBudget.route)},
+                    shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PesaMindTeal),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
                 ) {
                     Text("Create Budget")
                 }
