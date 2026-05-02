@@ -141,16 +141,112 @@ data class ApiMessageResponse(
 
 // SMS Message Model
 data class SMSMessage(
-    val id: String = "",
-    @SerializedName("sender_id")
-    val senderId: String = "",
-    @SerializedName("sender_name")
-    val senderName: String = "",
-    val content: String = "",
-    val timestamp: Long = System.currentTimeMillis(),
-    @SerializedName("is_read")
-    val isRead: Boolean = false,
-    @SerializedName("channel_id")
-    val channelId: String = ""
+	val id: String = "",
+	@SerializedName("sender_id")
+	val senderId: String = "",
+	@SerializedName("sender_name")
+	val senderName: String = "",
+	val content: String = "",
+	val timestamp: Long = System.currentTimeMillis(),
+	@SerializedName("is_read")
+	val isRead: Boolean = false,
+	@SerializedName("channel_id")
+	val channelId: String = ""
 )
 
+// Budget Transaction Models
+data class BudgetTransactionRequest(
+	val name: String = "",
+	val amount: Double = 0.0,
+	val type: String = "" // income, expense, saving
+)
+
+data class BudgetTransactionOperation(
+	val id: String = "",
+	val name: String = "",
+	val amount: Double = 0.0,
+	val type: String = "",
+	val action: String = "" // add, update, delete
+)
+
+data class BudgetTransactionResponse(
+	val id: String = "",
+	val name: String = "",
+	val amount: Double = 0.0,
+	val type: String = "",
+	@SerializedName("created_at")
+	val createdAt: Long = 0L
+)
+
+// Monthly Budget Models
+data class CreateMonthlyBudgetRequest(
+	@SerializedName("yearly_budget_id")
+	val yearlyBudgetId: String = "",
+	val month: Int = 0,
+	val year: Long = 0,
+	val transactions: List<BudgetTransactionRequest> = emptyList()
+)
+
+data class MonthlyBudgetResponse(
+	val id: String = "",
+	@SerializedName("user_id")
+	val userId: String = "",
+	@SerializedName("yearly_budget_id")
+	val yearlyBudgetId: String = "",
+	val month: Int = 0,
+	val year: Long = 0,
+	@SerializedName("total_expenditures")
+	val totalExpenditures: Long = 0,
+	@SerializedName("total_income")
+	val totalIncome: Long = 0,
+	@SerializedName("total_savings")
+	val totalSavings: Long = 0,
+	@SerializedName("total_transactions")
+	val totalTransactions: Long = 0,
+	val transactions: List<BudgetTransactionResponse> = emptyList(),
+	@SerializedName("created_at")
+	val createdAt: String = "",
+	@SerializedName("updated_at")
+	val updatedAt: String = ""
+)
+
+data class UpdateMonthlyBudgetRequest(
+	val month: Int? = null,
+	val year: Long? = null,
+	val transactions: List<BudgetTransactionRequest> = emptyList(),
+	@SerializedName("transaction_ops")
+	val transactionOps: List<BudgetTransactionOperation> = emptyList()
+)
+
+// Yearly Budget Models
+data class CreateYearlyBudgetRequest(
+	val year: Long = 0,
+	val transactions: List<BudgetTransactionRequest> = emptyList()
+)
+
+data class YearlyBudgetResponse(
+	val id: String = "",
+	@SerializedName("user_id")
+	val userId: String = "",
+	val year: Long = 0,
+	@SerializedName("total_expenditures")
+	val totalExpenditures: Long = 0,
+	@SerializedName("total_income")
+	val totalIncome: Long = 0,
+	@SerializedName("total_savings")
+	val totalSavings: Long = 0,
+	@SerializedName("total_transactions")
+	val totalTransactions: Long = 0,
+	val transactions: List<BudgetTransactionResponse> = emptyList(),
+	@SerializedName("created_at")
+	val createdAt: String = "",
+	@SerializedName("updated_at")
+	val updatedAt: String = ""
+)
+
+data class UpdateYearlyBudgetRequest(
+	val year: Long? = null,
+	val transactions: List<BudgetTransactionRequest> = emptyList(),
+	@SerializedName("transaction_ops")
+	val transactionOps: List<BudgetTransactionOperation> = emptyList()
+)

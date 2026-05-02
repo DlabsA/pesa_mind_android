@@ -21,6 +21,12 @@ import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
 import retrofit2.http.DELETE
 import retrofit2.http.Path
 import retrofit2.http.Query
+import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
+import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 
 
 interface ApiService {
@@ -75,5 +81,52 @@ interface ApiService {
 
     @POST("transactions")
     suspend fun createTransaction(@Body body: TransactionRequest): Response<TransactionDetails>
-}
 
+    // Budget endpoints
+    @GET("budgets/monthly")
+    suspend fun getMonthlyBudgets(): Response<List<MonthlyBudgetResponse>>
+
+    @POST("budgets/monthly")
+    suspend fun createMonthlyBudget(@Body body: CreateMonthlyBudgetRequest): Response<MonthlyBudgetResponse>
+
+    @GET("budgets/monthly/by-month-year")
+    suspend fun getMonthlyBudgetByMonthYear(
+        @Query("month") month: Int,
+        @Query("year") year: Long
+    ): Response<MonthlyBudgetResponse>
+
+    @GET("budgets/monthly/by-yearly/{id}")
+    suspend fun getMonthlyBudgetsByYearlyId(
+        @Path("id") yearlyBudgetId: String
+    ): Response<List<MonthlyBudgetResponse>>
+
+    @GET("budgets/monthly/{id}")
+    suspend fun getMonthlyBudgetById(@Path("id") id: String): Response<MonthlyBudgetResponse>
+
+    @PATCH("budgets/monthly/{id}")
+    suspend fun updateMonthlyBudget(
+        @Path("id") id: String,
+        @Body body: UpdateMonthlyBudgetRequest
+    ): Response<MonthlyBudgetResponse>
+
+    @DELETE("budgets/monthly/{id}")
+    suspend fun deleteMonthlyBudget(@Path("id") id: String): Response<ApiMessageResponse>
+
+    @GET("budgets/yearly")
+    suspend fun getYearlyBudgets(): Response<List<YearlyBudgetResponse>>
+
+    @POST("budgets/yearly")
+    suspend fun createYearlyBudget(@Body body: CreateYearlyBudgetRequest): Response<YearlyBudgetResponse>
+
+    @GET("budgets/yearly/{id}")
+    suspend fun getYearlyBudgetById(@Path("id") id: String): Response<YearlyBudgetResponse>
+
+    @PATCH("budgets/yearly/{id}")
+    suspend fun updateYearlyBudget(
+        @Path("id") id: String,
+        @Body body: UpdateYearlyBudgetRequest
+    ): Response<YearlyBudgetResponse>
+
+    @DELETE("budgets/yearly/{id}")
+    suspend fun deleteYearlyBudget(@Path("id") id: String): Response<ApiMessageResponse>
+}

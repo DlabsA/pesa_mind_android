@@ -19,6 +19,7 @@ import cc.dlabs.pesamind.features.settings.notifications.TransactionListScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
+import cc.dlabs.pesamind.features.tools.SetMonthlyBudgetScreen
 
 @Composable
 fun PesaMindNavGraph(navController: NavHostController) {
@@ -46,5 +47,6 @@ fun PesaMindNavGraph(navController: NavHostController) {
             AddTransactionScreen(navController)
         }
         composable(Routes.TransactionList.route) { TransactionListScreen(navController) }
+        composable( Routes.SetMonthlyBudget.route) { SetMonthlyBudgetScreen(2,4,) }
     }
 }

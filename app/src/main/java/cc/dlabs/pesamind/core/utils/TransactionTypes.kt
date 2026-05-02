@@ -10,4 +10,13 @@ object TransactionTypes {
     fun normalizeOrNull(raw: String): String? {
         return valid.firstOrNull { it.equals(raw.trim(), ignoreCase = true) }
     }
+
+    fun displayName(raw: String): String {
+        return when (normalizeOrNull(raw)) {
+            EXPENSE -> "Expense"
+            INCOME -> "Income"
+            SAVINGS -> "Savings"
+            else -> "Unknown"
+        }
+    }
 }
