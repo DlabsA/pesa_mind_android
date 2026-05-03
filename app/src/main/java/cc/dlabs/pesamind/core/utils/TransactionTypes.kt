@@ -1,9 +1,9 @@
 package cc.dlabs.pesamind.core.utils
 
 object TransactionTypes {
-    const val EXPENSE = "Expense"
-    const val INCOME = "Income"
-    const val SAVINGS = "Savings"
+    const val EXPENSE = "expense"
+    const val INCOME = "income"
+    const val SAVINGS = "savings"
 
     val valid = listOf(EXPENSE, INCOME, SAVINGS)
 

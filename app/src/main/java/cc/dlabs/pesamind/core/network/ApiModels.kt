@@ -175,7 +175,7 @@ data class BudgetTransactionResponse(
 	val amount: Double = 0.0,
 	val type: String = "",
 	@SerializedName("created_at")
-	val createdAt: Long = 0L
+	val createdAt: String = "",
 )
 
 // Monthly Budget Models
@@ -238,10 +238,14 @@ data class YearlyBudgetResponse(
 	@SerializedName("total_transactions")
 	val totalTransactions: Long = 0,
 	val transactions: List<BudgetTransactionResponse> = emptyList(),
-	@SerializedName("created_at")
-	val createdAt: String = "",
-	@SerializedName("updated_at")
-	val updatedAt: String = ""
+    @SerializedName("created_at")
+    val createdAt: String,  // or Date if you have a custom adapter
+
+    @SerializedName("updated_at")
+    val updatedAt: String,  // or Date if you have a custom adapter
+
+    @SerializedName("deleted_at")
+    val deletedAt: String? = null  // Make it nullable since it can be null
 )
 
 data class UpdateYearlyBudgetRequest(

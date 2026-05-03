@@ -142,9 +142,11 @@ fun BudgetScreen(
             if (storedAccount.username.isBlank() && storedAccount.email.isBlank()) {
                 account = null
                 accountError = "Account details not found. Please sign in again."
+                snackbarHostState.showSnackbar(accountError.orEmpty())
             } else {
                 account = storedAccount
                 accountError = null
+                vm.refresh()
             }
         state.error?.let {
             snackbarHostState.showSnackbar(it)
@@ -153,6 +155,8 @@ fun BudgetScreen(
         catch (_: Exception) {
             account = null
             accountError = "Failed to load account details"
+            snackbarHostState.showSnackbar(accountError.orEmpty())
+            vm.clearError()
         }
     }
 
@@ -202,10 +206,7 @@ fun BudgetScreen(
                             yearly = state.yearlyBudget,
                             isLoading = state.isLoadingYearly,
                             year = state.displayYear,
-                            navController = navController,
-                            onDetails = {
-                                state.yearlyBudget?.id?.let(onNavigateToYearlyDetail)
-                            }
+                            navController = navController
                         )
                     }
 
@@ -337,7 +338,6 @@ private fun YearlyBudgetCard(
     yearly: YearlyBudgetResponse?,
     isLoading: Boolean,
     year: Int,
-    onDetails: () -> Unit,
     navController: NavHostController
 ) {
     Card(
@@ -420,7 +420,7 @@ private fun YearlyBudgetCard(
                 Spacer(Modifier.height(14.dp))
 
                 Button(
-                    onClick = onDetails,
+                    onClick = {navController.navigate(Routes.SetYearlyBudget.route)},
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PesaMindTeal),
