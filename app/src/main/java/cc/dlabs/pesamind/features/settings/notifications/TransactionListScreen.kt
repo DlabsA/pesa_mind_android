@@ -33,6 +33,7 @@ import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import java.text.NumberFormat
 import java.util.*
+import androidx.compose.ui.platform.LocalLocale
 
 private val IncomeGreen  = Color(0xFF00C896)
 private val ExpenseRed   = Color(0xFFFF4D6A)
@@ -115,10 +116,7 @@ fun TransactionListScreen(
 private fun TransactionCard(tx: cc.dlabs.pesamind.core.network.models.TransactionDetails) {
     val accentColor = if (tx.type.equals("income", ignoreCase = true)) IncomeGreen else ExpenseRed
     val amountPrefix = if (tx.type.equals("income", ignoreCase = true)) "+" else "-"
-    val formattedAmount = try {
-        NumberFormat.getNumberInstance(Locale.getDefault()).format(tx.amount)
-    } catch (e: Exception) { tx.amount.toString()
-    Log.e("This is an error ", e.toString())}
+    val formattedAmount = NumberFormat.getNumberInstance(LocalLocale.current.platformLocale).format(tx.amount)
     // No timestamp in TransactionDetails, so we skip date for now
     Card(
         modifier = Modifier
