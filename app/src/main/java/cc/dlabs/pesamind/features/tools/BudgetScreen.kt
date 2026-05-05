@@ -103,6 +103,7 @@ import cc.dlabs.pesamind.core.theme.PesaMindNavy
 import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
 import coil3.compose.AsyncImage
+import okhttp3.Route
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
@@ -132,7 +133,6 @@ fun BudgetScreen(
 ) {
     val state by vm.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var selectedNavIndex by remember { mutableIntStateOf(0) }
     var account by remember { mutableStateOf<Account?>(null) }
     var accountError by remember { mutableStateOf<String?>(null) }
 
@@ -209,18 +209,15 @@ fun BudgetScreen(
                             navController = navController
                         )
                     }
-
+                    val nextMonth = Calendar.getInstance().get(Calendar.MONTH) + 2
+                    val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1 // Add 1 because Calendar month is 0-based
+                    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
                     // Next month prompt
                     NextMonthBudgetCard(
                         nextMonth = state.nextMonthIndex,
                         nextYear = state.nextMonthYear,
                         hasExisting = state.hasNextMonthBudget,
-                        onSetBudget = {
-                            onNavigateToCreateMonthlyBudget(
-                                state.nextMonthIndex,
-                                state.nextMonthYear
-                            )
-                        }
+                        onSetBudget = {navController.navigate(Routes.SetMonthlyBudget.createRoute(currentMonth, currentYear))}
                     )
 
                     // Current monthly budget
@@ -231,9 +228,7 @@ fun BudgetScreen(
                         year = state.displayYear,
                         balance = state.monthlyBalance,
                         isDeficit = state.isMonthlyDeficit,
-                        onDetails = {
-                            state.currentMonthlyBudget?.id?.let(onNavigateToMonthlyDetail)
-                        }
+                        onDetails = {navController.navigate(Routes.SetMonthlyBudget.createRoute(nextMonth, currentYear))}
                     )
 
                     Spacer(Modifier.height(12.dp))

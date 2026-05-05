@@ -35,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.outlined.Delete
@@ -87,6 +88,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.theme.ExpenseRed
@@ -130,6 +132,7 @@ private fun typeIcon(type: String): ImageVector = when (type) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetMonthlyBudgetScreen(
+    navController: NavController,
     month: Int,
     year: Int,
     vm: SetMonthlyBudgetViewModel = viewModel()
@@ -149,6 +152,16 @@ fun SetMonthlyBudgetScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text("${month.toMonthName()} Budget") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
     ) { padding ->
         LazyColumn(
             modifier = Modifier

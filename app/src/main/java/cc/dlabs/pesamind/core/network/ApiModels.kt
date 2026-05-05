@@ -211,6 +211,7 @@ data class MonthlyBudgetResponse(
 )
 
 data class UpdateMonthlyBudgetRequest(
+    val yearlyBudgetId: String? = null,
 	val month: Int? = null,
 	val year: Long? = null,
 	val transactions: List<BudgetTransactionRequest> = emptyList(),

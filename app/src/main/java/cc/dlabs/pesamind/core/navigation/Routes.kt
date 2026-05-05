@@ -35,6 +35,8 @@ sealed class Routes(val route: String) {
 
     object TransactionList : Routes("transaction_list")
 
-    object SetMonthlyBudget : Routes("set_monthly_budget")
+    object SetMonthlyBudget : Routes("set_monthly_budget/{month}/{year}") {
+        fun createRoute(month: Int, year: Int) = "set_monthly_budget/$month/$year"
+    }
     object SetYearlyBudget : Routes("set_yearly_budget")
 }
