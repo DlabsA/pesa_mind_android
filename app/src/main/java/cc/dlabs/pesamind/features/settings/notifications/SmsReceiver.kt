@@ -12,7 +12,9 @@ import cc.dlabs.pesamind.core.storage.NotificationStorage
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 class SmsReceiver : BroadcastReceiver() {
 
@@ -36,13 +38,17 @@ class SmsReceiver : BroadcastReceiver() {
             }
 
             val receivingSimInfo = getReceivingSimInfo(context, intent)
+            
+            // Track how many coroutines are running to know when to finish
+            val pendingJobs = AtomicInteger(messages.size)
+            val jobs = mutableListOf<Job>()
 
             for (message in messages) {
                 val senderNumber = message.originatingAddress ?: "Unknown"
                 val messageBody = message.messageBody
                 val timestamp = message.timestampMillis
 
-                scope.launch {
+                val job = scope.launch {
                     try {
                         NotificationStorage.init(context)
 
@@ -57,9 +63,13 @@ class SmsReceiver : BroadcastReceiver() {
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing SMS: ${e.message}", e)
                     } finally {
-                        pendingResult.finish()
+                        // Only finish when all jobs are complete
+                        if (pendingJobs.decrementAndGet() == 0) {
+                            pendingResult.finish()
+                        }
                     }
                 }
+                jobs.add(job)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onReceive: ${e.message}", e)
