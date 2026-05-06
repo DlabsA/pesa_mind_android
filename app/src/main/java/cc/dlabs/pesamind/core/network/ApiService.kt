@@ -13,6 +13,7 @@ import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import cc.dlabs.pesamind.core.network.models.ApiMessageResponse
+import cc.dlabs.pesamind.core.network.models.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
@@ -135,4 +136,10 @@ interface ApiService {
 
     @DELETE("budgets/yearly/{id}")
     suspend fun deleteYearlyBudget(@Path("id") id: String): Response<ApiMessageResponse>
+
+    @GET("analytics/budget-vs-actual")
+    suspend fun getBudgetVsActual(
+        @Query("month") month: Int,
+        @Query("year") year: Long
+    ): Response<BudgetVsActualResponse>
 }

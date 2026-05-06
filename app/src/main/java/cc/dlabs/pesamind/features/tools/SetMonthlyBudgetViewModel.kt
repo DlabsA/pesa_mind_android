@@ -1,6 +1,5 @@
 package cc.dlabs.pesamind.features.tools
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient.api
@@ -285,8 +284,6 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
         val response = api.updateMonthlyBudget(budgetId, body)
         if (response.isSuccessful) {
             val updated = response.body()!!
-            Log.d("Budget", "Updated: $body")
-            Log.d("Budget", "Updated: ${response.body()}")
             BudgetManager.saveCurrentMonthlyBudget(updated)
             _state.update {
                 it.copy(

@@ -255,3 +255,32 @@ data class UpdateYearlyBudgetRequest(
 	@SerializedName("transaction_ops")
 	val transactionOps: List<BudgetTransactionOperation> = emptyList()
 )
+
+data class BudgetVsActualItem(
+    val name: String = "",
+    @SerializedName("budgeted_amount")
+    val budgetedAmount: Double = 0.0,
+    @SerializedName("actual_amount")
+    val actualAmount: Double = 0.0,
+    val variance: Double = 0.0,
+    @SerializedName("variance_percent")
+    val variancePercent: Double = 0.0,
+    val status: String = "on-track" // "under", "on-track", "over"
+)
+
+data class BudgetVsActualResponse(
+    val month: Int = 0,
+    val year: Long = 0,
+    @SerializedName("total_budgeted")
+    val totalBudgeted: Double = 0.0,
+    @SerializedName("total_actual")
+    val totalActual: Double = 0.0,
+    @SerializedName("total_variance")
+    val totalVariance: Double = 0.0,
+    @SerializedName("variance_percent")
+    val variancePercent: Double = 0.0,
+    @SerializedName("overall_status")
+    val overallStatus: String = "on-track",
+    @SerializedName("budget_vs_actual")
+    val budgetVsActual: List<BudgetVsActualItem> = emptyList()
+)
