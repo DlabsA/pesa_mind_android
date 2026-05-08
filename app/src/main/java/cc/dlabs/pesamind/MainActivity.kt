@@ -24,7 +24,10 @@ import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import android.provider.Settings
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.HiltAndroidApp
 
+@HiltAndroidApp
 class PesaMindApp : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -36,6 +39,7 @@ class PesaMindApp : Application() {
     }
 }
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     companion object {

@@ -84,7 +84,7 @@ fun MainScreen(rootNav: NavHostController) {
             modifier = Modifier.padding(padding)
         ) {
             composable(Routes.Home.route) { DashboardScreen() }
-            composable(Routes.Analytics.route) { AnalyticsScreen() }
+            composable(Routes.Analytics.route) { AnalyticsScreen(rootNav) }
             composable(Routes.Tools.route) { BudgetScreen(rootNav) }
             composable(Routes.Settings.route) { SettingsScreen(rootNav) }
         }
