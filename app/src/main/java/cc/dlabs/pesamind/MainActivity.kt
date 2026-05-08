@@ -38,7 +38,6 @@ class PesaMindApp : Application() {
         ThemeManager.init(this)
     }
 }
-
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 

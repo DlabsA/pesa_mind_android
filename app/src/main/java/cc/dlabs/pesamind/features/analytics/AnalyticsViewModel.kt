@@ -11,6 +11,7 @@ import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
-
+@HiltViewModel
 class AnalyticsViewModel @Inject constructor(
     private val api: ApiService
 ) : ViewModel() {
