@@ -1,4 +1,11 @@
 package cc.dlabs.pesamind.core.network
+import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
+import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
+import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
+import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
+import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
+import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -142,4 +149,37 @@ interface ApiService {
         @Query("month") month: Int,
         @Query("year") year: Long
     ): Response<BudgetVsActualResponse>
+
+    @GET("analytics/summary")
+    suspend fun getAnalyticsSummary(): Response<AnalyticsSummaryResponse>
+
+    @GET("analytics/budget-utilization/by-month")
+    suspend fun getBudgetUtilization(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<BudgetUtilizationResponse>
+
+    @GET("analytics/spending-velocity")
+    suspend fun getSpendingVelocity(): Response<SpendingVelocityResponse>
+
+    @GET("analytics/monthly-trends")
+    suspend fun getMonthlyTrends(): Response<MonthlyTrendsResponse>
+
+    @GET("analytics/expense-forecast")
+    suspend fun getExpenseForecast(): Response<ExpenseForecastResponse>
+
+    @GET("analytics/cash-flow-waterfall")
+    suspend fun getCashFlowWaterfall(
+        @Query("year") year: Int,
+        @Query("month") month: Int
+    ): Response<CashFlowWaterfallResponse>
+
+    @GET("analytics/budget-vs-actual")
+    suspend fun getBudgetVsActual(
+        @Query("year") year: Int,
+        @Query("month") month: Int
+    ): Response<BudgetVsActualResponse>
+
+    @GET("analytics/anomalies")
+    suspend fun getAnomalies(): Response<AnomaliesResponse>
 }
