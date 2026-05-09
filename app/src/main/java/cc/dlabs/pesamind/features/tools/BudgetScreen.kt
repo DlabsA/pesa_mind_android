@@ -241,7 +241,7 @@ fun BudgetScreen(
 // ─── Dashboard Header ─────────────────────────────────────────────────────────
 
 @Composable
-private fun DashboardHeader(
+public fun DashboardHeader(
     state: DashboardUiState,
     onBack: () -> Unit,
     initial: String = "U"

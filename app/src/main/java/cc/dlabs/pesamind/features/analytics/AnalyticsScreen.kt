@@ -7,22 +7,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.analytics.AnomalyData
+import cc.dlabs.pesamind.core.network.analytics.AnomalyItem
 import cc.dlabs.pesamind.core.network.analytics.BudgetActualData
 import cc.dlabs.pesamind.core.network.analytics.ForecastData
 import cc.dlabs.pesamind.core.network.analytics.Health
@@ -45,10 +44,13 @@ import cc.dlabs.pesamind.core.theme.IncomeGreen
 import cc.dlabs.pesamind.core.theme.PesaMindGreen
 import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.features.tools.DashboardHeader
 import java.text.NumberFormat
+import java.util.Calendar
 import java.util.Locale
 
 private val TealPrimary = Color(0xFF1A9E8F)
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,8 +71,22 @@ fun AnalyticsScreen(
         }
     }
 
+    val headerState = HeaderCompatibleState(
+        userDisplayName = uiState.userDisplayName,
+        isFromCache = false
+    )
+    val initial = headerState.userDisplayName.firstOrNull()?.uppercase() ?: "U"
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            AnalyticsHeader(
+                userDisplayName = headerState.userDisplayName,  // Pass an object that matches the expected shape
+                onBack = { navController.popBackStack() },
+                initial = initial
+            )
+        }
     ) { padding ->
         if (uiState.isLoading && uiState.summary == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -489,6 +505,40 @@ fun BudgetVsActualCard(budgetActual: BudgetActualData) {
     }
 }
 
+//@Composable
+//fun AnomaliesAlertCard(anomalies: AnomalyData) {
+//    Card(
+//        modifier = Modifier.fillMaxWidth(),
+//        shape = RoundedCornerShape(16.dp),
+//        colors = CardDefaults.cardColors(
+//            containerColor = ExpenseRed.copy(alpha = 0.1f)
+//        ),
+//        border = BorderStroke(1.dp, ExpenseRed.copy(alpha = 0.3f))
+//    ) {
+//        Column(modifier = Modifier.padding(16.dp)) {
+//            Row(verticalAlignment = Alignment.CenterVertically) {
+//                Icon(
+//                    Icons.Default.Warning,
+//                    contentDescription = "Warning",
+//                    tint = ExpenseRed,
+//                    modifier = Modifier.size(24.dp)
+//                )
+//                Spacer(modifier = Modifier.width(8.dp))
+//                Text(
+//                    "Unusual Spending Detected",
+//                    style = MaterialTheme.typography.titleMedium,
+//                    color = ExpenseRed,
+//                    fontWeight = FontWeight.SemiBold
+//                )
+//            }
+//            Spacer(modifier = Modifier.height(8.dp))
+//            Text("${anomalies.criticalCount} critical anomalies found", style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp)
+//            Text("Check your transaction patterns", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, color = TextSecondary)
+//        }
+//    }
+//}
+
+
 @Composable
 fun AnomaliesAlertCard(anomalies: AnomalyData) {
     Card(
@@ -500,6 +550,7 @@ fun AnomaliesAlertCard(anomalies: AnomalyData) {
         border = BorderStroke(1.dp, ExpenseRed.copy(alpha = 0.3f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Warning,
@@ -516,12 +567,104 @@ fun AnomaliesAlertCard(anomalies: AnomalyData) {
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text("${anomalies.criticalCount} critical anomalies found", style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp)
-            Text("Check your transaction patterns", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, color = TextSecondary)
+            Text(
+                "${anomalies.criticalCount} critical anomalies found",
+                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 14.sp
+            )
+            Text(
+                "Check your transaction patterns",
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
+
+            if (anomalies.items.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Anomaly Details",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Scrollable list of anomalies
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    anomalies.items.forEach { item ->
+                        AnomalyItemRow(item)
+                    }
+                }
+            }
         }
     }
 }
 
+@Composable
+private fun AnomalyItemRow(item: AnomalyItem) {
+    val severityColor = when (item.severity) {
+        "high" -> ExpenseRed
+        "medium" -> Color(0xFFFF9800)
+        else -> Color(0xFF9E9E9E)
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(1.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = item.category,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = severityColor.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = item.severity.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = severityColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Amount: ${formatUgx(item.amount)}",
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 12.sp
+            )
+            Text(
+                text = "Normal range: ${formatUgx(item.normalMin)} - ${formatUgx(item.normalMax)}",
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 11.sp,
+                color = TextSecondary
+            )
+            if (item.type == "spike") {
+                Text(
+                    text = "Spike detected (${item.sigmaMultiple.toInt()}x above norm)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    color = ExpenseRed
+                )
+            }
+        }
+    }
+}
 @Composable
 fun HealthScoreCard(health: Health) {
     Card(
@@ -603,6 +746,80 @@ fun RecommendationCard(recommendation: Recommendation) {
                     Text("Confidence: ${(recommendation.confidence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp)
                 }
             }
+        }
+    }
+}
+
+private data class HeaderCompatibleState(
+    val userDisplayName: String,
+    val isFromCache: Boolean
+)
+
+@Composable
+private fun AnalyticsHeader(
+    userDisplayName: String,
+    onBack: () -> Unit,
+    initial: String = "U"
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(PesaMindTeal, PesaMindTeal.copy(alpha = 0.75f))
+                )
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Avatar
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = PesaMindTeal.copy(alpha = 0.15f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = initial,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.75f)
+                    )
+                }
+            }
+
+            Column {
+                val now = Calendar.getInstance()
+                val hour = now.get(Calendar.HOUR_OF_DAY)
+                val greeting = when {
+                    hour < 12 -> "Good morning"
+                    hour < 17 -> "Good afternoon"
+                    else      -> "Good evening"
+                }
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.75f)
+                )
+                if (userDisplayName.isNotBlank()) {
+                    Text(
+                        text = userDisplayName,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.3).sp
+                        ),
+                        color = Color.White
+                    )
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
         }
     }
 }

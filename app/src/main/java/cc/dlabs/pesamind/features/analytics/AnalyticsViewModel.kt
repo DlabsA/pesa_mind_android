@@ -11,6 +11,7 @@ import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
+import cc.dlabs.pesamind.core.storage.AccountManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +31,11 @@ class AnalyticsViewModel @Inject constructor(
 
     private var currentYear = Calendar.getInstance().get(Calendar.YEAR)
     private var currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+
+    init {
+        loadUserProfile()
+        loadAllData()
+    }
 
     fun loadAllData() {
         viewModelScope.launch {
@@ -77,11 +83,35 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     fun refresh() = loadAllData()
+
+    private fun loadUserProfile() {
+        viewModelScope.launch {
+            val user = AccountManager.getAccount()
+            val initials = buildInitials(user.username)
+            _uiState.update {
+                it.copy(
+                    userDisplayName = user.username,
+                    userInitials = initials
+                )
+            }
+        }
+    }
+    private fun buildInitials(name: String): String {
+        val parts = name.trim().split(" ").filter { it.isNotBlank() }
+        return when {
+            parts.isEmpty() -> "?"
+            parts.size == 1 -> parts[0].take(2).uppercase()
+            else -> "${parts.first().first()}${parts.last().first()}".uppercase()
+        }
+    }
 }
+
 
 data class AnalyticsUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
+    val userDisplayName: String = "",
+    val userInitials: String = "",
     val summary: AnalyticsSummaryResponse? = null,
     val spendingVelocity: SpendingVelocityResponse? = null,
     val monthlyTrends: MonthlyTrendsResponse? = null,
