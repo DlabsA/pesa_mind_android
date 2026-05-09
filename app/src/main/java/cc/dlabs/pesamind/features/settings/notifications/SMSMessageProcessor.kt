@@ -5,11 +5,16 @@ import android.util.Log
 import cc.dlabs.pesamind.core.network.models.SMSMessage
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.utils.TransactionViewModel
+import cc.dlabs.pesamind.features.home.TYPE_EXPENSE
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class SMSMessageProcessor(private val context: Context) {
+class SMSMessageProcessor(
+    private val context: Context,
+    private val viewModel: TransactionViewModel
+) {
 
     /**
      * Process incoming SMS message locally
@@ -22,13 +27,23 @@ class SMSMessageProcessor(private val context: Context) {
         senderId: String,
         content: String,
         timestamp: Long,
-        receivingSimSlot: Int,
         receivingSimNumber: String
     ) = withContext(Dispatchers.IO) {
+        var channelId = ""
+        var amountText = ""
+        var note = ""
+        val txType = TYPE_EXPENSE
         try {
             // Step 1: Validate sender and content
             if (senderId.isBlank() || content.isBlank()) {
                 Log.w("SMSMessageProcessor", "Invalid message: sender=$senderId, content length=${content.length}")
+                return@withContext
+            }
+
+            // Validate senderId against allowed senders
+            val normalizedSender = MessageSender.normalizeOrNull(senderId)
+            if (normalizedSender == null) {
+                Log.w("SMSMessageProcessor", "Unknown sender: $senderId")
                 return@withContext
             }
 
@@ -41,6 +56,25 @@ class SMSMessageProcessor(private val context: Context) {
                 return@withContext
             }
 
+            channelId = channelInfo.channel.id
+            amountText = 500.toString()
+            note = content
+
+            val canSubmit = channelId.isNotBlank()
+                    && amountText.toDoubleOrNull() != null
+                    && amountText.toDouble() > 0
+                    && note.isNotBlank()
+
+            Log.w("SMSMessageProcessor", "Parsed message - channelId: $channelId, amount: $amountText, note length: ${note.length}, canSubmit: $canSubmit")
+
+            if (canSubmit) {
+                viewModel.CreateTransaction(
+                    channelID = channelId.trim(),
+                    amount = amountText.toDouble(),
+                    type = txType,
+                    note = note.trim()
+                )
+            }
             // Step 3: Create local SMS message
             val smsMessage = SMSMessage(
                 id = generateMessageId(senderId, timestamp),
@@ -84,6 +118,3 @@ class SMSMessageProcessor(private val context: Context) {
         Log.d("SMSMessageProcessor", "Would show notification for: ${message.senderId}")
     }
 }
-
-
-

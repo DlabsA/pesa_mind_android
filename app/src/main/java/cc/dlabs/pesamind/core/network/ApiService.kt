@@ -1,4 +1,12 @@
 package cc.dlabs.pesamind.core.network
+import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
+import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
+import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
+import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
+import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
+import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -21,6 +29,12 @@ import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
 import retrofit2.http.DELETE
 import retrofit2.http.Path
 import retrofit2.http.Query
+import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
+import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 
 
 interface ApiService {
@@ -75,5 +89,92 @@ interface ApiService {
 
     @POST("transactions")
     suspend fun createTransaction(@Body body: TransactionRequest): Response<TransactionDetails>
-}
 
+    // Budget endpoints
+    @GET("budgets/monthly")
+    suspend fun getMonthlyBudgets(): Response<List<MonthlyBudgetResponse>>
+
+    @POST("budgets/monthly")
+    suspend fun createMonthlyBudget(@Body body: CreateMonthlyBudgetRequest): Response<MonthlyBudgetResponse>
+
+    @GET("budgets/monthly/by-month-year")
+    suspend fun getMonthlyBudgetByMonthYear(
+        @Query("month") month: Int,
+        @Query("year") year: Long
+    ): Response<MonthlyBudgetResponse>
+
+    @GET("budgets/monthly/by-yearly/{id}")
+    suspend fun getMonthlyBudgetsByYearlyId(
+        @Path("id") yearlyBudgetId: String
+    ): Response<List<MonthlyBudgetResponse>>
+
+    @GET("budgets/monthly/{id}")
+    suspend fun getMonthlyBudgetById(@Path("id") id: String): Response<MonthlyBudgetResponse>
+
+    @PATCH("budgets/monthly/{id}")
+    suspend fun updateMonthlyBudget(
+        @Path("id") id: String,
+        @Body body: UpdateMonthlyBudgetRequest
+    ): Response<MonthlyBudgetResponse>
+
+    @DELETE("budgets/monthly/{id}")
+    suspend fun deleteMonthlyBudget(@Path("id") id: String): Response<ApiMessageResponse>
+
+    @GET("budgets/yearly")
+    suspend fun getYearlyBudgets(): Response<List<YearlyBudgetResponse>>
+
+    @GET("budgets/yearly/by-year")
+    suspend fun getYearlyBudgetsByYear(
+        @Query("year") year: Long
+    ): Response<YearlyBudgetResponse>
+
+
+    @POST("budgets/yearly")
+    suspend fun createYearlyBudget(@Body body: CreateYearlyBudgetRequest): Response<YearlyBudgetResponse>
+
+    @GET("budgets/yearly/{id}")
+    suspend fun getYearlyBudgetById(@Path("id") id: String): Response<YearlyBudgetResponse>
+
+    @PATCH("budgets/yearly/{id}")
+    suspend fun updateYearlyBudget(
+        @Path("id") id: String,
+        @Body body: UpdateYearlyBudgetRequest
+    ): Response<YearlyBudgetResponse>
+
+    @DELETE("budgets/yearly/{id}")
+    suspend fun deleteYearlyBudget(@Path("id") id: String): Response<ApiMessageResponse>
+
+
+    @GET("analytics/summary")
+    suspend fun getAnalyticsSummary(): Response<AnalyticsSummaryResponse>
+
+    @GET("analytics/budget-utilization/by-month")
+    suspend fun getBudgetUtilization(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<BudgetUtilizationResponse>
+
+    @GET("analytics/spending-velocity")
+    suspend fun getSpendingVelocity(): Response<SpendingVelocityResponse>
+
+    @GET("analytics/monthly-trends")
+    suspend fun getMonthlyTrends(): Response<MonthlyTrendsResponse>
+
+    @GET("analytics/expense-forecast")
+    suspend fun getExpenseForecast(): Response<ExpenseForecastResponse>
+
+    @GET("analytics/cash-flow-waterfall")
+    suspend fun getCashFlowWaterfall(
+        @Query("year") year: Int,
+        @Query("month") month: Int
+    ): Response<CashFlowWaterfallResponse>
+
+    @GET("analytics/budget-vs-actual")
+    suspend fun getBudgetVsActual(
+        @Query("year") year: Int,
+        @Query("month") month: Int
+    ): Response<BudgetVsActualResponse>
+
+    @GET("analytics/anomalies")
+    suspend fun getAnomalies(): Response<AnomaliesResponse>
+}

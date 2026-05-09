@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.navigation.NavHostController
 import java.text.NumberFormat
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Colours — income = green tint, expense = red tint, neutral = surface
@@ -50,8 +51,8 @@ private val NeutralGray  = Color(0xFFF2F4F7)
 // ─────────────────────────────────────────────────────────────────────────────
 //  Transaction type constants — align with TransactionTypes.valid in ViewModel
 // ─────────────────────────────────────────────────────────────────────────────
-private const val TYPE_INCOME  = "income"
-private const val TYPE_EXPENSE = "expense"
+public const val TYPE_INCOME  = "income"
+public const val TYPE_EXPENSE = "expense"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,16 +164,12 @@ fun AddTransactionScreen(
                         text = if (amountText.isEmpty()) {
                             "0"
                         } else {
-                            try {
                                 val number = amountText.toBigInteger()
-                                NumberFormat.getNumberInstance(Locale.getDefault())
+                                NumberFormat.getNumberInstance(LocalLocale.current.platformLocale)
                                     .apply<NumberFormat> {
                                         this.minimumFractionDigits = 0
                                         this.maximumFractionDigits = 0
                                     }.format(number)
-                            } catch (e: NumberFormatException) {
-                                amountText
-                            }
                         },
                         fontSize = 52.sp,
                         fontWeight = FontWeight.Black,

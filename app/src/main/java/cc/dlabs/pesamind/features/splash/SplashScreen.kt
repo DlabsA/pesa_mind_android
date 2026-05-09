@@ -31,7 +31,7 @@ fun SplashScreen(navController: NavHostController) {
         delay(1800)
 
         val destination = when (TokenManager.getLockState()) {
-            LockState.NONE -> if (TokenManager.isLoggedIn()) Routes.LockSetup.route else Routes.Login.route
+            LockState.NONE -> if (TokenManager.isLoggedIn()) Routes.Dashboard.route else Routes.Login.route
             LockState.PIN -> Routes.PinUnlock.route
             LockState.PATTERN -> Routes.PatternUnlock.route
         }

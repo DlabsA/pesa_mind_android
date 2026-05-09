@@ -22,6 +22,7 @@ import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,7 @@ fun SettingsScreen(rootNav: NavHostController) {
     val teal = Color(0xFF1A9E8F)
     val scope = rememberCoroutineScope()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var isDarkMode by remember { mutableStateOf(ThemeManager.isDarkModeEnabled()) }
 
     var account by remember { mutableStateOf<Account?>(null) }
     var accountError by remember { mutableStateOf<String?>(null) }
@@ -183,33 +185,37 @@ fun SettingsScreen(rootNav: NavHostController) {
         // ── Section: Preferences ─────────────────────────────
         SettingsSectionHeader(title = "Preferences")
 
-        SettingsRow(
+        SettingsToggleRow(
             icon = Icons.Filled.Palette,
             iconTint = teal,
-            title = "Appearance",
-            subtitle = "Dark mode, theme",
-            onClick = { /* TODO */ }
+            title = "Dark Mode",
+            subtitle = "Use dark theme",
+            isChecked = isDarkMode,
+            onCheckedChange = { isChecked ->
+                isDarkMode = isChecked
+                ThemeManager.setDarkModeEnabled(isChecked)
+            }
         )
 
-        SettingsDivider()
-
-        SettingsRow(
-            icon = Icons.Filled.Language,
-            iconTint = teal,
-            title = "Language",
-            subtitle = "English",
-            onClick = { /* TODO */ }
-        )
-
-        SettingsDivider()
-
-        SettingsRow(
-            icon = Icons.Filled.AttachMoney,
-            iconTint = teal,
-            title = "Currency",
-            subtitle = "UGX — Ugandan Shilling",
-            onClick = { /* TODO */ }
-        )
+//        SettingsDivider()
+//
+//        SettingsRow(
+//            icon = Icons.Filled.Language,
+//            iconTint = teal,
+//            title = "Language",
+//            subtitle = "English",
+//            onClick = { /* TODO */ }
+//        )
+//
+//        SettingsDivider()
+//
+//        SettingsRow(
+//            icon = Icons.Filled.AttachMoney,
+//            iconTint = teal,
+//            title = "Currency",
+//            subtitle = "UGX — Ugandan Shilling",
+//            onClick = { /* TODO */ }
+//        )
 
         Spacer(Modifier.height(8.dp))
 
@@ -344,6 +350,57 @@ private fun SettingsRow(
                 modifier = Modifier.size(20.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String?,
+    isChecked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!isChecked) }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Icon box
+        Surface(
+            modifier = Modifier.size(38.dp),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+            color = iconTint.copy(alpha = 0.1f)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    icon,
+                    contentDescription = title,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.width(14.dp))
+
+        // Text
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            if (subtitle != null) {
+                Text(subtitle, fontSize = 12.sp, color = Color.Gray)
+            }
+        }
+
+        // Toggle Switch
+        Switch(
+            checked = isChecked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.size(height = 24.dp, width = 48.dp)
+        )
     }
 }
 

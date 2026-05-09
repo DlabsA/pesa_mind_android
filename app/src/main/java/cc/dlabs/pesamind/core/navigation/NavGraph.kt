@@ -2,8 +2,10 @@ package cc.dlabs.pesamind.core.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import cc.dlabs.pesamind.features.auth.LockSetupScreen
 import cc.dlabs.pesamind.features.splash.SplashScreen
 import cc.dlabs.pesamind.features.auth.LoginScreen
@@ -19,6 +21,9 @@ import cc.dlabs.pesamind.features.settings.notifications.TransactionListScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
+import cc.dlabs.pesamind.features.tools.SetMonthlyBudgetScreen
+import cc.dlabs.pesamind.features.tools.YearlyBudgetDetailScreen
+import java.util.Calendar
 
 @Composable
 fun PesaMindNavGraph(navController: NavHostController) {
@@ -46,5 +51,23 @@ fun PesaMindNavGraph(navController: NavHostController) {
             AddTransactionScreen(navController)
         }
         composable(Routes.TransactionList.route) { TransactionListScreen(navController) }
+        composable(
+            route = Routes.SetMonthlyBudget.route,
+            arguments = listOf(
+                navArgument("month") { type = NavType.IntType },
+                navArgument("year") { type = NavType.IntType }
+            )
+        ) { backStackEntry ->
+            val month = backStackEntry.arguments?.getInt("month") ?: 1
+            val year = backStackEntry.arguments?.getInt("year") ?: 2026
+            SetMonthlyBudgetScreen(
+                navController = navController,
+                month = month,
+                year = year
+            )
+        }
+        composable( Routes.SetYearlyBudget.route) {
+            YearlyBudgetDetailScreen(navController, Calendar.getInstance().get(Calendar.YEAR))
+        }
     }
 }

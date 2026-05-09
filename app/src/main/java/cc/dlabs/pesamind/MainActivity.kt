@@ -13,16 +13,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import android.provider.Settings
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.HiltAndroidApp
 
+@HiltAndroidApp
 class PesaMindApp : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -30,9 +35,10 @@ class PesaMindApp : Application() {
         AccountManager.init(this)
         ChannelManager.init(this)
         NotificationStorage.init(this)
+        ThemeManager.init(this)
     }
 }
-
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     companion object {
@@ -54,7 +60,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            PesaMindTheme {
+            val isDarkMode = ThemeManager.darkModeFlow.collectAsState().value
+            PesaMindTheme(darkTheme = isDarkMode) {
                 val navController = rememberNavController()
                 PesaMindNavGraph(navController = navController)
             }

@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Pesa Mind"
 include(":app")
+
  
