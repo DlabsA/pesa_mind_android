@@ -505,40 +505,6 @@ fun BudgetVsActualCard(budgetActual: BudgetActualData) {
     }
 }
 
-//@Composable
-//fun AnomaliesAlertCard(anomalies: AnomalyData) {
-//    Card(
-//        modifier = Modifier.fillMaxWidth(),
-//        shape = RoundedCornerShape(16.dp),
-//        colors = CardDefaults.cardColors(
-//            containerColor = ExpenseRed.copy(alpha = 0.1f)
-//        ),
-//        border = BorderStroke(1.dp, ExpenseRed.copy(alpha = 0.3f))
-//    ) {
-//        Column(modifier = Modifier.padding(16.dp)) {
-//            Row(verticalAlignment = Alignment.CenterVertically) {
-//                Icon(
-//                    Icons.Default.Warning,
-//                    contentDescription = "Warning",
-//                    tint = ExpenseRed,
-//                    modifier = Modifier.size(24.dp)
-//                )
-//                Spacer(modifier = Modifier.width(8.dp))
-//                Text(
-//                    "Unusual Spending Detected",
-//                    style = MaterialTheme.typography.titleMedium,
-//                    color = ExpenseRed,
-//                    fontWeight = FontWeight.SemiBold
-//                )
-//            }
-//            Spacer(modifier = Modifier.height(8.dp))
-//            Text("${anomalies.criticalCount} critical anomalies found", style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp)
-//            Text("Check your transaction patterns", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, color = TextSecondary)
-//        }
-//    }
-//}
-
-
 @Composable
 fun AnomaliesAlertCard(anomalies: AnomalyData) {
     Card(
