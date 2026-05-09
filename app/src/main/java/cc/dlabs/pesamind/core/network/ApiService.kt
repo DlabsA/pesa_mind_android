@@ -2,6 +2,7 @@ package cc.dlabs.pesamind.core.network
 import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
 import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
 import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
@@ -20,7 +21,6 @@ import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import cc.dlabs.pesamind.core.network.models.ApiMessageResponse
-import cc.dlabs.pesamind.core.network.models.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
@@ -144,11 +144,6 @@ interface ApiService {
     @DELETE("budgets/yearly/{id}")
     suspend fun deleteYearlyBudget(@Path("id") id: String): Response<ApiMessageResponse>
 
-    @GET("analytics/budget-vs-actual")
-    suspend fun getBudgetVsActual(
-        @Query("month") month: Int,
-        @Query("year") year: Long
-    ): Response<BudgetVsActualResponse>
 
     @GET("analytics/summary")
     suspend fun getAnalyticsSummary(): Response<AnalyticsSummaryResponse>

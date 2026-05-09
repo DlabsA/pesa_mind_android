@@ -3,7 +3,7 @@ package cc.dlabs.pesamind.features.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
-import cc.dlabs.pesamind.core.network.models.BudgetVsActualResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,8 +32,8 @@ class BudgetVsActualViewModel : ViewModel() {
             _state.value = currentState.copy(isLoading = true, error = null)
             try {
                 val response = ApiClient.api.getBudgetVsActual(
-                    month = currentState.month,
-                    year = currentState.year
+                    year = currentState.year.toInt(),
+                    month = currentState.month
                 )
                 if (response.isSuccessful) {
                     _state.value = currentState.copy(

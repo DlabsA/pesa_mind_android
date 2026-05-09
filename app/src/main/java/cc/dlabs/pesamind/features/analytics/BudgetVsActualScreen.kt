@@ -23,8 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import cc.dlabs.pesamind.core.network.models.BudgetVsActualItem
-import cc.dlabs.pesamind.core.network.models.BudgetVsActualResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetActualData
+import cc.dlabs.pesamind.core.network.analytics.BudgetActualItem
 import java.text.NumberFormat
 import java.util.*
 
@@ -76,13 +77,13 @@ fun BudgetVsActualScreen(
                 )
             }
         } else if (state.data != null) {
-            BudgetVsActualContent(data = state.data!!)
+            BudgetVsActualContent(data = state.data!!.data)
         }
     }
 }
 
 @Composable
-fun BudgetVsActualContent(data: BudgetVsActualResponse) {
+fun BudgetVsActualContent(data: BudgetActualData) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -98,7 +99,7 @@ fun BudgetVsActualContent(data: BudgetVsActualResponse) {
         }
 
         // Detailed Items
-        items(data.budgetVsActual) { item ->
+        items(data.items) { item ->
             BudgetVsActualItemCard(item)
         }
 
@@ -109,7 +110,7 @@ fun BudgetVsActualContent(data: BudgetVsActualResponse) {
 }
 
 @Composable
-fun BudgetVsActualSummaryCard(data: BudgetVsActualResponse) {
+fun BudgetVsActualSummaryCard(data: BudgetActualData) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -132,12 +133,12 @@ fun BudgetVsActualSummaryCard(data: BudgetVsActualResponse) {
             ) {
                 SummaryStatItem(
                     label = "Budgeted",
-                    value = formatCurrency(data.totalBudgeted),
+                    value = formatCurrency(data.budgetTotal.toDouble()),
                     color = TealPrimary
                 )
                 SummaryStatItem(
                     label = "Actual",
-                    value = formatCurrency(data.totalActual),
+                    value = formatCurrency(data.actualTotal.toDouble()),
                     color = TextDark
                 )
             }
@@ -161,12 +162,12 @@ fun BudgetVsActualSummaryCard(data: BudgetVsActualResponse) {
                         color = TextLight
                     )
                     Text(
-                        text = "${if (data.totalVariance >= 0) "+" else ""}${formatCurrency(data.totalVariance)}",
+                        text = "${if (data.variance >= 0) "+" else ""}${formatCurrency(data.variance.toDouble())}",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = when {
-                            data.totalVariance < 0 -> SuccessGreen
-                            data.totalVariance > data.totalBudgeted * 0.1 -> ErrorRed
+                            data.variance < 0 -> SuccessGreen
+                            data.variance > data.budgetTotal * 0.1 -> ErrorRed
                             else -> WarningYellow
                         }
                     )
@@ -212,14 +213,14 @@ fun SummaryStatItem(
 }
 
 @Composable
-fun OverallStatusBanner(data: BudgetVsActualResponse) {
-    val statusColor = when (data.overallStatus) {
+fun OverallStatusBanner(data: BudgetActualData) {
+    val statusColor = when (data.status) {
         "over" -> ErrorRed
         "under" -> SuccessGreen
         else -> WarningYellow
     }
 
-    val statusMessage = when (data.overallStatus) {
+    val statusMessage = when (data.status) {
         "over" -> "You're over budget this month"
         "under" -> "Great! You're under budget"
         else -> "You're on track with your budget"
@@ -245,15 +246,15 @@ fun OverallStatusBanner(data: BudgetVsActualResponse) {
 
 
 @Composable
-fun BudgetVsActualItemCard(item: BudgetVsActualItem) {
-    val statusColor = when (item.status) {
-        "over" -> ErrorRed
-        "under" -> SuccessGreen
+fun BudgetVsActualItemCard(item: BudgetActualItem) {
+    val statusColor = when {
+        item.variance < 0 -> SuccessGreen
+        item.variance > item.budget * 0.1 -> ErrorRed
         else -> WarningYellow
     }
 
-    val progressValue: Any = if (item.budgetedAmount > 0) {
-        (item.actualAmount / item.budgetedAmount).coerceIn(0.0, 1.5)
+    val progressValue: Any = if (item.budget > 0) {
+        (item.actual.toDouble() / item.budget.toDouble()).coerceIn(0.0, 1.5)
     } else {
         0f
     }
@@ -277,7 +278,7 @@ fun BudgetVsActualItemCard(item: BudgetVsActualItem) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.name,
+                    text = item.category,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextDark,
@@ -336,7 +337,7 @@ fun BudgetVsActualItemCard(item: BudgetVsActualItem) {
                         color = TextLight
                     )
                     Text(
-                        text = formatCurrency(item.budgetedAmount),
+                        text = formatCurrency(item.budget.toDouble()),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TextDark
@@ -350,7 +351,7 @@ fun BudgetVsActualItemCard(item: BudgetVsActualItem) {
                         color = TextLight
                     )
                     Text(
-                        text = formatCurrency(item.actualAmount),
+                        text = formatCurrency(item.actual.toDouble()),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = statusColor
@@ -364,7 +365,7 @@ fun BudgetVsActualItemCard(item: BudgetVsActualItem) {
                         color = TextLight
                     )
                     Text(
-                        text = "${if (item.variance >= 0) "+" else ""}${formatCurrency(item.variance)}",
+                        text = "${if (item.variance >= 0) "+" else ""}${formatCurrency(item.variance.toDouble())}",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = statusColor

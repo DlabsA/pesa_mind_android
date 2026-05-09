@@ -63,7 +63,7 @@ class AnalyticsViewModel @Inject constructor(
                         budgetUtilization = utilizationResp.body(),
                         expenseForecast = forecastResp.body(),
                         cashFlow = cashFlowResp.body(),
-                        budgetVsActual = budgetActualResp.body() as BudgetVsActualResponse?,
+                        budgetVsActual = budgetActualResp.body(),
                         anomalies = anomaliesResp.body(),
                         error = null
                     )

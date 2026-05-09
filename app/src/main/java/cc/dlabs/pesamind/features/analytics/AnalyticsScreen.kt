@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,7 +47,6 @@ import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
 import java.text.NumberFormat
 import java.util.Locale
-import kotlin.io.path.Path
 
 private val TealPrimary = Color(0xFF1A9E8F)
 
@@ -66,27 +66,11 @@ fun AnalyticsScreen(
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
-            viewModel.refresh()
         }
     }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Analytics") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                }
-            )
-        }
     ) { padding ->
         if (uiState.isLoading && uiState.summary == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -94,7 +78,9 @@ fun AnalyticsScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.padding(padding),
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxWidth(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -180,32 +166,38 @@ fun KeyMetricsCard(data: SummaryData) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("This Month", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("This Month", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                MetricItem("Income", data.totalIncome, IncomeGreen)
-                MetricItem("Expense", data.totalExpense, ExpenseRed)
-                MetricItem("Savings", data.totalSavings, PesaMindTeal)
-                MetricItem("Net", data.netMovement, if (data.netMovement >= 0) IncomeGreen else ExpenseRed)
+                MetricItem("Income", data.totalIncome, IncomeGreen, Modifier.weight(1f))
+                MetricItem("Expense", data.totalExpense, ExpenseRed, Modifier.weight(1f))
+                MetricItem("Savings", data.totalSavings, PesaMindTeal, Modifier.weight(1f))
+                MetricItem("Net", data.netMovement, if (data.netMovement >= 0) IncomeGreen else ExpenseRed, Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-fun MetricItem(title: String, amount: Long, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(title, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+fun MetricItem(title: String, amount: Long, color: Color, modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Text(title, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = formatUgx(amount),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = color
+            color = color,
+            fontSize = 13.sp
         )
     }
 }
@@ -219,34 +211,43 @@ private fun formatUgx(amount: Long): String {
 fun SpendingVelocityCard(velocity: VelocityData) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Spending Velocity", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Spending Velocity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column {
-                    Text("Daily Avg", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(velocity.dailyAverage.toLong()), fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) {
+                    Text("Daily Avg", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(velocity.dailyAverage.toLong()), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Column {
-                    Text("Projected", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(velocity.projectedMonthEnd.toLong()), fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) {
+                    Text("Projected", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(velocity.projectedMonthEnd.toLong()), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Column {
-                    Text("Pattern", style = MaterialTheme.typography.labelSmall)
-                    Text(velocity.spendingPattern.replaceFirstChar { it.uppercase() })
+                Column(Modifier.weight(1f)) {
+                    Text("Pattern", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(velocity.spendingPattern.replaceFirstChar { it.uppercase() }, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
+            Spacer(modifier = Modifier.height(12.dp))
             LinearProgressIndicator(
                 progress = (velocity.totalSpent.toFloat() / velocity.budgetLimit.toFloat()).coerceIn(0f, 1f),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                color = if (velocity.alertLevel == "ok") PesaMindTeal else ExpenseRed
+                modifier = Modifier.fillMaxWidth(),
+                color = if (velocity.alertLevel == "ok") PesaMindTeal else ExpenseRed,
+                trackColor = Color.LightGray.copy(alpha = 0.5f)
             )
-            Text("${formatUgx(velocity.totalSpent)} / ${formatUgx(velocity.budgetLimit.toLong())}", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "${formatUgx(velocity.totalSpent)} / ${formatUgx(velocity.budgetLimit.toLong())}", 
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
         }
     }
 }
@@ -256,22 +257,26 @@ fun SpendingVelocityCard(velocity: VelocityData) {
 fun BudgetUtilizationCard(utilization: Double) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Budget Utilization", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Budget Utilization", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             val percent = (utilization).coerceIn(0.0, 300.0)
             LinearProgressIndicator(
-                progress = (percent / 100f).toFloat(),
+                progress = ((percent / 100.0).coerceIn(0.0, 1.0)).toFloat(),
                 modifier = Modifier.fillMaxWidth(),
                 color = when {
                     percent <= 100 -> IncomeGreen
-                    percent <= 150 -> Color.Yellow
+                    percent <= 150 -> Color(0xFFFFC107)
                     else -> ExpenseRed
-                }
+                },
+                trackColor = Color.LightGray.copy(alpha = 0.5f)
             )
-            Text("${percent.toInt()}% of budget used", style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("${percent.toInt()}% of budget used", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
         }
     }
 }
@@ -281,10 +286,12 @@ fun BudgetUtilizationCard(utilization: Double) {
 fun MonthlyTrendsCard(trends: TrendsData) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Monthly Trends", style = MaterialTheme.typography.titleMedium)
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Monthly Trends", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(12.dp))
             // Only show last 6 months for clarity
             val last6Months = trends.months.takeLast(6)
@@ -293,13 +300,15 @@ fun MonthlyTrendsCard(trends: TrendsData) {
                 label = "Income",
                 color = IncomeGreen
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             SimpleLineChart(
                 data = last6Months.map { it.expense.toFloat() },
                 label = "Expense",
                 color = ExpenseRed
             )
-            Text("Trend: ${trends.summary.incomeTrend}", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Income Trend: ${trends.summary.incomeTrend}", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
+            Text("Expense Trend: ${trends.summary.expenseTrend}", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
         }
     }
 }
@@ -309,8 +318,8 @@ fun SimpleLineChart(data: List<Float>, label: String, color: Color) {
     if (data.isEmpty()) return
     val maxVal = data.maxOrNull() ?: 1f
     Column {
-        Text(label, style = MaterialTheme.typography.labelSmall)
-        Canvas(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+        Canvas(modifier = Modifier.fillMaxWidth().height(100.dp)) {
             val step = size.width / (data.size - 1).coerceAtLeast(1)
             val points = data.mapIndexed { i, v ->
                 Offset(x = i * step, y = size.height - (v / maxVal) * size.height)
@@ -320,13 +329,13 @@ fun SimpleLineChart(data: List<Float>, label: String, color: Color) {
                     path = Path().apply {
                         moveTo(points.first().x, points.first().y)
                         points.drop(1).forEach { lineTo(it.x, it.y) }
-                    } as Path,
+                    },
                     color = color,
-                    style = Stroke(width = 3f)
+                    style = Stroke(width = 2.5f)
                 )
             }
             points.forEach {
-                drawCircle(color = color, radius = 4f, center = it)
+                drawCircle(color = color, radius = 3f, center = it)
             }
         }
     }
@@ -337,38 +346,42 @@ fun ExpenseForecastCard(forecast: ForecastData) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Expense Forecast", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Expense Forecast", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column {
-                    Text("Daily Burn Rate", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(forecast.dailyBurnRate.toLong()), fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) {
+                    Text("Daily Burn", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(forecast.dailyBurnRate.toLong()), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Column {
-                    Text("Projected Total", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(forecast.projectedTotal.toLong()), fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) {
+                    Text("Projected", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(forecast.projectedTotal.toLong()), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Column {
-                    Text("Will exceed budget?", style = MaterialTheme.typography.labelSmall)
+                Column(Modifier.weight(1f)) {
+                    Text("Exceed?", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
                     Text(
                         if (forecast.willExceedBudget) "Yes" else "No",
                         color = if (forecast.willExceedBudget) ExpenseRed else IncomeGreen,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             LinearProgressIndicator(
                 progress = (forecast.actualSpent.toFloat() / forecast.budgetLimit.toFloat()).coerceIn(0f, 1f),
                 modifier = Modifier.fillMaxWidth(),
-                color = if (forecast.willExceedBudget) ExpenseRed else PesaMindTeal
+                color = if (forecast.willExceedBudget) ExpenseRed else PesaMindTeal,
+                trackColor = Color.LightGray.copy(alpha = 0.5f)
             )
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Confidence: ${(forecast.confidence * 100).toInt()}%",
                 style = MaterialTheme.typography.bodySmall,
@@ -383,37 +396,39 @@ fun CashFlowCard(cashFlow: WaterfallData) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Cash Flow", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Cash Flow", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column {
-                    Text("Income", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(cashFlow.income.total), fontWeight = FontWeight.Bold, color = IncomeGreen)
+                Column(Modifier.weight(1f)) {
+                    Text("Income", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(cashFlow.income.total), fontWeight = FontWeight.Bold, color = IncomeGreen, fontSize = 13.sp)
                 }
-                Column {
-                    Text("Expenses", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(cashFlow.expenses.total), fontWeight = FontWeight.Bold, color = ExpenseRed)
+                Column(Modifier.weight(1f)) {
+                    Text("Expenses", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(cashFlow.expenses.total), fontWeight = FontWeight.Bold, color = ExpenseRed, fontSize = 13.sp)
                 }
-                Column {
-                    Text("Savings", style = MaterialTheme.typography.labelSmall)
-                    Text(formatUgx(cashFlow.savingsTransfers), fontWeight = FontWeight.Bold, color = PesaMindTeal)
+                Column(Modifier.weight(1f)) {
+                    Text("Savings", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 11.sp)
+                    Text(formatUgx(cashFlow.savingsTransfers), fontWeight = FontWeight.Bold, color = PesaMindTeal, fontSize = 13.sp)
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Top Expense Categories", style = MaterialTheme.typography.labelMedium)
+            Text("Top Expense Categories", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(8.dp))
             cashFlow.expenses.categories.take(3).forEach { category ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(category.channel, style = MaterialTheme.typography.bodySmall)
-                    Text(formatUgx(category.amount), style = MaterialTheme.typography.bodySmall)
+                    Text(category.channel, style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
+                    Text(formatUgx(category.amount), style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -425,45 +440,49 @@ fun BudgetVsActualCard(budgetActual: BudgetActualData) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Budget vs Actual", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Budget vs Actual", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Budget", style = MaterialTheme.typography.bodyMedium)
-                Text(formatUgx(budgetActual.budgetTotal), fontWeight = FontWeight.Bold)
+                Text("Budget", style = MaterialTheme.typography.bodyMedium, fontSize = 12.sp)
+                Text(formatUgx(budgetActual.budgetTotal), fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Actual", style = MaterialTheme.typography.bodyMedium)
-                Text(formatUgx(budgetActual.actualTotal), fontWeight = FontWeight.Bold, color = ExpenseRed)
+                Text("Actual", style = MaterialTheme.typography.bodyMedium, fontSize = 12.sp)
+                Text(formatUgx(budgetActual.actualTotal), fontWeight = FontWeight.Bold, color = ExpenseRed, fontSize = 12.sp)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Variance", style = MaterialTheme.typography.bodyMedium)
+                Text("Variance", style = MaterialTheme.typography.bodyMedium, fontSize = 12.sp)
                 Text(
                     formatUgx(budgetActual.variance),
                     color = if (budgetActual.variance < 0) ExpenseRed else IncomeGreen,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Categories over budget: ${budgetActual.categoriesOverBudget}", style = MaterialTheme.typography.bodySmall)
+            Text("Categories over budget: ${budgetActual.categoriesOverBudget}", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            Spacer(modifier = Modifier.height(8.dp))
             budgetActual.items.take(3).forEach { item ->
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(item.category, style = MaterialTheme.typography.bodySmall)
-                    Text("${formatUgx(item.actual)} / ${formatUgx(item.budget)}", style = MaterialTheme.typography.bodySmall)
+                    Text(item.category, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("${formatUgx(item.actual)} / ${formatUgx(item.budget)}", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 }
             }
         }
@@ -492,12 +511,13 @@ fun AnomaliesAlertCard(anomalies: AnomalyData) {
                 Text(
                     "Unusual Spending Detected",
                     style = MaterialTheme.typography.titleMedium,
-                    color = ExpenseRed
+                    color = ExpenseRed,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text("${anomalies.criticalCount} critical anomalies found", style = MaterialTheme.typography.bodyMedium)
-            Text("Check your transaction patterns", style = MaterialTheme.typography.bodySmall)
+            Text("${anomalies.criticalCount} critical anomalies found", style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp)
+            Text("Check your transaction patterns", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, color = TextSecondary)
         }
     }
 }
@@ -507,11 +527,12 @@ fun HealthScoreCard(health: Health) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Financial Health", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Financial Health", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(80.dp),
@@ -523,20 +544,21 @@ fun HealthScoreCard(health: Health) {
                         strokeWidth = 8.dp,
                         color = when (health.status) {
                             "good" -> PesaMindGreen
-                            "fair" -> Color.Yellow
+                            "fair" -> Color(0xFFFFC107)
                             else -> ExpenseRed
                         }
                     )
                     Text(
                         "${health.score}",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp
                     )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text("Status: ${health.status.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.bodyMedium)
-                    Text("Trend: ${health.trend}", style = MaterialTheme.typography.bodySmall)
+                    Text("Status: ${health.status.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp)
+                    Text("Trend: ${health.trend}", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, color = TextSecondary)
                 }
             }
         }
@@ -568,17 +590,17 @@ fun RecommendationCard(recommendation: Recommendation) {
                 },
                 contentDescription = null,
                 tint = when (recommendation.severity) {
-                    "warning" -> Color.Yellow
+                    "warning" -> Color(0xFFFFC107)
                     else -> PesaMindTeal
                 },
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
-                Text(recommendation.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Text(recommendation.message, style = MaterialTheme.typography.bodySmall)
+                Text(recommendation.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(recommendation.message, style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
                 if (recommendation.confidence > 0) {
-                    Text("Confidence: ${(recommendation.confidence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("Confidence: ${(recommendation.confidence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp)
                 }
             }
         }
