@@ -6,11 +6,11 @@ import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
 import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
+import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
 import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
-import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.storage.AccountManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
+
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
     private val api: ApiService
@@ -29,8 +30,8 @@ class AnalyticsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AnalyticsUiState())
     val uiState: StateFlow<AnalyticsUiState> = _uiState.asStateFlow()
 
-    private var currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    private var currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+    private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+    private val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
 
     init {
         loadUserProfile()
@@ -41,37 +42,28 @@ class AnalyticsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                // Parallel requests with async
-                val summaryDeferred = async { api.getAnalyticsSummary() }
-                val velocityDeferred = async { api.getSpendingVelocity() }
-                val trendsDeferred = async { api.getMonthlyTrends() }
-                val utilizationDeferred = async { api.getBudgetUtilization(currentMonth, currentYear) }
-                val forecastDeferred = async { api.getExpenseForecast() }
-                val cashFlowDeferred = async { api.getCashFlowWaterfall(currentYear, currentMonth) }
-                val budgetActualDeferred = async { api.getBudgetVsActual(currentYear, currentMonth) }
-                val anomaliesDeferred = async { api.getAnomalies() }
-
-                val summaryResp = summaryDeferred.await()
-                val velocityResp = velocityDeferred.await()
-                val trendsResp = trendsDeferred.await()
-                val utilizationResp = utilizationDeferred.await()
-                val forecastResp = forecastDeferred.await()
-                val cashFlowResp = cashFlowDeferred.await()
-                val budgetActualResp = budgetActualDeferred.await()
-                val anomaliesResp = anomaliesDeferred.await()
+                // Fire all requests in parallel
+                val summaryDeferred       = async { api.getAnalyticsSummary() }
+                val velocityDeferred      = async { api.getSpendingVelocity() }
+                val trendsDeferred        = async { api.getMonthlyTrends() }
+                val utilizationDeferred   = async { api.getBudgetUtilization(currentMonth, currentYear) }
+                val forecastDeferred      = async { api.getExpenseForecast() }
+                val cashFlowDeferred      = async { api.getCashFlowWaterfall(currentYear, currentMonth) }
+                val budgetActualDeferred  = async { api.getBudgetVsActual(currentYear, currentMonth) }
+                val anomaliesDeferred     = async { api.getAnomalies() }
 
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        summary = summaryResp.body(),
-                        spendingVelocity = velocityResp.body(),
-                        monthlyTrends = trendsResp.body(),
-                        budgetUtilization = utilizationResp.body(),
-                        expenseForecast = forecastResp.body(),
-                        cashFlow = cashFlowResp.body(),
-                        budgetVsActual = budgetActualResp.body(),
-                        anomalies = anomaliesResp.body(),
-                        error = null
+                        isLoading        = false,
+                        summary          = summaryDeferred.await().body(),
+                        spendingVelocity = velocityDeferred.await().body(),
+                        monthlyTrends    = trendsDeferred.await().body(),
+                        budgetUtilization= utilizationDeferred.await().body(),
+                        expenseForecast  = forecastDeferred.await().body(),
+                        cashFlow         = cashFlowDeferred.await().body(),
+                        budgetVsActual   = budgetActualDeferred.await().body(),
+                        anomalies        = anomaliesDeferred.await().body(),
+                        error            = null
                     )
                 }
             } catch (e: Exception) {
@@ -84,28 +76,33 @@ class AnalyticsViewModel @Inject constructor(
 
     fun refresh() = loadAllData()
 
+    /** Consume the one-shot error after it has been shown to the user. */
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     private fun loadUserProfile() {
         viewModelScope.launch {
-            val user = AccountManager.getAccount()
-            val initials = buildInitials(user.username)
-            _uiState.update {
-                it.copy(
-                    userDisplayName = user.username,
-                    userInitials = initials
-                )
+            runCatching { AccountManager.getAccount() }.onSuccess { user ->
+                _uiState.update {
+                    it.copy(
+                        userDisplayName = user.username,
+                        userInitials    = buildInitials(user.username)
+                    )
+                }
             }
         }
     }
+
     private fun buildInitials(name: String): String {
         val parts = name.trim().split(" ").filter { it.isNotBlank() }
         return when {
-            parts.isEmpty() -> "?"
-            parts.size == 1 -> parts[0].take(2).uppercase()
-            else -> "${parts.first().first()}${parts.last().first()}".uppercase()
+            parts.isEmpty()  -> "?"
+            parts.size == 1  -> parts[0].take(2).uppercase()
+            else             -> "${parts.first().first()}${parts.last().first()}".uppercase()
         }
     }
 }
-
 
 data class AnalyticsUiState(
     val isLoading: Boolean = false,
