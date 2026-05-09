@@ -12,7 +12,9 @@ data class MonthlyTrendsResponse(
 data class TrendsData(
     val months: List<MonthlyData>,
     val summary: TrendSummary
-)
+) {
+    var notEmpty: Boolean = months.isNotEmpty()
+}
 
 data class MonthlyData(
     val date: String,

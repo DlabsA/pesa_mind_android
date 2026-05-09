@@ -96,5 +96,7 @@ data class DashboardUiState(
     val summary: AnalyticsSummaryResponse? = null,
     val spendingVelocity: SpendingVelocityResponse? = null,
     val anomalies: AnomaliesResponse? = null,
-    val budgetUtilization: BudgetUtilizationResponse? = null
+    val budgetUtilization: BudgetUtilizationResponse? = null,
+    val monthlyTrends: MonthlyTrendsResponse? = null,
+    val budgetVsActual: BudgetVsActualResponse? = null,
 )
