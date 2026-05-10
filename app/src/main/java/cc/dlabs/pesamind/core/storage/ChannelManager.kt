@@ -1,10 +1,15 @@
 package cc.dlabs.pesamind.core.storage
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
+import cc.dlabs.pesamind.features.settings.notifications.MessageSender
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.first
@@ -128,26 +133,63 @@ object ChannelManager {
      * Check if any channel with this sender ID has SMS notifications enabled
      */
     data class ChannelInfo(val channel: ChannelDetails, val enabled: Boolean)
-    suspend fun isSmsAllowedForSender(receivingSimNumber: String): ChannelInfo {
-        if (!isInitialized()) {
-            return ChannelInfo(ChannelDetails(), false)
+    suspend fun isSmsAllowedForSender(receivingSimNumber: String, simInfo: Int, senderID: String): ChannelInfo? {
+        if (!isInitialized()) return null
+
+        // Get existing channels (cached)
+        val channels = getChannels()
+        val matchingChannel = channels.find {
+            it.channelType != "CASH" &&
+                    it.description.equals(receivingSimNumber, ignoreCase = true)
         }
 
-        try {
-            val channels = getChannels()
-            val matchingChannel = channels.find { 
-                it.channelType != "CASH" &&
-                 it.description.equals(receivingSimNumber, ignoreCase = true)
-            }
-            return ChannelInfo(
-                channel = matchingChannel ?: ChannelDetails(),
-                enabled = matchingChannel?.smsNotificationEnabled ?: false
-            )
-        } catch (e: Exception) {
-            return ChannelInfo(ChannelDetails(), false)
+        // If found, return it
+        if (matchingChannel != null) {
+            return ChannelInfo(matchingChannel, matchingChannel.smsNotificationEnabled)
         }
+
+        // Otherwise, create a new channel
+        val (channelType, channelDesc) = determineChannelTypeAndDesc(senderID)
+        if (channelType == null || channelDesc == null) {
+            // Unrecognized sender – cannot auto‑create
+            return null
+        }
+
+        val newChannel = try {
+            val request = CreateChannelRequest(
+                name = "Auto‑created ${channelDesc}",
+                description = receivingSimNumber,
+                channelType = channelType,
+                channelDesc = channelDesc,
+                status = true
+            )
+            val response = ApiClient.api.createChannel(request)
+            if (response.isSuccessful) {
+                response.body()?.also {
+                    // Refresh local cache
+                    val updatedChannels = channels + it
+                    saveChannels(updatedChannels)
+                }
+            } else {
+                Log.e("ChannelManager", "Error creating channel for sender $senderID: ${response.errorBody()?.string()}")
+            }
+        } catch (e: Exception) {
+            Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)
+        }
+
+        return newChannel?.let { ChannelInfo(it as ChannelDetails, true) }
     }
 
+    private fun determineChannelTypeAndDesc(senderID: String): Pair<String?, String?> {
+        val normalized = MessageSender.normalizeOrNull(senderID) ?: return Pair(null, null)
+        return when (normalized) {
+            MessageSender.MTNMobMoney -> Pair(ChannelTypes.MOBILE_MONEY, MessageSender.MTNMobMoney)
+            MessageSender.airtelmoney -> Pair(ChannelTypes.MOBILE_MONEY, MessageSender.airtelmoney)
+            MessageSender.stanbicbank -> Pair(ChannelTypes.BANK, MessageSender.stanbicbank)
+            MessageSender.centenary -> Pair(ChannelTypes.BANK, MessageSender.centenary)
+            else -> Pair(null, null)
+        }
+    }
     /**
      * Get last sync time
      */

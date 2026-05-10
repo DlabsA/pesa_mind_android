@@ -25,6 +25,8 @@ import cc.dlabs.pesamind.core.navigation.Routes
 fun LockSetupScreen(navController: NavHostController) {
     val teal = Color(0xFF1A9E8F)
     val navy = Color(0xFF1E2240)
+    val grey = Color(0xFFE5E5E5)
+
 
     Column(
         modifier = Modifier
@@ -64,6 +66,14 @@ fun LockSetupScreen(navController: NavHostController) {
             colors = ButtonDefaults.buttonColors(containerColor = navy)
         ) {
             Text("Set Pattern", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = { navController.navigate(Routes.Dashboard.route) },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = grey)
+        ) {
+            Text("No Lockup set ", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
         }
 
         Spacer(Modifier.height(12.dp))

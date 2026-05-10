@@ -11,6 +11,7 @@ import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.BudgetManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,7 +88,6 @@ class YearlyBudgetViewModel() : ViewModel() {
             // First, try to get from cache
             val cached = BudgetManager.getYearlyBudgetByYear(year.toLong())
             if (cached != null) {
-                Log.d("YearlyBudgetVM", "Found cached budget: ${cached.id}")
                 _state.update {
                     it.copy(
                         budget = cached,
@@ -102,15 +102,11 @@ class YearlyBudgetViewModel() : ViewModel() {
 
             // Always try to fetch from network to get latest data
             try {
-                Log.d("YearlyBudgetVM", "Fetching from network for year: $year")
                 val response = api.getYearlyBudgetsByYear(year.toLong())
-
-                Log.d("YearlyBudgetVM", "Network response code: ${response.code()}")
 
                 if (response.isSuccessful) {
                     val budget = response.body()
                     if (budget != null) {
-                        Log.d("YearlyBudgetVM", "Found budget on server: ${budget.id}")
                         // Save to cache
                         BudgetManager.saveYearlyBudgets(listOf(budget))
                         BudgetManager.saveCurrentYearlyBudget(budget)
@@ -248,6 +244,15 @@ class YearlyBudgetViewModel() : ViewModel() {
         try {
             val response = api.createYearlyBudget(body)
             if (response.isSuccessful) {
+                val errorBody = response.errorBody()?.string()
+                if (errorBody?.contains("duplicate key value violates unique constraint") == true) {
+                    // Budget already exists – try to refresh and then patch
+                    refresh()
+                    // Wait a moment and retry as update
+                    delay(500)
+                    patchBudgetAddTransaction(s.yearlyBudgetId, tx)
+                    return
+                }
                 val created = response.body()!!
                 Log.d("YearlyBudgetVM", "Successfully created budget: ${created.id}")
 

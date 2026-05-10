@@ -7,7 +7,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,7 +32,7 @@ fun MainScreen(rootNav: NavHostController) {
     val items = listOf(
         BottomNavItem("Home", Routes.Home.route, Icons.Filled.Home),
         BottomNavItem("Analytics", Routes.Analytics.route, Icons.Filled.BarChart),
-        BottomNavItem("Tools", Routes.Tools.route, Icons.Filled.Build),
+        BottomNavItem("Budget", Routes.Tools.route, Icons.Filled.MonetizationOn),
         BottomNavItem("Settings", Routes.Settings.route, Icons.Filled.Settings),
     )
 

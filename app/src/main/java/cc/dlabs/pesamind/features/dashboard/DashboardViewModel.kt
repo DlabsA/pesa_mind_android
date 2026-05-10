@@ -57,11 +57,13 @@ class DashboardViewModel @Inject constructor(
                 val velocityDeferred = async { api.getSpendingVelocity() }
                 val anomaliesDeferred = async { api.getAnomalies() }
                 val utilizationDeferred = async { api.getBudgetUtilization(getCurrentMonth(), getCurrentYear()) }
+                val healthDeferred = async { api.getFinancialHealth() }
 
                 val summaryResp = summaryDeferred.await()
                 val velocityResp = velocityDeferred.await()
                 val anomaliesResp = anomaliesDeferred.await()
                 val utilizationResp = utilizationDeferred.await()
+                val healthResp = healthDeferred.await()  // add this
 
                 _uiState.update {
                     it.copy(
@@ -70,7 +72,9 @@ class DashboardViewModel @Inject constructor(
                         spendingVelocity = velocityResp.body(),
                         anomalies = anomaliesResp.body(),
                         budgetUtilization = utilizationResp.body(),
+                        financialHealth = healthResp.body(),
                         error = null
+
                     )
                 }
             } catch (e: Exception) {
@@ -99,4 +103,6 @@ data class DashboardUiState(
     val budgetUtilization: BudgetUtilizationResponse? = null,
     val monthlyTrends: MonthlyTrendsResponse? = null,
     val budgetVsActual: BudgetVsActualResponse? = null,
+    val health: Health? = null,
+    val financialHealth: FinancialHealthResponse? = null,
 )
