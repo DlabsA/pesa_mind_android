@@ -6,7 +6,6 @@ import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -108,9 +107,7 @@ class MainActivity : ComponentActivity() {
      */
     private fun buildRequiredPermissions(): List<String> {
         val permissions = mutableListOf(Manifest.permission.RECEIVE_SMS)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            permissions.add(Manifest.permission.READ_PHONE_STATE)
-        }
+        permissions.add(Manifest.permission.READ_PHONE_STATE)
         return permissions
     }
 

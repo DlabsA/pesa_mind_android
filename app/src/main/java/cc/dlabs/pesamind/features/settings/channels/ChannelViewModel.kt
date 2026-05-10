@@ -143,7 +143,7 @@ class ChannelViewModel : ViewModel() {
         name: String,
         description: String,
         channelType: String,
-        channelDescription: String = "",
+        channelDescription: String,
         status: Boolean = true
     ) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
@@ -172,15 +172,14 @@ class ChannelViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
             try {
-                val response = ApiClient.api.createChannel(
-                    CreateChannelRequest(
-                        name = name.trim(),
-                        description = description.trim(),
-                        channelType = normalizedType,
-                        channelDesc = normalizedChannelDesc ?: channelDescription.trim(),
-                        status = status
-                    )
+                val body = CreateChannelRequest(
+                    name = name.trim(),
+                    description = description.trim(),
+                    channelType = normalizedType,
+                    channelDesc = normalizedChannelDesc ?: "Cash",
+                    status = status
                 )
+                val response = ApiClient.api.createChannel(body = body)
 
                 if (response.isSuccessful) {
                     val created = response.body()

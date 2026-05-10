@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import kotlinx.coroutines.launch
 
@@ -44,6 +45,12 @@ fun RegisterScreen(navController: NavHostController) {
     var username by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val initialChannel = "Initial Cash"
+    val description = "This is the initial channel that is created with the account"
+    val initialChannelType = "Cash"
+    val initialChannelDesc = "This is the channel type that is created with the account"
+
 
     val scope = rememberCoroutineScope()
     val teal = MaterialTheme.colorScheme.primary
@@ -61,6 +68,7 @@ fun RegisterScreen(navController: NavHostController) {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.id != null) {
+                        val initialChannelResponse = ApiClient.api.createChannel(CreateChannelRequest(initialChannel, initialChannelType, description, initialChannelDesc, true))
                         navController.navigate("login")
                     } else {
                         errorMessage = body?.error ?: "Registration failed"

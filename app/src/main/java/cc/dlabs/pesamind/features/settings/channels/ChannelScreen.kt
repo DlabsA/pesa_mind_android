@@ -1000,7 +1000,7 @@ private fun ChannelFormDialog(
                     }
                 }
                     else{
-                    channelDescription = "Cash"
+                    channelDescription = ""
                 }
                 // Description
                 if (type == ChannelTypes.MOBILE_MONEY){

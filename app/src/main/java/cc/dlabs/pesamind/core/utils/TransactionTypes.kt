@@ -3,7 +3,7 @@ package cc.dlabs.pesamind.core.utils
 object TransactionTypes {
     const val EXPENSE = "expense"
     const val INCOME = "income"
-    const val SAVINGS = "savings"
+    const val SAVINGS = "saving"
 
     val valid = listOf(EXPENSE, INCOME, SAVINGS)
 
@@ -15,7 +15,7 @@ object TransactionTypes {
         return when (normalizeOrNull(raw)) {
             EXPENSE -> "Expense"
             INCOME -> "Income"
-            SAVINGS -> "Savings"
+            SAVINGS -> "Saving"
             else -> "Unknown"
         }
     }
