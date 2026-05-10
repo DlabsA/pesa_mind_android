@@ -27,6 +27,7 @@ class SMSMessageProcessor(
         senderId: String,
         content: String,
         timestamp: Long,
+        simInfo: Int,
         receivingSimNumber: String
     ) = withContext(Dispatchers.IO) {
         var channelId = ""
@@ -49,7 +50,7 @@ class SMSMessageProcessor(
 
             // Step 2: Check if this sender/channel has SMS notifications enabled
             ChannelManager.init(context)
-            val channelInfo = ChannelManager.isSmsAllowedForSender(receivingSimNumber)
+            val channelInfo = ChannelManager.isSmsAllowedForSender(receivingSimNumber, simInfo, normalizedSender)
             
             if (!channelInfo.enabled) {
                 Log.d("SMSMessageProcessor", "Message from $senderId blocked - SMS notifications disabled for this channel")

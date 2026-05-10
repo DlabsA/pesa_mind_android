@@ -36,7 +36,10 @@ import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
+import cc.dlabs.pesamind.core.storage.ChannelManager.getChannels
+import cc.dlabs.pesamind.core.storage.ChannelManager.saveChannels
 import kotlinx.coroutines.launch
+import kotlin.collections.plus
 
 @Composable
 fun RegisterScreen(navController: NavHostController) {
@@ -69,6 +72,16 @@ fun RegisterScreen(navController: NavHostController) {
                     val body = response.body()
                     if (body?.id != null) {
                         val initialChannelResponse = ApiClient.api.createChannel(CreateChannelRequest(initialChannel, initialChannelType, description, initialChannelDesc, true))
+                        if (initialChannelResponse.isSuccessful) {
+                            val channels = getChannels()
+                            initialChannelResponse.body()?.also {
+                                // Refresh local cache
+                                val updatedChannels = channels + it
+                                saveChannels(updatedChannels)
+                            }
+                        } else {
+                            null
+                        }
                         navController.navigate("login")
                     } else {
                         errorMessage = body?.error ?: "Registration failed"

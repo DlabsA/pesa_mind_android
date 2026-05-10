@@ -57,6 +57,7 @@ class SmsReceiver : BroadcastReceiver() {
                             senderId = senderNumber,
                             content = messageBody,
                             timestamp = timestamp,
+                            simInfo = receivingSimInfo.slotIndex,
                             receivingSimNumber = receivingSimInfo.phoneNumber
                         )
 
