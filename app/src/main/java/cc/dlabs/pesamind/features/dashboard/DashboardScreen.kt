@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,7 +23,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -152,9 +156,9 @@ fun DashboardScreen(
 
                 // ── Financial Health Score ───────────────────────────────────
                 item {
-                    uiState.summary?.health?.let { health ->
+                    uiState.financialHealth?.let { health ->
                         FinancialHealthCard(
-                            health = health,
+                            health = health.data,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }
@@ -707,90 +711,112 @@ private fun FinancialHealthCard(health: Health, modifier: Modifier = Modifier) {
         "fair" -> Color(0xFFF39C12)
         else -> ExpenseRed
     }
-    val trendIcon = when (health.trend.lowercase()) {
-        "improving", "up" -> Icons.Outlined.TrendingUp
-        "declining", "down" -> Icons.Outlined.TrendingDown
-        else -> Icons.Outlined.TrendingFlat
-    }
+    val animatedScore by animateFloatAsState(
+        targetValue = health.score / 100f,
+        animationSpec = tween(1200, easing = FastOutSlowInEasing),
+        label = "health_score"
+    )
 
-    DashCard(modifier = modifier, title = "Financial Health") {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Score circle
-            Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = (health.score / 100f).coerceIn(0f, 1f),
-                    modifier = Modifier.size(72.dp),
-                    color = scoreColor,
-                    trackColor = scoreColor.copy(alpha = 0.15f),
-                    strokeWidth = 6.dp
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "${health.score}",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = scoreColor
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text("Financial Health", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+            Spacer(Modifier.height(16.dp))
+
+            // Score circle + status row
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val stroke = 8.dp.toPx()
+                        val inset = stroke / 2f
+                        drawArc(
+                            color = scoreColor.copy(alpha = 0.15f),
+                            startAngle = 135f, sweepAngle = 270f,
+                            useCenter = false,
+                            topLeft = Offset(inset, inset),
+                            size = Size(size.width - stroke, size.height - stroke),
+                            style = Stroke(stroke, cap = StrokeCap.Round)
                         )
-                    )
-                    Text(
-                        text = "/100",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary
-                    )
+                        drawArc(
+                            color = scoreColor,
+                            startAngle = 135f, sweepAngle = 270f * animatedScore,
+                            useCenter = false,
+                            topLeft = Offset(inset, inset),
+                            size = Size(size.width - stroke, size.height - stroke),
+                            style = Stroke(stroke, cap = StrokeCap.Round)
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${health.score}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = scoreColor)
+                        Text("/100", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    }
+                }
+                Column {
+                    Text(health.status.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = scoreColor)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val trendIcon = when (health.trend.lowercase()) {
+                            "improving" -> Icons.Outlined.TrendingUp
+                            "declining" -> Icons.Outlined.TrendingDown
+                            else -> Icons.Outlined.TrendingFlat
+                        }
+                        Icon(trendIcon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Trend: ${health.trend}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
                 }
             }
 
-            Column(modifier = Modifier.weight(1f).padding(start = 20.dp)) {
-                Text(
-                    text = health.status.replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = scoreColor
-                    )
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(trendIcon, contentDescription = null, tint = scoreColor, modifier = Modifier.size(16.dp))
-                    Text(
-                        text = health.trend.replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
+            // Components breakdown
+            if (!health.components.isNullOrEmpty()) {
+                Spacer(Modifier.height(20.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(12.dp))
+                Text("Breakdown", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                health.components?.forEach { (name, comp) ->
+                    val compColor = when (comp.status.lowercase()) {
+                        "excellent", "good" -> IncomeGreen
+                        "fair" -> Color(0xFFF39C12)
+                        else -> ExpenseRed
+                    }
+                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                        Row(horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(name.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall)
+                            Text("${comp.score}%", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = compColor)
+                        }
+                        LinearProgressIndicator(
+                            progress = (comp.score / 100f).coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth(),
+                            color = compColor,
+                            trackColor = compColor.copy(alpha = 0.15f)
+                        )
+                        Text(comp.description, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp)
+                    }
                 }
+            }
+
+            // Strengths
+            if (!health.strengths.isNullOrEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text("Strengths", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = IncomeGreen)
+                health.strengths.forEach { strength ->
+                    Text("• $strength", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
+                }
+            }
+            // Weaknesses
+            if (!health.weaknesses.isNullOrEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                // Score bar
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(scoreColor.copy(alpha = 0.15f))
-                ) {
-                    val animScore by animateFloatAsState(
-                        targetValue = health.score / 100f,
-                        animationSpec = tween(1200, easing = FastOutSlowInEasing),
-                        label = "health"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animScore)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(scoreColor)
-                    )
+                Text("Areas to Improve", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = ExpenseRed)
+                health.weaknesses.forEach { weakness ->
+                    Text("• $weakness", style = MaterialTheme.typography.bodySmall, fontSize = 12.sp, color = ExpenseRed.copy(alpha = 0.8f))
                 }
             }
         }
     }
 }
-
 // ─── Budget vs Actual ─────────────────────────────────────────────────────────
 
 @Composable

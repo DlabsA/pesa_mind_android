@@ -5,6 +5,8 @@ import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
 import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
+import cc.dlabs.pesamind.core.network.analytics.FinancialHealthResponse
+import cc.dlabs.pesamind.core.network.analytics.Health
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
@@ -177,4 +179,7 @@ interface ApiService {
 
     @GET("analytics/anomalies")
     suspend fun getAnomalies(): Response<AnomaliesResponse>
+
+    @GET("analytics/financial-health")
+    suspend fun getFinancialHealth(): Response<FinancialHealthResponse>
 }

@@ -6,7 +6,7 @@ data class AnalyticsSummaryResponse(
     val data: SummaryData,
     val metadata: Metadata,
     val context: ContextData,
-    val health: Health,
+    var health: Health,
     val recommendations: List<Recommendation>
 )
 
@@ -51,14 +51,27 @@ data class ContextData(
     @SerializedName("previous_month")
     val previousMonth: String
 )
-
+data class FinancialHealthResponse(
+    val data: Health,
+    val metadata: Metadata,
+    val recommendations: List<Recommendation> = emptyList()
+)
 data class Health(
+    @SerializedName("health_score")
     val score: Int,
     val status: String,
     val trend: String,
-    val components: Map<String, Any>? = null
+    val components: Map<String, Component>? = null,
+    val strengths: List<String>? = null,
+    val weaknesses: List<String>? = null
 )
 
+data class Component(
+    val score: Int,
+    val status: String,
+    val description: String,
+    val trend: String
+)
 data class Recommendation(
     val type: String,
     val title: String,
