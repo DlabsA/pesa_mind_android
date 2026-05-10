@@ -73,7 +73,7 @@ fun LockSetupScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = grey)
         ) {
-            Text("Set Pattern", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text("No Lockup set ", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
         }
 
         Spacer(Modifier.height(12.dp))
