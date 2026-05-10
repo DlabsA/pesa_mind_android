@@ -71,17 +71,6 @@ fun RegisterScreen(navController: NavHostController) {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.id != null) {
-                        val initialChannelResponse = ApiClient.api.createChannel(CreateChannelRequest(initialChannel, initialChannelType, description, initialChannelDesc, true))
-                        if (initialChannelResponse.isSuccessful) {
-                            val channels = getChannels()
-                            initialChannelResponse.body()?.also {
-                                // Refresh local cache
-                                val updatedChannels = channels + it
-                                saveChannels(updatedChannels)
-                            }
-                        } else {
-                            null
-                        }
                         navController.navigate("login")
                     } else {
                         errorMessage = body?.error ?: "Registration failed"
