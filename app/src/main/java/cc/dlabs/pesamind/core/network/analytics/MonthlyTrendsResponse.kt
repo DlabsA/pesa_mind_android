@@ -6,11 +6,11 @@ data class MonthlyTrendsResponse(
     val data: TrendsData,
     val metadata: Metadata,
     val health: Health,
-    val recommendations: List<Recommendation>
+    val recommendations: List<Recommendation> = emptyList()
 )
 
 data class TrendsData(
-    val months: List<MonthlyData>,
+    val months: List<MonthlyData> = emptyList(),
     val summary: TrendSummary
 ) {
     var notEmpty: Boolean = months.isNotEmpty()
@@ -28,11 +28,11 @@ data class MonthlyData(
 
 data class TrendSummary(
     @SerializedName("avg_income")
-    val avgIncome: Long,
+    val avgIncome: Double,
     @SerializedName("avg_expense")
-    val avgExpense: Long,
+    val avgExpense: Double,
     @SerializedName("avg_savings")
-    val avgSavings: Long,
+    val avgSavings: Double,
     @SerializedName("income_trend")
     val incomeTrend: String,
     @SerializedName("expense_trend")

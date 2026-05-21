@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName
 data class CashFlowWaterfallResponse(
     val data: WaterfallData,
     val metadata: Metadata,
-    val recommendations: List<Recommendation>
+    val recommendations: List<Recommendation> = emptyList()
 )
 
 data class WaterfallData(
@@ -21,7 +21,7 @@ data class WaterfallData(
 
 data class IncomeBreakdown(
     val total: Long,
-    val sources: List<IncomeSource>
+    val sources: List<IncomeSource> = emptyList()
 )
 
 data class IncomeSource(
@@ -34,7 +34,7 @@ data class IncomeSource(
 
 data class ExpenseBreakdown(
     val total: Long,
-    val categories: List<ExpenseCategory>
+    val categories: List<ExpenseCategory> = emptyList()
 )
 
 data class ExpenseCategory(

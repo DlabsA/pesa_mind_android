@@ -746,7 +746,7 @@ private fun CashFlowCard(cashFlow: WaterfallData, modifier: Modifier = Modifier)
                 color = TextSecondary
             )
             Spacer(Modifier.height(8.dp))
-            val maxAmount = remember(topCategories) { topCategories.maxOf { it.amount }.toFloat().coerceAtLeast(1f) }
+            val maxAmount = remember(topCategories) { topCategories.maxOfOrNull { it.amount }?.toFloat()?.coerceAtLeast(1f) ?: 1f }
             topCategories.forEach { cat ->
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -843,7 +843,7 @@ private fun BudgetVsActualCard(budgetActual: BudgetActualData, modifier: Modifie
             Text("Category Breakdown", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = TextSecondary)
             Spacer(Modifier.height(8.dp))
             topItems.forEach { item ->
-                val itemProgress = remember(item) { (item.actual.toFloat() / item.budget.toFloat()).coerceIn(0f, 1.5f) }
+                val itemProgress = remember(item) { if (item.budget > 0) (item.actual.toFloat() / item.budget.toFloat()).coerceIn(0f, 1.5f) else 0f }
                 val isOver = item.actual > item.budget
                 Column(modifier = Modifier.padding(vertical = 5.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
