@@ -6,7 +6,7 @@ data class SpendingVelocityResponse(
     val data: VelocityData,
     val metadata: Metadata,
     val health: Health,
-    val recommendations: List<Recommendation>
+    val recommendations: List<Recommendation> = emptyList()
 )
 
 data class VelocityData(

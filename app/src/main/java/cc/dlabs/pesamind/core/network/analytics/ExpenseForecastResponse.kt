@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName
 data class ExpenseForecastResponse(
     val data: ForecastData,
     val metadata: Metadata,
-    val recommendations: List<Recommendation>
+    val recommendations: List<Recommendation> = emptyList()
 )
 
 data class ForecastData(

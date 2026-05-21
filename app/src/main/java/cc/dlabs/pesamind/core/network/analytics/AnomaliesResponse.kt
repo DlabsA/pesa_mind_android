@@ -5,13 +5,13 @@ import  com.google.gson.annotations.SerializedName
 data class AnomaliesResponse(
     val data: AnomalyData,
     val metadata: Metadata,
-    val recommendations: List<Recommendation>
+    val recommendations: List<Recommendation> = emptyList()
 )
 
 data class AnomalyData(
     @SerializedName("anomalies_detected")
     val anomaliesDetected: Int,
-    val items: List<AnomalyItem>,
+    val items: List<AnomalyItem> = emptyList(),
     @SerializedName("critical_count")
     val criticalCount: Int,
     @SerializedName("warning_count")

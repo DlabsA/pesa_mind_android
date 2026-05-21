@@ -7,7 +7,7 @@ data class AnalyticsSummaryResponse(
     val metadata: Metadata,
     val context: ContextData,
     var health: Health,
-    val recommendations: List<Recommendation>
+    val recommendations: List<Recommendation> = emptyList()
 )
 
 data class SummaryData(
@@ -61,9 +61,9 @@ data class Health(
     val score: Int,
     val status: String,
     val trend: String,
-    val components: Map<String, Component>? = null,
-    val strengths: List<String>? = null,
-    val weaknesses: List<String>? = null
+    val components: Map<String, Component> = emptyMap(),
+    val strengths: List<String> = emptyList(),
+    val weaknesses: List<String> = emptyList()
 )
 
 data class Component(
