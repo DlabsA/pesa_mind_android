@@ -53,29 +53,27 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val summaryDeferred = async { api.getAnalyticsSummary() }
-                val velocityDeferred = async { api.getSpendingVelocity() }
-                val anomaliesDeferred = async { api.getAnomalies() }
-                val utilizationDeferred = async { api.getBudgetUtilization(getCurrentMonth(), getCurrentYear()) }
-                val healthDeferred = async { api.getFinancialHealth() }
+                val month = getCurrentMonth()
+                val year = getCurrentYear()
+                val response = api.getDashboard(month, year)
 
-                val summaryResp = summaryDeferred.await()
-                val velocityResp = velocityDeferred.await()
-                val anomaliesResp = anomaliesDeferred.await()
-                val utilizationResp = utilizationDeferred.await()
-                val healthResp = healthDeferred.await()  // add this
-
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        summary = summaryResp.body(),
-                        spendingVelocity = velocityResp.body(),
-                        anomalies = anomaliesResp.body(),
-                        budgetUtilization = utilizationResp.body(),
-                        financialHealth = healthResp.body(),
-                        error = null
-
-                    )
+                if (response.isSuccessful) {
+                    val dashboard = response.body()!!
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            summary = dashboard.summary,
+                            spendingVelocity = dashboard.spendingVelocity,
+                            anomalies = dashboard.anomalies,
+                            budgetUtilization = dashboard.budgetUtilization,
+                            financialHealth = dashboard.financialHealth,
+                            error = null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(isLoading = false, error = "Server error: ${response.code()}")
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {
