@@ -10,6 +10,7 @@ import cc.dlabs.pesamind.core.network.analytics.FinancialHealthResponse
 import cc.dlabs.pesamind.core.network.analytics.Health
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
+import cc.dlabs.pesamind.core.network.models.AnalyticResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -187,4 +188,7 @@ interface ApiService {
     @GET("data/dashboard")
     suspend fun getDashboard(
     ): Response<DashboardResponse>
+    @GET("data/analytics")
+    suspend fun getAnalytics(
+    ): Response<AnalyticResponse>
 }

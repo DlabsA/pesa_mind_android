@@ -1,6 +1,8 @@
 package cc.dlabs.pesamind.core.network.models
 
 import com.google.gson.annotations.SerializedName
+import cc.dlabs.pesamind.core.network.analytics.AnomalyData
+import cc.dlabs.pesamind.core.network.analytics.Health
 
 data class RegisterRequest(
     val username: String = "",
@@ -283,4 +285,216 @@ data class BudgetVsActualResponse(
     val overallStatus: String = "on-track",
     @SerializedName("budget_vs_actual")
     val budgetVsActual: List<BudgetVsActualItem> = emptyList()
+)
+
+
+// ─── Top-level response ───────────────────────────────────────────────────────
+
+
+data class AnalyticResponse(
+    val summary:             SummarySection,
+    val monthlyTrends:       MonthlyTrendsSection,
+    val spendingVelocity:    SpendingVelocitySection,
+    val budgetVsActual:      BudgetVsActualSection,
+    val expenseForecast:     ExpenseForecastSection,
+    val cashFlowWaterfall:   CashFlowWaterfallSection,
+    val anomalies:           AnomalySection,
+    val budgetUtilization:   Double,
+)
+// ─── Summary ──────────────────────────────────────────────────────────────────
+
+data class SummarySection(
+    val data:            SummaryData,
+    val context:         SummaryContext,
+    val health:          Health,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class SummaryData(
+    val totalIncome:       Double,
+    val totalExpense:      Double,
+    val totalSavings:      Double,
+    val netMovement:       Double,
+    val transactionCount:  Int,
+    val activeCategories:  Int,
+    val currentMonth:      String,
+)
+
+data class SummaryContext(
+    val totalIncome:      Double,
+    val totalExpense:     Double,
+    val totalSavings:     Double,
+    val netMovement:      Double,
+    val transactionCount: Int,
+    val activeCategories: Int,
+    val previousMonth:    String,
+)
+
+// ─── Monthly Trends ───────────────────────────────────────────────────────────
+
+data class MonthlyTrendsSection(
+    val data:            MonthlyTrendsData,
+    val health:          Health,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class MonthlyTrendsData(
+    val months:  List<MonthEntry>,
+    val summary: MonthSummary,
+)
+
+data class MonthEntry(
+    val date:             String,
+    val income:           Double,
+    val expense:          Double,
+    val savings:          Double,
+    val net:              Double,
+    val transactionCount: Int,
+) {
+    val shortLabel: String get() {
+        val parts = date.split("-")
+        if (parts.size < 2) return date
+        val m = parts[1].toIntOrNull() ?: return date
+        val names = listOf("Jan","Feb","Mar","Apr","May","Jun",
+            "Jul","Aug","Sep","Oct","Nov","Dec")
+        return if (m in 1..12) names[m - 1] else date
+    }
+}
+
+data class MonthSummary(
+    val avgIncome:           Double,
+    val avgExpense:          Double,
+    val avgSavings:          Double,
+    val incomeTrend:         String,
+    val expenseTrend:        String,
+    val savingsTrend:        String,
+    val highestIncomeMonth:  String,
+    val highestExpenseMonth: String,
+)
+
+// ─── Spending Velocity ────────────────────────────────────────────────────────
+
+data class SpendingVelocitySection(
+    val data:            SpendingVelocityData?,
+    val health:          Health,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class SpendingVelocityData(
+    val period:                    String,
+    val daysElapsed:               Int,
+    val daysRemaining:             Int,
+    val totalSpent:                Double,
+    val dailyAverage:              Double,
+    val projectedMonthEnd:         Double,
+    val budgetLimit:               Double,
+    val amountRemaining:           Double,
+    val spendingPattern:           String,
+    val alertLevel:                String,
+    val daysUntilBudgetExhausted:  Double?,
+) {
+    val daysTotal: Int get() = daysElapsed + daysRemaining
+    val dayFraction: Float get() = if (daysTotal > 0) daysElapsed.toFloat() / daysTotal else 0f
+    val budgetUsedFraction: Float get() = if (budgetLimit > 0) (totalSpent / budgetLimit).toFloat().coerceIn(0f, 1f) else 0f
+}
+
+// ─── Budget vs Actual ─────────────────────────────────────────────────────────
+
+data class BudgetVsActualSection(
+    val data:            BudgetVsActualData,
+    val health:          Health,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class BudgetVsActualData(
+    val period:                 String,
+    val budgetTotal:            Double,
+    val actualTotal:            Double,
+    val variance:               Double,
+    val variancePercent:        Double,
+    val status:                 String,
+    val items:                  List<BudgetLineItem>?,
+    val categoriesOnTrack:      Int,
+    val categoriesOverBudget:   Int,
+) {
+    val usageFraction: Float get() = if (budgetTotal > 0) (actualTotal / budgetTotal).toFloat().coerceIn(0f, 1f) else 0f
+}
+
+data class BudgetLineItem(
+    val category:               String,
+    val budget:                 Double,
+    val actual:                 Double,
+    val variance:               Double,
+    val variancePercent:        Double,
+    val transactions:           Int?,
+    val averagePerTransaction:  Double?,
+) {
+    val usageFraction: Float get() = if (budget > 0) (actual / budget).toFloat().coerceIn(0f, 1f) else 0f
+    val status: String get() = if (budget == 0.0 || actual > budget) "over_budget" else "on_budget"
+}
+
+// ─── Expense Forecast ─────────────────────────────────────────────────────────
+
+data class ExpenseForecastSection(
+    val data:            ExpenseForecastData,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class ExpenseForecastData(
+    val period:             String,
+    val daysElapsed:        Int,
+    val dailyBurnRate:      Double,
+    val actualSpent:        Double,
+    val projectedTotal:     Double,
+    val budgetLimit:        Double,
+    val projectedVariance:  Double,
+    val willExceedBudget:   Boolean,
+    val confidence:         Double,
+) {
+    val confidencePct: Int get() = (confidence * 100).toInt()
+}
+
+// ─── Cash Flow Waterfall ──────────────────────────────────────────────────────
+
+data class CashFlowWaterfallSection(
+    val data:            CashFlowData,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class CashFlowData(
+    val openingBalance:   Double,
+    val income:           CashFlowSide,
+    val expenses:         CashFlowSide,
+    val savingsTransfers: Double,
+    val closingBalance:   Double,
+)
+
+data class CashFlowSide(
+    val total:      Double,
+    val sources:    List<CashFlowEntry>? = null,
+    val categories: List<CashFlowEntry>? = null,
+)
+
+data class CashFlowEntry(
+    val channel:          String,
+    val amount:           Double,
+    val percent:          Double?,
+    val transactionCount: Int?,
+)
+
+// ─── Anomalies ────────────────────────────────────────────────────────────────
+
+data class AnomalySection(
+    val data:            AnomalyData,
+    val recommendations: List<AnalyticsRecommendation>,
+)
+
+// ─── Shared ───────────────────────────────────────────────────────────────────
+
+data class AnalyticsRecommendation(
+    val type:       String,
+    val title:      String,
+    val message:    String,
+    val confidence: Double,
+    val severity:   String,
 )

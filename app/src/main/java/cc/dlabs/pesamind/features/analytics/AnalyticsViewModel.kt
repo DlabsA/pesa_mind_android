@@ -2,119 +2,138 @@ package cc.dlabs.pesamind.features.analytics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cc.dlabs.pesamind.core.network.ApiService
-import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
-import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
-import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
-import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
-import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
-import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
-import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
-import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
-import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.network.models.AnalyticResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
+// ─── Phase ────────────────────────────────────────────────────────────────────
+
+sealed interface AnalyticsPhase {
+    data object Idle    : AnalyticsPhase
+    data object Loading : AnalyticsPhase
+    data object Loaded  : AnalyticsPhase
+    data object Empty   : AnalyticsPhase
+    data class  Error(val message: String) : AnalyticsPhase
+}
+
+// ─── UI State ─────────────────────────────────────────────────────────────────
+
+data class AnalyticsUiState(
+    val analytics:    AnalyticResponse? = null,
+    val phase:        AnalyticsPhase     = AnalyticsPhase.Idle,
+    val isRefreshing: Boolean            = false,
+    val isOffline:    Boolean            = false,
+    val lastUpdated:  Long?              = null,   // epoch millis
+)
+
+// ─── ViewModel ────────────────────────────────────────────────────────────────
+
 @HiltViewModel
-class AnalyticsViewModel @Inject constructor(
-    private val api: ApiService
-) : ViewModel() {
+class AnalyticsViewModel @Inject constructor() : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AnalyticsUiState())
-    val uiState: StateFlow<AnalyticsUiState> = _uiState.asStateFlow()
+    private val _state = MutableStateFlow(AnalyticsUiState())
+    val state: StateFlow<AnalyticsUiState> = _state.asStateFlow()
 
-    private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    private val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+    // ── Public API ────────────────────────────────────────────────────────────
 
-    init {
-        loadUserProfile()
-        loadAllData()
-    }
-
-    fun loadAllData() {
+    fun load() {
+        if (_state.value.analytics != null) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            try {
-                // Fire all requests in parallel
-                val summaryDeferred       = async { api.getAnalyticsSummary() }
-                val velocityDeferred      = async { api.getSpendingVelocity() }
-                val trendsDeferred        = async { api.getMonthlyTrends() }
-                val utilizationDeferred   = async { api.getBudgetUtilization(currentMonth, currentYear) }
-                val forecastDeferred      = async { api.getExpenseForecast() }
-                val cashFlowDeferred      = async { api.getCashFlowWaterfall(currentYear, currentMonth) }
-                val budgetActualDeferred  = async { api.getBudgetVsActual(currentYear, currentMonth) }
-                val anomaliesDeferred     = async { api.getAnomalies() }
-
-                _uiState.update {
-                    it.copy(
-                        isLoading        = false,
-                        summary          = summaryDeferred.await().body(),
-                        spendingVelocity = velocityDeferred.await().body(),
-                        monthlyTrends    = trendsDeferred.await().body(),
-                        budgetUtilization= utilizationDeferred.await().body(),
-                        expenseForecast  = forecastDeferred.await().body(),
-                        cashFlow         = cashFlowDeferred.await().body(),
-                        budgetVsActual   = budgetActualDeferred.await().body(),
-                        anomalies        = anomaliesDeferred.await().body(),
-                        error            = null
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(isLoading = false, error = e.message ?: "Unknown error")
-                }
-            }
+            _state.value = _state.value.copy(phase = AnalyticsPhase.Loading)
+            fetchFromNetwork()
         }
     }
 
-    fun refresh() = loadAllData()
-
-    /** Consume the one-shot error after it has been shown to the user. */
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
-    private fun loadUserProfile() {
+    fun refresh() {
+        if (_state.value.isRefreshing) return
         viewModelScope.launch {
-            runCatching { AccountManager.getAccount() }.onSuccess { user ->
-                _uiState.update {
-                    it.copy(
-                        userDisplayName = user.username,
-                        userInitials    = buildInitials(user.username)
-                    )
-                }
-            }
+            _state.value = _state.value.copy(isRefreshing = true)
+            fetchFromNetwork()
+            _state.value = _state.value.copy(isRefreshing = false)
         }
     }
 
-    private fun buildInitials(name: String): String {
-        val parts = name.trim().split(" ").filter { it.isNotBlank() }
+    // ── Network ───────────────────────────────────────────────────────────────
+
+    private suspend fun fetchFromNetwork() {
+        try {
+            val response = ApiClient.api.getAnalytics()
+            if (response.isSuccessful) {
+                val body = response.body()!!
+                val isEmpty = body.summary.data.transactionCount == 0
+                _state.value = _state.value.copy(
+                    analytics   = body,
+                    phase       = if (isEmpty) AnalyticsPhase.Empty else AnalyticsPhase.Loaded,
+                    lastUpdated = System.currentTimeMillis(),
+                    isOffline   = false,
+                )
+            } else {
+                if (_state.value.analytics == null) {
+                    _state.value = _state.value.copy(
+                        phase = AnalyticsPhase.Error("Server error (${response.code()})")
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            if (_state.value.analytics == null) {
+                _state.value = _state.value.copy(
+                    phase = AnalyticsPhase.Error(e.message ?: "Unknown error")
+                )
+            }
+            _state.value = _state.value.copy(isOffline = true)
+        }
+    }
+
+    // ── Computed helpers ──────────────────────────────────────────────────────
+
+    val overallHealthScore: Int get() {
+        val s = _state.value.analytics ?: return 75
+        val scores = listOfNotNull(
+            s.summary.health.score,
+            s.monthlyTrends.health.score,
+            s.budgetVsActual.health.score,
+            s.spendingVelocity.health.score,
+        ).filter { it > 0 }
+        return if (scores.isEmpty()) 75 else scores.sum() / scores.size
+    }
+
+    val currentPeriodLabel: String get() {
+        val raw = _state.value.analytics?.summary?.data?.currentMonth ?: return "This Month"
+        val parts = raw.split("-")
+        if (parts.size < 2) return raw
+        val year  = parts[0].toIntOrNull() ?: return raw
+        val month = parts[1].toIntOrNull() ?: return raw
+        if (month !in 1..12) return raw
+        val names = listOf("January","February","March","April","May","June",
+            "July","August","September","October","November","December")
+        return "${names[month - 1]} $year"
+    }
+    val greetingText: String
+        get() {
+            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            return when (hour) {
+                in 0..11  -> "Good morning"
+                in 12..16 -> "Good afternoon"
+                else      -> "Good evening"
+            }
+        }
+
+    val formattedLastUpdated: String get() {
+        val ts = _state.value.lastUpdated ?: return "Never synced"
+        val diffMs = System.currentTimeMillis() - ts
         return when {
-            parts.isEmpty()  -> "?"
-            parts.size == 1  -> parts[0].take(2).uppercase()
-            else             -> "${parts.first().first()}${parts.last().first()}".uppercase()
+            diffMs < 60_000              -> "Synced just now"
+            diffMs < 3_600_000           -> "Synced ${diffMs / 60_000}m ago"
+            else                         -> "Synced ${diffMs / 3_600_000}h ago"
         }
     }
 }
-
-data class AnalyticsUiState(
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val userDisplayName: String = "",
-    val userInitials: String = "",
-    val summary: AnalyticsSummaryResponse? = null,
-    val spendingVelocity: SpendingVelocityResponse? = null,
-    val monthlyTrends: MonthlyTrendsResponse? = null,
-    val budgetUtilization: BudgetUtilizationResponse? = null,
-    val expenseForecast: ExpenseForecastResponse? = null,
-    val cashFlow: CashFlowWaterfallResponse? = null,
-    val budgetVsActual: BudgetVsActualResponse? = null,
-    val anomalies: AnomaliesResponse? = null
-)

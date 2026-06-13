@@ -53,6 +53,7 @@ private val NeutralGray  = Color(0xFFF2F4F7)
 // ─────────────────────────────────────────────────────────────────────────────
 public const val TYPE_INCOME  = "income"
 public const val TYPE_EXPENSE = "expense"
+public const val TYPE_SAVING = "saving"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -393,7 +394,7 @@ private fun TransactionTypeToggle(
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        listOf(TYPE_EXPENSE to "Expense", TYPE_INCOME to "Income").forEach { (value, label) ->
+        listOf(TYPE_EXPENSE to "Expense", TYPE_INCOME to "Income", TYPE_SAVING to "Saving").forEach { (value, label) ->
             val isSelected = selected == value
             val bgColor by animateColorAsState(
                 targetValue = if (isSelected) accentColor else Color.Transparent,
