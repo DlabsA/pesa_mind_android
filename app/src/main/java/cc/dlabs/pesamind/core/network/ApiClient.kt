@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
     // ← Replace with your actual server IP
-    const val BASE_URL = "http://173.212.219.227:8080/api/v1/"
+    const val BASE_URL = "http://192.168.2.204:8080/api/v1/"
 
     private val client = OkHttpClient.Builder()
         // Add Token Authentication Interceptor (FIRST - modifies request)

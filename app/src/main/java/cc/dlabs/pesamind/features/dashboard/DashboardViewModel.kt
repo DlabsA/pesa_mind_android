@@ -1,106 +1,178 @@
 package cc.dlabs.pesamind.features.dashboard
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiService
-import cc.dlabs.pesamind.core.network.analytics.*
-import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.network.NetworkMonitor
+import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
+
+// ─── Phase (mirrors iOS DashboardViewModel.Phase) ────────────────────────────
+
+sealed class DashboardPhase {
+    data object Idle    : DashboardPhase()
+    data object Loading : DashboardPhase()
+    data object Loaded  : DashboardPhase()
+    data object Empty   : DashboardPhase()
+    data class  Error(val message: String) : DashboardPhase()
+}
+
+// ─── UI State ─────────────────────────────────────────────────────────────────
+
+data class DashboardUiState(
+    val dashboard:    DashboardResponse? = null,
+    val phase:        DashboardPhase     = DashboardPhase.Idle,
+    val isRefreshing: Boolean            = false,
+    val isOffline:    Boolean            = false,
+    val lastUpdated:  Date?              = null,
+)
+
+// ─── ViewModel ────────────────────────────────────────────────────────────────
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val api: ApiService
+    private val apiService:     ApiService,
+    private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(DashboardUiState())
-    val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+    private val _state = MutableStateFlow(DashboardUiState())
+    val state: StateFlow<DashboardUiState> = _state.asStateFlow()
 
     init {
-        loadUserProfile()
-        loadDashboardData()
+        // Mirror iOS: observe connectivity, auto-load when connection returns
+        viewModelScope.launch {
+            networkMonitor.isConnected.collect { connected ->
+                _state.update { it.copy(isOffline = !connected) }
+                if (connected && _state.value.dashboard == null) {
+                    fetchFromNetwork()
+                }
+            }
+        }
     }
 
-    private fun loadUserProfile() {
+    // ─── Public API (mirrors iOS load() / refresh()) ──────────────────────────
+
+    fun load() {
+        if (_state.value.dashboard != null) return
         viewModelScope.launch {
-            val user = AccountManager.getAccount()
-            val initials = buildInitials(user.username)
-            _uiState.update {
+            _state.update {
                 it.copy(
-                    userDisplayName = user.username,
-                    userInitials = initials
+                    phase     = DashboardPhase.Loading,
+                    isOffline = !networkMonitor.isConnectedNow,
                 )
             }
+            if (networkMonitor.isConnectedNow) fetchFromNetwork()
         }
     }
 
-    private fun buildInitials(name: String): String {
-        val parts = name.trim().split(" ").filter { it.isNotBlank() }
-        return when {
-            parts.isEmpty() -> "?"
-            parts.size == 1 -> parts[0].take(2).uppercase()
-            else -> "${parts.first().first()}${parts.last().first()}".uppercase()
-        }
-    }
-
-    fun loadDashboardData() {
+    fun refresh() {
+        if (_state.value.isRefreshing) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            try {
-                val month = getCurrentMonth()
-                val year = getCurrentYear()
-                val response = api.getDashboard(month, year)
+            _state.update { it.copy(isRefreshing = true) }
+            if (networkMonitor.isConnectedNow) {
+                fetchFromNetwork()
+            } else {
+                _state.update { it.copy(isOffline = true) }
+            }
+            _state.update { it.copy(isRefreshing = false) }
+        }
+    }
 
-                if (response.isSuccessful) {
-                    val dashboard = response.body()!!
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            summary = dashboard.summary,
-                            spendingVelocity = dashboard.spendingVelocity,
-                            anomalies = dashboard.anomalies,
-                            budgetUtilization = dashboard.budgetUtilization,
-                            financialHealth = dashboard.financialHealth,
-                            error = null
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(isLoading = false, error = "Server error: ${response.code()}")
-                    }
+    // ─── Network fetch (uses real ApiService.getDashboard()) ──────────────────
+
+    private suspend fun fetchFromNetwork() {
+        try {
+            val response = apiService.getDashboard()
+            Log.d("DashboardVM", "Response raw: ${response.raw()}")
+            Log.d("DashboardVM", "Response body: ${response.body()}")
+
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: throw IllegalStateException("Empty response body from /analytics/dashboard")
+
+                val isEmpty = body.summary.data.transactionCount == 0
+                _state.update {
+                    it.copy(
+                        dashboard   = body,
+                        phase       = if (isEmpty) DashboardPhase.Empty else DashboardPhase.Loaded,
+                        lastUpdated = Date(),
+                        isOffline   = false,
+                    )
                 }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(isLoading = false, error = e.message ?: "Failed to load dashboard")
+            } else {
+                val errorMsg = when (response.code()) {
+                    401  -> "Session expired — please log in again"
+                    403  -> "Access denied"
+                    404  -> "Dashboard data not found"
+                    500  -> "Server error — try again later"
+                    else -> "Unexpected error (${response.code()})"
+                }
+                if (_state.value.dashboard == null) {
+                    _state.update { it.copy(phase = DashboardPhase.Error(errorMsg)) }
+                }
+            }
+        } catch (e: Exception) {
+            if (_state.value.dashboard == null) {
+                _state.update {
+                    it.copy(phase = DashboardPhase.Error(e.message ?: "Unknown error"))
                 }
             }
         }
     }
 
-    fun refresh() = loadDashboardData()
-    fun clearError() = _uiState.update { it.copy(error = null) }
+    // ─── Computed helpers (mirrors iOS DashboardViewModel) ────────────────────
 
-    private fun getCurrentMonth() = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
-    private fun getCurrentYear() = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val greetingText: String
+        get() {
+            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            return when (hour) {
+                in 0..11  -> "Good morning"
+                in 12..16 -> "Good afternoon"
+                else      -> "Good evening"
+            }
+        }
+
+    val currentPeriodLabel: String
+        get() {
+            val period = _state.value.dashboard?.summary?.data?.currentMonth
+                ?: return "This Month"
+            val parts  = period.split("-")
+            if (parts.size != 2) return period
+            val year   = parts[0].toIntOrNull() ?: return period
+            val month  = parts[1].toIntOrNull()?.takeIf { it in 1..12 } ?: return period
+            val months = arrayOf(
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December",
+            )
+            return "${months[month - 1]} $year"
+        }
+
+    val formattedLastUpdated: String
+        get() {
+            val date    = _state.value.lastUpdated ?: return "Never synced"
+            val diffMs  = System.currentTimeMillis() - date.time
+            val diffMin = (diffMs / 60_000).toInt()
+            return when {
+                diffMin < 1  -> "Synced just now"
+                diffMin < 60 -> "Synced ${diffMin}m ago"
+                else         -> {
+                    val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
+                    "Synced at ${sdf.format(date)}"
+                }
+            }
+        }
+
+    val hasAnomalies: Boolean
+        get() = (_state.value.dashboard?.anomalies?.data?.anomaliesDetected ?: 0) > 0
 }
-
-data class DashboardUiState(
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val userDisplayName: String = "",
-    val userInitials: String = "",
-    val summary: AnalyticsSummaryResponse? = null,
-    val spendingVelocity: SpendingVelocityResponse? = null,
-    val anomalies: AnomaliesResponse? = null,
-    val budgetUtilization: BudgetUtilizationResponse? = null,
-    val monthlyTrends: MonthlyTrendsResponse? = null,
-    val budgetVsActual: BudgetVsActualResponse? = null,
-    val health: Health? = null,
-    val financialHealth: FinancialHealthResponse? = null,
-)

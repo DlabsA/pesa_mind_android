@@ -184,9 +184,7 @@ interface ApiService {
     @GET("analytics/financial-health")
     suspend fun getFinancialHealth(): Response<FinancialHealthResponse>
 
-    @GET("analytics/dashboard")
+    @GET("data/dashboard")
     suspend fun getDashboard(
-        @Query("month") month: Int? = null,
-        @Query("year") year: Int? = null
     ): Response<DashboardResponse>
 }

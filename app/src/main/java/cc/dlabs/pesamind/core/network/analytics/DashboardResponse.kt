@@ -7,6 +7,8 @@ data class DashboardResponse(
     @SerializedName("spending_velocity")
     val spendingVelocity: SpendingVelocityResponse,
     val anomalies: AnomaliesResponse,
+    val budgetActualData: BudgetActualData,
+    val budgetVsActualResponse: BudgetVsActualResponse,
     @SerializedName("budget_utilization")
     val budgetUtilization: BudgetUtilizationResponse,
     @SerializedName("financial_health")
