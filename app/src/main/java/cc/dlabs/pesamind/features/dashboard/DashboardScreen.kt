@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.dashboard
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -478,6 +479,7 @@ private fun FinancialHealthCard(
     health:   Health,
     modifier: Modifier = Modifier,
 ) {
+    Log.d("FinancialHealthCard", "health: $health")
     val score     = health.score
     val ringColor = when {
         score >= 80 -> IncomeGreen
@@ -515,7 +517,7 @@ private fun FinancialHealthCard(
                         drawArc(ringColor,                     -90f, 360f * ringProgress, false, tl, sz, style = Stroke(stroke, cap = StrokeCap.Round))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("$score", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold), color = ringColor)
+                        Text("${health.score}", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold), color = ringColor)
                         Text("/ 100", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     }
                 }

@@ -141,84 +141,96 @@ private fun AnalyticsScrollBody(
             }
 
             state.analytics?.let { a ->
-
-                // ── Overall Health Score
+                // Overall Health Score
                 item {
                     StaggeredCard(index = 0, visible = cardsVisible) {
                         HealthScoreCard(
                             analytics = a,
-                            score     = viewModel.overallHealthScore,
-                            modifier  = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                }
-
-                // ── Summary Metrics 2×2 grid
-                item {
-                    StaggeredCard(index = 1, visible = cardsVisible) {
-                        SummaryMetricsCard(
-                            data    = a.summary,
+                            score = viewModel.overallHealthScore,
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
                 }
 
-                // ── Spending Velocity
-                item {
-                    StaggeredCard(index = 2, visible = cardsVisible) {
-                        SpendingVelocityCard(
-                            section  = a.spendingVelocity,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                // Summary Metrics
+                a.summary?.let { summary ->
+                    item {
+                        StaggeredCard(index = 1, visible = cardsVisible) {
+                            SummaryMetricsCard(
+                                data = summary,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
-                // ── Monthly Trends
-                item {
-                    StaggeredCard(index = 3, visible = cardsVisible) {
-                        MonthlyTrendsCard(
-                            section  = a.monthlyTrends,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                // Spending Velocity
+                a.spendingVelocity?.let { velocity ->
+                    item {
+                        StaggeredCard(index = 2, visible = cardsVisible) {
+                            SpendingVelocityCard(
+                                section = velocity,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
-                // ── Budget vs Actual
-                item {
-                    StaggeredCard(index = 4, visible = cardsVisible) {
-                        BudgetVsActualCard(
-                            section  = a.budgetVsActual,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                // Monthly Trends
+                a.monthlyTrends?.let { trends ->
+                    item {
+                        StaggeredCard(index = 3, visible = cardsVisible) {
+                            MonthlyTrendsCard(
+                                section = trends,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
-                // ── Expense Forecast
-                item {
-                    StaggeredCard(index = 5, visible = cardsVisible) {
-                        ExpenseForecastCard(
-                            section  = a.expenseForecast,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                // Budget vs Actual
+                a.budgetVsActual?.let { bva ->
+                    item {
+                        StaggeredCard(index = 4, visible = cardsVisible) {
+                            BudgetVsActualCard(
+                                section = bva,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
-                // ── Cash Flow Waterfall
-                item {
-                    StaggeredCard(index = 6, visible = cardsVisible) {
-                        CashFlowCard(
-                            section  = a.cashFlowWaterfall,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                // Expense Forecast
+                a.expenseForecast?.let { forecast ->
+                    item {
+                        StaggeredCard(index = 5, visible = cardsVisible) {
+                            ExpenseForecastCard(
+                                section = forecast,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
-                // ── Anomalies (only when present)
-                if (a.anomalies.data.anomaliesDetected > 0) {
+                // Cash Flow Waterfall
+                a.cashFlowWaterfall?.let { cashFlow ->
+                    item {
+                        StaggeredCard(index = 6, visible = cardsVisible) {
+                            CashFlowCard(
+                                section = cashFlow,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Anomalies
+                val anomalyData = a.anomalies?.data
+                if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
                     item {
                         StaggeredCard(index = 7, visible = cardsVisible) {
                             AnomaliesCard(
-                                data     = a.anomalies.data,
+                                data = anomalyData, // Now safely smart-cast to non-null 'AnomalyData'
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
                         }
@@ -332,7 +344,7 @@ private fun AnalyticsOfflineBanner(caption: String, modifier: Modifier = Modifie
 
 @Composable
 private fun HealthScoreCard(
-    analytics: AnalyticResponse,
+    analytics: AnalyticResponse?,
     score:     Int,
     modifier:  Modifier = Modifier,
 ) {
@@ -400,8 +412,8 @@ private fun HealthScoreCard(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
-                val trend = analytics.summary.health.trend
-                val trendIcon = when (trend.lowercase()) {
+                val trend = analytics?.summary?.health?.trend
+                val trendIcon = when (trend?.lowercase()) {
                     "improving" -> Icons.Outlined.TrendingUp
                     "declining" -> Icons.Outlined.TrendingDown
                     else        -> Icons.Outlined.TrendingFlat
@@ -409,13 +421,13 @@ private fun HealthScoreCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(trendIcon, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(12.dp))
                     Text(
-                        "Trend: ${trend.replaceFirstChar { it.uppercase() }}",
+                        "Trend: ${trend?.replaceFirstChar { it.uppercase() }}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                     )
                 }
                 Text(
-                    "${analytics.summary.data.transactionCount} transactions · ${analytics.summary.data.activeCategories} categories",
+                    "${analytics?.summary?.data?.transactionCount} transactions · ${analytics?.summary?.data?.activeCategories} categories",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                 )

@@ -69,7 +69,7 @@ class AnalyticsViewModel @Inject constructor() : ViewModel() {
             val response = ApiClient.api.getAnalytics()
             if (response.isSuccessful) {
                 val body = response.body()!!
-                val isEmpty = body.summary.data.transactionCount == 0
+                val isEmpty = body.summary?.data?.transactionCount == 0
                 _state.value = _state.value.copy(
                     analytics   = body,
                     phase       = if (isEmpty) AnalyticsPhase.Empty else AnalyticsPhase.Loaded,
@@ -96,13 +96,15 @@ class AnalyticsViewModel @Inject constructor() : ViewModel() {
     // ── Computed helpers ──────────────────────────────────────────────────────
 
     val overallHealthScore: Int get() {
-        val s = _state.value.analytics ?: return 75
-        val scores = listOfNotNull(
-            s.summary.health.score,
-            s.monthlyTrends.health.score,
-            s.budgetVsActual.health.score,
-            s.spendingVelocity.health.score,
-        ).filter { it > 0 }
+        val a = _state.value.analytics ?: return 75
+
+        val scores = mutableListOf<Int>()
+
+        a.summary?.health?.score?.let { scores.add(it) }
+        a.monthlyTrends?.health?.score?.let { scores.add(it) }
+        a.budgetVsActual?.health?.score?.let { scores.add(it) }
+        a.spendingVelocity?.health?.score?.let { scores.add(it) }
+
         return if (scores.isEmpty()) 75 else scores.sum() / scores.size
     }
 
