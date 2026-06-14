@@ -475,7 +475,7 @@ private fun QuickStatChip(
 // Receives Health directly (the real Android model from FinancialHealthResponse.data)
 
 @Composable
-private fun FinancialHealthCard(
+fun FinancialHealthCard(
     health:   Health,
     modifier: Modifier = Modifier,
 ) {

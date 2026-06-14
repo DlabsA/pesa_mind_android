@@ -35,6 +35,7 @@ import cc.dlabs.pesamind.core.network.models.MonthlyTrendsSection
 import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
+import cc.dlabs.pesamind.features.dashboard.FinancialHealthCard
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -141,17 +142,6 @@ private fun AnalyticsScrollBody(
             }
 
             state.analytics?.let { a ->
-                // Overall Health Score
-                item {
-                    StaggeredCard(index = 0, visible = cardsVisible) {
-                        HealthScoreCard(
-                            analytics = a,
-                            score = viewModel.overallHealthScore,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                }
-
                 // Summary Metrics
                 a.summary?.let { summary ->
                     item {
@@ -342,99 +332,7 @@ private fun AnalyticsOfflineBanner(caption: String, modifier: Modifier = Modifie
 
 // ─── Health Score Card ────────────────────────────────────────────────────────
 
-@Composable
-private fun HealthScoreCard(
-    analytics: AnalyticResponse?,
-    score:     Int,
-    modifier:  Modifier = Modifier,
-) {
-    val ringColor = when {
-        score >= 80 -> IncomeGreen
-        score >= 60 -> Color(0xFFFF9500)
-        else        -> ExpenseRed
-    }
-    val statusLabel = when {
-        score >= 90 -> "Excellent 🎯"
-        score >= 80 -> "Good 👍"
-        score >= 70 -> "Fair"
-        score >= 60 -> "Needs Work ⚠️"
-        else        -> "Critical ⛔"
-    }
 
-    var ringTarget by remember { mutableStateOf(0f) }
-    LaunchedEffect(score) { ringTarget = score / 100f }
-    val ringProgress by animateFloatAsState(
-        targetValue   = ringTarget,
-        animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessLow),
-        label         = "health_ring",
-    )
-
-    AnalyticsCard(modifier = modifier) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-        ) {
-            // Animated ring
-            Box(modifier = Modifier.size(84.dp), contentAlignment = Alignment.Center) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val stroke = 11.dp.toPx()
-                    val inset  = stroke / 2f
-                    val tl     = Offset(inset, inset)
-                    val sz     = Size(size.width - stroke, size.height - stroke)
-                    drawArc(ringColor.copy(alpha = 0.12f), -90f, 360f,                    false, tl, sz, style = Stroke(stroke, cap = StrokeCap.Round))
-                    drawArc(ringColor,                     -90f, 360f * ringProgress,     false, tl, sz, style = Stroke(stroke, cap = StrokeCap.Round))
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "$score",
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                        color = ringColor,
-                    )
-                    Text(
-                        "/ 100",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    )
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "Financial Health",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Surface(shape = RoundedCornerShape(50), color = ringColor.copy(alpha = 0.10f)) {
-                    Text(
-                        statusLabel,
-                        style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color    = ringColor,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    )
-                }
-                val trend = analytics?.summary?.health?.trend
-                val trendIcon = when (trend?.lowercase()) {
-                    "improving" -> Icons.Outlined.TrendingUp
-                    "declining" -> Icons.Outlined.TrendingDown
-                    else        -> Icons.Outlined.TrendingFlat
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(trendIcon, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(12.dp))
-                    Text(
-                        "Trend: ${trend?.replaceFirstChar { it.uppercase() }}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                    )
-                }
-                Text(
-                    "${analytics?.summary?.data?.transactionCount} transactions · ${analytics?.summary?.data?.activeCategories} categories",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                )
-            }
-        }
-    }
-}
 
 // ─── Summary Metrics Card ─────────────────────────────────────────────────────
 
