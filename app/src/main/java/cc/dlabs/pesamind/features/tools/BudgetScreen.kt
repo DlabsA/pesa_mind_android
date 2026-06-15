@@ -217,7 +217,7 @@ fun BudgetScreen(
                         nextMonth = state.nextMonthIndex,
                         nextYear = state.nextMonthYear,
                         hasExisting = state.hasNextMonthBudget,
-                        onSetBudget = {navController.navigate(Routes.SetMonthlyBudget.createRoute(currentMonth, currentYear))}
+                        onSetBudget = {navController.navigate(Routes.SetMonthlyBudget.createRoute(nextMonth, currentYear))}
                     )
 
                     // Current monthly budget
