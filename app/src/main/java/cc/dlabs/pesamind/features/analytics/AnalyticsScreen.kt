@@ -3,6 +3,7 @@ package cc.dlabs.pesamind.features.analytics
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.*
@@ -32,6 +33,7 @@ import cc.dlabs.pesamind.core.network.models.CashFlowWaterfallSection
 import cc.dlabs.pesamind.core.network.models.ExpenseForecastSection
 import cc.dlabs.pesamind.core.network.models.MonthEntry
 import cc.dlabs.pesamind.core.network.models.MonthlyTrendsSection
+import cc.dlabs.pesamind.core.network.models.MonthSummary
 import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
@@ -49,6 +51,12 @@ private fun Double.ugxShort() = when {
     this >= 1_000_000     -> "UGX ${String.format("%.1fM", this / 1_000_000)}"
     this >= 1_000         -> "UGX ${String.format("%.0fK", this / 1_000)}"
     else                  -> "UGX ${ugxFmt.format(this.toLong())}"
+}
+private fun Double.amountShort() = when {
+    this >= 1_000_000_000 -> String.format("%.1fB", this / 1_000_000_000)
+    this >= 1_000_000     -> String.format("%.1fM", this / 1_000_000)
+    this >= 1_000         -> String.format("%.0fK", this / 1_000)
+    else                  -> "${ugxFmt.format(this.toLong())}"
 }
 
 // ─── Root Screen ──────────────────────────────────────────────────────────────
@@ -495,7 +503,7 @@ private fun SpendingVelocityCard(
                     Text("Spending Velocity", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
                     Text("Day ${d.daysElapsed} of ${d.daysTotal}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
                 }
-                AlertLevelBadge(level = d.alertLevel)
+                AlertLevelBadge(level = d.alertLevel, alertColor = alertColor)
             }
 
             Row(
@@ -515,9 +523,9 @@ private fun SpendingVelocityCard(
                         val innerTL     = Offset(innerInset, innerInset)
                         val innerSz     = Size(size.width - innerInset * 2, size.height - innerInset * 2)
                         drawArc(LightColors.Savings.copy(alpha = 0.10f), -90f, 360f,              false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
-                        drawArc(LightColors.Savings.copy(alpha = 0.10f), -90f, 360f * dayRing,    false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
+                        drawArc(LightColors.Savings, -90f, 360f * dayRing,    false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
                         drawArc(alertColor.copy(alpha = 0.10f),   -90f, 360f,              false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
-                        drawArc(alertColor,                        -90f, 360f * budgetRing, false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
+                        drawArc(alertColor,-90f, 360f * budgetRing, false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
@@ -541,7 +549,7 @@ private fun SpendingVelocityCard(
             }
 
             // Pattern footer
-            Surface(shape = RoundedCornerShape(8.dp), color = alertColor) {
+            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
                 Row(
                     modifier              = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                     verticalAlignment     = Alignment.CenterVertically,
@@ -579,13 +587,13 @@ private fun VelocityRow(icon: ImageVector, label: String, value: String, valueCo
 }
 
 @Composable
-private fun AlertLevelBadge(level: String) {
-    val color = when (level) { "ok" -> LightColors.Income; "warning" -> Color(0xFFFF9500); else -> LightColors.Expense }
+private fun AlertLevelBadge(level: String, alertColor: Color) {
+    val color = when (level) { "ok" -> LightColors.Income.copy(alpha = 0.10f); "warning" -> Color(0xFFFF9500).copy(alpha = 0.10f); else -> LightColors.Expense.copy(alpha = 0.10f)}
     val icon  = when (level) { "ok" -> Icons.Default.CheckCircle; "warning" -> Icons.Default.Warning; else -> Icons.Default.Cancel }
     Surface(shape = RoundedCornerShape(50), color = color) {
         Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(icon, null, tint = color, modifier = Modifier.size(10.dp))
-            Text(level.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = color)
+            Icon(icon, null, tint = alertColor, modifier = Modifier.size(10.dp))
+            Text(level.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -593,7 +601,35 @@ private fun AlertLevelBadge(level: String) {
 // ─── Monthly Trends Card ──────────────────────────────────────────────────────
 
 private enum class TrendMetric(val label: String) {
-    EXPENSE("Expenses"), INCOME("Income"), SAVINGS("Savings"), NET("Net")
+    EXPENSE("Expense"), INCOME("Income"), SAVINGS("Savings"), NET("Net")
+}
+
+private object TrendColors {
+    val Income  = Color(0xFF1D9E75)
+    val Expense = Color(0xFFD85A30)
+    val Savings = Color(0xFF378ADD)
+    val NetPos  = Color(0xFF639922)
+    val NetNeg  = Color(0xFFE24B4A)
+
+    val IncomeBg  = Color(0xFFE1F5EE)
+    val IncomeText = Color(0xFF085041)
+
+    val ChipActive     = Color(0xFF378ADD)
+    val ChipActiveText = Color.White
+}
+
+private fun TrendMetric.barColor(value: Double): Color = when (this) {
+    TrendMetric.EXPENSE -> TrendColors.Expense
+    TrendMetric.INCOME  -> TrendColors.Income
+    TrendMetric.SAVINGS -> TrendColors.Savings
+    TrendMetric.NET     -> if (value >= 0) TrendColors.NetPos else TrendColors.NetNeg
+}
+
+private fun MonthEntry.valueFor(metric: TrendMetric): Double = when (metric) {
+    TrendMetric.EXPENSE -> expense
+    TrendMetric.INCOME  -> income
+    TrendMetric.SAVINGS -> savings
+    TrendMetric.NET     -> net
 }
 
 @Composable
@@ -601,147 +637,335 @@ private fun MonthlyTrendsCard(
     section: MonthlyTrendsSection,
     modifier: Modifier = Modifier,
 ) {
-    val months = section.data.months
-    val s      = section.data.summary
+    val months  = section.data.months
+    val summary = section.data.summary
 
     var metric        by remember { mutableStateOf(TrendMetric.EXPENSE) }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
-    var animPct       by remember { mutableStateOf(0f) }
 
-    LaunchedEffect(Unit) { animPct = 1f }
-
-    fun valueFor(m: MonthEntry) = when (metric) {
-        TrendMetric.EXPENSE -> m.expense
-        TrendMetric.INCOME  -> m.income
-        TrendMetric.SAVINGS -> m.savings
-        TrendMetric.NET     -> m.net
+    // Animate bars to full height on first composition and on metric change.
+    var animTrigger by remember { mutableStateOf(0) }
+    var animPct by remember { mutableStateOf(0f) }
+    LaunchedEffect(animTrigger) { 
+        animPct = 1f 
     }
-
-    val maxVal = months.map { abs(valueFor(it)) }.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-
-    val animatedPct by animateFloatAsState(
+    val springPct by animateFloatAsState(
         targetValue   = animPct,
         animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-        label         = "bar_anim",
+        label         = "bar_spring",
     )
 
+    val maxVal = remember(months, metric) {
+        months.maxOfOrNull { abs(it.valueFor(metric)) }?.takeIf { it > 0 } ?: 1.0
+    }
+
     AnalyticsCard(modifier = modifier) {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // Title row
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Monthly Trends", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
-                    Text(s.incomeTrend.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-                }
-                HealthScorePill(section.health.score)
+            // ── Header ────────────────────────────────────────────────────
+            TrendsHeaderComposable(
+                trend       = summary.incomeTrend,
+                healthScore = section.health.score,
+            )
+
+            // ── Metric chips ──────────────────────────────────────────────
+            MetricChipRowComposable(
+                active   = metric,
+                onSelect = { m ->
+                    metric        = m
+                    selectedIndex = null
+                    animTrigger++
+                },
+            )
+
+            // ── Tooltip / always visible ──────────────────────────────────
+            BarTooltipComposable(
+                selectedIndex = selectedIndex,
+                months        = months,
+                metric        = metric,
+            )
+
+            // ── Bar chart with values ─────────────────────────────────────
+            BarChartComposable(
+                months        = months,
+                metric        = metric,
+                maxVal        = maxVal,
+                animatedPct   = springPct,
+                selectedIndex = selectedIndex,
+                onBarClick    = { idx ->
+                    selectedIndex = if (selectedIndex == idx) null else idx
+                },
+            )
+
+            // ── Month labels ──────────────────────────────────────────────
+            MonthLabelRowComposable(months = months, selectedIndex = selectedIndex)
+
+            // ── Summary stats ─────────────────────────────────────────────
+            if (summary.avgIncome + summary.avgExpense > 0) {
+                HorizontalDivider(
+                    color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
+                    thickness = 0.5.dp,
+                )
+                SummaryStatsRowComposable(summary = summary)
             }
+        }
+    }
+}
 
-            // Metric toggle chips
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TrendMetric.entries.forEach { m ->
-                    val selected = metric == m
-                    Surface(
-                        shape   = RoundedCornerShape(50),
-                        color   = if (selected) LightColors.Savings else MaterialTheme.colorScheme.background,
-                        modifier = Modifier.clickable {
-                            metric        = m
-                            selectedIndex = null
-                            animPct       = 0f
-                            animPct       = 1f
-                        }
-                    ) {
-                        Text(
-                            m.label,
-                            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
-                            color    = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                        )
-                    }
-                }
-            }
+@Composable
+private fun TrendsHeaderComposable(trend: String, healthScore: Int) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text  = "Monthly Trends",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text  = trend.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+        }
+        HealthScorePillComposable(score = healthScore)
+    }
+}
 
-            // Selected tooltip
-            selectedIndex?.let { idx ->
-                if (idx < months.size) {
-                    val m = months[idx]
-                    val v = valueFor(m)
-                    Row(
-                        modifier              = Modifier
-                            .background(MaterialTheme.colorScheme.background, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment     = Alignment.CenterVertically,
-                    ) {
-                        Text("${m.shortLabel} ${m.date.take(4)}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-                        Text(v.ugxShort(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold), color = if (v >= 0) LightColors.Income else LightColors.Expense)
-                        Text("· ${m.transactionCount} txns", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
+@Composable
+private fun HealthScorePillComposable(score: Int) {
+    Surface(
+        shape = CircleShape,
+        color = TrendColors.IncomeBg,
+    ) {
+        Text(
+            text     = "Score $score",
+            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+            color    = TrendColors.IncomeText,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+        )
+    }
+}
 
-            // Bar chart
+@Composable
+private fun MetricChipRowComposable(
+    active: TrendMetric,
+    onSelect: (TrendMetric) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TrendMetric.entries.forEach { m ->
+            MetricChipComposable(
+                label      = m.label,
+                isActive   = m == active,
+                onClick    = { onSelect(m) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricChipComposable(label: String, isActive: Boolean, onClick: () -> Unit) {
+    val bgColor   by animateColorAsState(
+        if (isActive) TrendColors.ChipActive else MaterialTheme.colorScheme.surfaceVariant,
+        label = "chip_bg",
+    )
+    val textColor by animateColorAsState(
+        if (isActive) TrendColors.ChipActiveText else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "chip_text",
+    )
+    Surface(
+        shape   = CircleShape,
+        color   = bgColor,
+        border  = if (!isActive) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = .35f)) else null,
+        modifier = Modifier.clickable(
+            indication            = null,
+            interactionSource     = remember { MutableInteractionSource() },
+            onClick               = onClick,
+        ),
+    ) {
+        Text(
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color    = textColor,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+        )
+    }
+}
+
+@Composable
+private fun BarTooltipComposable(
+    selectedIndex: Int?,
+    months: List<MonthEntry>,
+    metric: TrendMetric,
+) {
+    val tooltipBg = MaterialTheme.colorScheme.surfaceVariant
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tooltipBg, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (selectedIndex != null && selectedIndex < months.size) {
+            val m = months[selectedIndex]
+            val v = m.valueFor(metric)
+            val valueColor = metric.barColor(v)
             Row(
-                modifier              = Modifier.fillMaxWidth().height(90.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalAlignment     = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
             ) {
-                months.forEachIndexed { idx, month ->
-                    val v        = valueFor(month)
-                    val fraction = (abs(v) / maxVal).toFloat()
-                    val h        = (90.dp.value * fraction * animatedPct).coerceAtLeast(3f)
-                    val isSelected = selectedIndex == idx
-                    val baseColor = when (metric) {
-                        TrendMetric.EXPENSE -> LightColors.Expense
-                        TrendMetric.INCOME  -> LightColors.Income
-                        TrendMetric.SAVINGS -> LightColors.Savings
-                        TrendMetric.NET     -> if (v >= 0) LightColors.Income else LightColors.Expense
-                    }
-                    val barColor = if (isSelected) baseColor else baseColor
+                // Colored dot indicator
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(valueColor, CircleShape)
+                )
+                Text(
+                    text  = "${m.shortLabel} ${m.date.take(4)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = v.ugxShort(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = valueColor,
+                )
+                Text(
+                    text  = "· ${m.transactionCount} txns",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+                )
+            }
+        } else {
+            // Show total of all months
+            val totalValue = months.sumOf { it.valueFor(metric) }
+            val totalColor = metric.barColor(totalValue)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(totalColor, CircleShape)
+                )
+                Text(
+                    text  = "Total",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = totalValue.ugxShort(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = totalColor,
+                )
+                Text(
+                    text  = "· ${months.sumOf { it.transactionCount }} txns",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+                )
+            }
+        }
+    }
+}
 
+@Composable
+private fun BarChartComposable(
+    months: List<MonthEntry>,
+    metric: TrendMetric,
+    maxVal: Double,
+    animatedPct: Float,
+    selectedIndex: Int?,
+    onBarClick: (Int) -> Unit,
+) {
+    val hasSelection = selectedIndex != null
+    Row(
+        modifier              = Modifier
+            .fillMaxWidth()
+            .height(110.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment     = Alignment.Bottom,
+    ) {
+        months.forEachIndexed { idx, month ->
+            val value    = month.valueFor(metric)
+            val fraction = (abs(value) / maxVal).toFloat()
+            val barHeightDp = (90f * fraction * animatedPct).coerceAtLeast(3f).dp
+            val barColor = metric.barColor(value)
+            val isSelected = selectedIndex == idx
+            // Dim unselected bars when something is selected
+            val barAlpha by animateFloatAsState(
+                targetValue   = when {
+                    !hasSelection -> 1f
+                    isSelected    -> 1f
+                    else          -> 0.25f
+                },
+                animationSpec = tween(180),
+                label         = "bar_alpha_$idx",
+            )
+            // Scale selected bar slightly up for emphasis
+            val barScale by animateFloatAsState(
+                targetValue   = if (isSelected) 1.04f else 1f,
+                animationSpec = spring(Spring.DampingRatioMediumBouncy),
+                label         = "bar_scale_$idx",
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(
+                        indication        = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick           = { onBarClick(idx) },
+                    ),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Bottom,
+                ) {
+                    // Value text above bar
+                    Text(
+                        text  = value.amountShort(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize   = 7.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color     = barColor,
+                        maxLines  = 1,
+                    )
+                    Spacer(Modifier.height(2.dp))
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable {
-                                selectedIndex = if (selectedIndex == idx) null else idx
-                            },
-                        contentAlignment = Alignment.BottomCenter,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(h.dp)
-                                .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                                .background(barColor)
-                        )
-                    }
-                }
-            }
-
-            // Month labels
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                months.forEachIndexed { idx, m ->
-                    Text(
-                        m.shortLabel,
-                        style    = MaterialTheme.typography.labelSmall.copy(
-                            fontSize   = 7.sp,
-                            fontWeight = if (selectedIndex == idx) FontWeight.Bold else FontWeight.Normal,
-                        ),
-                        color    = if (selectedIndex == idx) LightColors.Savings else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
+                            .fillMaxWidth()
+                            .height(barHeightDp)
+                            .graphicsLayer {
+                                alpha  = barAlpha
+                                scaleX = barScale
+                                scaleY = barScale
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                            }
+                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                            .background(barColor)
+                            // Selected: white inner border for "lifted" feel
+                            .then(
+                                if (isSelected)
+                                    Modifier.border(
+                                        width = 1.5.dp,
+                                        color = Color.White.copy(alpha = .55f),
+                                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp),
+                                    )
+                                else Modifier
+                            )
                     )
-                }
-            }
-
-            // Summary averages
-            if (s.avgIncome + s.avgExpense > 0) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TrendStatPill("Avg Income",  s.avgIncome.ugxShort(),  LightColors.Income)
-                    TrendStatPill("Avg Expense", s.avgExpense.ugxShort(), LightColors.Expense)
-                    TrendStatPill("Avg Savings", s.avgSavings.ugxShort(), LightColors.Savings)
                 }
             }
         }
@@ -749,24 +973,62 @@ private fun MonthlyTrendsCard(
 }
 
 @Composable
-private fun TrendStatPill(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = color)
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurface)
+private fun MonthLabelRowComposable(months: List<MonthEntry>, selectedIndex: Int?) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        months.forEachIndexed { idx, m ->
+            val isSelected = selectedIndex == idx
+            Text(
+                text  = m.shortLabel,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize   = 8.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color     = if (isSelected) TrendColors.ChipActive
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                modifier  = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
 @Composable
-private fun TrendDirectionRow(label: String, trend: String) {
-    val isUp   = trend.lowercase() in listOf("increasing", "up")
-    val isDown = trend.lowercase() in listOf("decreasing", "down")
-    val icon   = if (isUp) Icons.Default.NorthEast else if (isDown) Icons.Default.SouthEast else Icons.Default.Remove
-    val color  = if (isUp) LightColors.Income else if (isDown) LightColors.Expense else MaterialTheme.colorScheme.onSurface
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(icon, null, tint = color, modifier = Modifier.size(11.dp))
-            Text(trend.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = color)
+private fun SummaryStatsRowComposable(summary: MonthSummary) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        StatPillComposable(label = "Avg income",  value = summary.avgIncome.ugxShort(),  color = TrendColors.Income,  modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg expense", value = summary.avgExpense.ugxShort(), color = TrendColors.Expense, modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg savings", value = summary.avgSavings.ugxShort(), color = TrendColors.Savings, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun StatPillComposable(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape    = RoundedCornerShape(8.dp),
+        color    = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(
+            modifier              = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalAlignment   = Alignment.CenterHorizontally,
+            verticalArrangement   = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+            Text(
+                text  = value,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = color,
+            )
         }
     }
 }
