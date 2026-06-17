@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 
@@ -33,6 +34,7 @@ fun PrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    color: Color = MaterialTheme.colorScheme.primary
 ) {
     Box(
         modifier = modifier
@@ -43,9 +45,9 @@ fun PrimaryButton(
             ) { onClick() }
             .background(
                 color = if (enabled) {
-                    MaterialTheme.colorScheme.primary
+                    color
                 } else {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    color.copy(alpha = 0.5f)
                 },
                 shape = RoundedCornerShape(9999.dp)
             )

@@ -1,11 +1,7 @@
 package cc.dlabs.pesamind.features.home
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -40,15 +36,14 @@ import cc.dlabs.pesamind.features.settings.channels.ChannelViewModel
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.navigation.NavHostController
 import java.text.NumberFormat
-import java.util.Locale
 import androidx.compose.ui.platform.LocalLocale
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Transaction type constants — align with TransactionTypes.valid in ViewModel
 // ─────────────────────────────────────────────────────────────────────────────
-public const val TYPE_INCOME  = "income"
-public const val TYPE_EXPENSE = "expense"
-public const val TYPE_SAVING = "saving"
+const val TYPE_INCOME  = "income"
+const val TYPE_EXPENSE = "expense"
+const val TYPE_SAVING = "saving"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -355,6 +350,7 @@ fun AddTransactionScreen(
                         note      = note.trim()
                     )
                 },
+                color = accentColor,
                 enabled = canSubmit,
                 modifier = Modifier
                     .fillMaxWidth()
