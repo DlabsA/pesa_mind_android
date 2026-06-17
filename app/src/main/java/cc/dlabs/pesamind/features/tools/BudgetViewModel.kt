@@ -40,9 +40,11 @@ data class DashboardUiState(
     // UX
     val error: String? = null,
     val isDarkMode: Boolean = false,
+    val isOffline: Boolean = false,
 
     // Computed from data
-    val isFromCache: Boolean = false
+    val isFromCache: Boolean = false,
+    val lastUpdated: Long? = null,
 ) {
     /** Net balance = income - expenditure for the current monthly budget */
     val monthlyBalance: Long
@@ -57,6 +59,27 @@ data class DashboardUiState(
     val hasNextMonthBudget: Boolean get() = nextMonthBudget != null
 
     val isLoading: Boolean get() = isLoadingYearly || isLoadingMonthly
+
+    // ── New computed properties ────────────────────────────────────────────
+
+    val greetingText: String
+        get() {
+            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            return when (hour) {
+                in 0..11  -> "Good morning"
+                in 12..16 -> "Good afternoon"
+                else      -> "Good evening"
+            }
+        }
+
+    val currentPeriodLabel: String
+        get() {
+            val monthNames = listOf(
+                "January","February","March","April","May","June",
+                "July","August","September","October","November","December"
+            )
+            return "${monthNames[displayMonth - 1]} $displayYear"
+        }
 }
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -165,92 +188,98 @@ class BudgetViewModel : ViewModel() {
 
     // ── Network fetches ───────────────────────────────────────────────────────
 
-     private suspend fun fetchYearlyBudget(year: Int) {
-         try {
-             val response = api.getYearlyBudgets()
-             if (response.isSuccessful) {
-                 val match = response.body()?.find { it.year == year.toLong() }
-                 BudgetManager.saveYearlyBudgets(response.body() ?: emptyList())
-                 _state.update {
-                     it.copy(
-                         yearlyBudget = match,
-                         isLoadingYearly = false,
-                         isFromCache = false
-                     )
-                 }
-             } else if (response.code() == 401) {
-                 // Authentication failed - user needs to login
-                 _state.update { 
-                     it.copy(
-                         isLoadingYearly = false,
-                         error = "Session expired. Please login again"
-                     ) 
-                 }
-             } else {
-                 _state.update { 
-                     it.copy(
-                         isLoadingYearly = false,
-                         error = "Failed to load yearly budget (${response.code()})"
-                     ) 
-                 }
-             }
-         } catch (e: Exception) {
-             _state.update {
-                 it.copy(
-                     isLoadingYearly = false,
-                     error = "Could not load yearly budget: ${e.message}"
-                 )
-             }
-         }
-     }
+    private suspend fun fetchYearlyBudget(year: Int) {
+        try {
+            val response = api.getYearlyBudgets()
+            if (response.isSuccessful) {
+                val match = response.body()?.find { it.year == year.toLong() }
+                BudgetManager.saveYearlyBudgets(response.body() ?: emptyList())
+                _state.update {
+                    it.copy(
+                        yearlyBudget = match,
+                        isLoadingYearly = false,
+                        isFromCache = false,
+                        isOffline = false
+                    )
+                }
+            } else if (response.code() == 401) {
+                _state.update {
+                    it.copy(
+                        isLoadingYearly = false,
+                        error = "Session expired. Please login again",
+                        isOffline = false
+                    )
+                }
+            } else {
+                _state.update {
+                    it.copy(
+                        isLoadingYearly = false,
+                        error = "Failed to load yearly budget (${response.code()})",
+                        isOffline = false
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            _state.update {
+                it.copy(
+                    isLoadingYearly = false,
+                    error = "Could not load yearly budget: ${e.message}",
+                    isOffline = true  // ← Set offline flag on exception
+                )
+            }
+        }
+    }
 
-     private suspend fun fetchMonthlyBudget(
-         month: Int,
-         year: Long,
-         isNext: Boolean = false
-     ) {
-         try {
-             val response = api.getMonthlyBudgetByMonthYear(month, year)
-             if (response.isSuccessful) {
-                 val budget = response.body()
-                 if (budget != null) {
-                     BudgetManager.saveCurrentMonthlyBudget(budget)
-                     _state.update {
-                         if (isNext) it.copy(nextMonthBudget = budget, isLoadingMonthly = false)
-                         else it.copy(
-                             currentMonthlyBudget = budget,
-                             isLoadingMonthly = false,
-                             isFromCache = false
-                         )
-                     }
-                 } else {
-                     _state.update { it.copy(isLoadingMonthly = false) }
-                 }
-             } else if (response.code() == 401) {
-                 // Authentication failed
-                 _state.update { 
-                     it.copy(
-                         isLoadingMonthly = false,
-                         error = "Session expired. Please login again"
-                     ) 
-                 }
-             } else {
-                 _state.update { 
-                     it.copy(
-                         isLoadingMonthly = false,
-                         error = if (!isNext) "Failed to load monthly budget (${response.code()})" else it.error
-                     ) 
-                 }
-             }
-          } catch (e: Exception) {
-              _state.update {
-                  it.copy(
-                      isLoadingMonthly = false,
-                      error = if (!isNext) "Could not load monthly budget: ${e.message}" else it.error
-                  )
-              }
-          }
-      }
+    private suspend fun fetchMonthlyBudget(
+        month: Int,
+        year: Long,
+        isNext: Boolean = false
+    ) {
+        try {
+            val response = api.getMonthlyBudgetByMonthYear(month, year)
+            if (response.isSuccessful) {
+                val budget = response.body()
+                if (budget != null) {
+                    BudgetManager.saveCurrentMonthlyBudget(budget)
+                    _state.update {
+                        if (isNext) it.copy(nextMonthBudget = budget, isLoadingMonthly = false, isOffline = false)
+                        else it.copy(
+                            currentMonthlyBudget = budget,
+                            isLoadingMonthly = false,
+                            isFromCache = false,
+                            isOffline = false
+                        )
+                    }
+                } else {
+                    _state.update { it.copy(isLoadingMonthly = false, isOffline = false) }
+                }
+            } else if (response.code() == 401) {
+                _state.update {
+                    it.copy(
+                        isLoadingMonthly = false,
+                        error = "Session expired. Please login again",
+                        isOffline = false
+                    )
+                }
+            } else {
+                _state.update {
+                    it.copy(
+                        isLoadingMonthly = false,
+                        error = if (!isNext) "Failed to load monthly budget (${response.code()})" else it.error,
+                        isOffline = false
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            _state.update {
+                it.copy(
+                    isLoadingMonthly = false,
+                    error = if (!isNext) "Could not load monthly budget: ${e.message}" else it.error,
+                    isOffline = true  // ← Set offline flag on exception
+                )
+            }
+        }
+    }
 
      // ── Error handling ────────────────────────────────────────────────────────
 

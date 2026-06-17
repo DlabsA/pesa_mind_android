@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -102,6 +103,7 @@ import cc.dlabs.pesamind.core.theme.PesaMindGreen
 import cc.dlabs.pesamind.core.theme.PesaMindNavy
 import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.features.analytics.AnalyticsUiState
 import coil3.compose.AsyncImage
 import okhttp3.Route
 import java.text.NumberFormat
@@ -168,10 +170,12 @@ fun BudgetScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            DashboardHeader(
-                state = state,
-                onBack = { navController.popBackStack() },
-                initial = initial
+            BudgetHeader(
+                state     = state,
+                viewModel = vm,
+                modifier  = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp),
             )
         }
     ) { padding ->
@@ -187,7 +191,6 @@ fun BudgetScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
             ) {
-
                 // ── Body content
                 Column(
                     modifier = Modifier
@@ -239,92 +242,54 @@ fun BudgetScreen(
 }
 
 // ─── Dashboard Header ─────────────────────────────────────────────────────────
-
 @Composable
-public fun DashboardHeader(
-    state: DashboardUiState,
-    onBack: () -> Unit,
-    initial: String = "U"
+private fun BudgetHeader(
+    state:    DashboardUiState,
+    viewModel: BudgetViewModel,
+    modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(PesaMindTeal, PesaMindTeal.copy(alpha = 0.75f))
-                )
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text  = state.greetingText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             )
-    ) {
-        // Greeting + avatar row centered lower in the hero
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Avatar
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = PesaMindTeal.copy(alpha = 0.15f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = initial,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.75f)
-                    )
-                }
-            }
-
-            Column {
-                val now = Calendar.getInstance()
-                val hour = now.get(Calendar.HOUR_OF_DAY)
-                val greeting = when {
-                    hour < 12 -> "Good morning"
-                    hour < 17 -> "Good afternoon"
-                    else      -> "Good evening"
-                }
+            Text(
+                text          = "Budgets",
+                style         = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color         = MaterialTheme.colorScheme.onBackground,
+                letterSpacing = (-0.5).sp,
+            )
+            Text(
+                text  = state.currentPeriodLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+        when {
+            state.isRefreshing -> CircularProgressIndicator(
+                modifier    = Modifier.size(22.dp),
+                color       = MaterialTheme.colorScheme.secondary,
+                strokeWidth = 2.dp,
+            )
+            state.isOffline -> Icon(
+                Icons.Default.WifiOff,
+                contentDescription = "Offline",
+                tint               = MaterialTheme.colorScheme.error,
+                modifier           = Modifier.size(20.dp),
+            )
+            else -> Surface(shape = RoundedCornerShape(70), color = MaterialTheme.colorScheme.surface) {
                 Text(
-                    text = greeting,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.75f)
+                    text     = state.currentPeriodLabel,
+                    style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
-                if (state.userDisplayName.isNotBlank()) {
-                    Text(
-                        text = state.userDisplayName,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.3).sp
-                        ),
-                        color = Color.White
-                    )
-                }
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            // Cache indicator pill
-            if (state.isFromCache) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "Cached",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
             }
         }
     }
 }
-
 
 // ─── Yearly Budget Card ───────────────────────────────────────────────────────
 
