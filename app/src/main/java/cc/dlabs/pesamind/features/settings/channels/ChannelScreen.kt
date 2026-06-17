@@ -89,10 +89,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
-import cc.dlabs.pesamind.core.theme.ExpenseRed
-import cc.dlabs.pesamind.core.theme.PesaMindGreen
-import cc.dlabs.pesamind.core.theme.PesaMindTeal
-import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.core.theme.getErrorColor
+import cc.dlabs.pesamind.core.theme.getTertiaryColor
+import cc.dlabs.pesamind.core.theme.getPrimaryColor
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 
@@ -160,7 +159,7 @@ fun ChannelScreen(
                                 .size(18.dp)
                                 .padding(end = 2.dp),
                             strokeWidth = 2.dp,
-                            color = PesaMindTeal
+                            color = getPrimaryColor()
                         )
                         Spacer(Modifier.width(4.dp))
                     }
@@ -176,14 +175,14 @@ fun ChannelScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showCreateDialog = true },
-                containerColor = PesaMindTeal,
+                containerColor = getPrimaryColor(),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.shadow(
                     elevation = 8.dp,
                     shape = RoundedCornerShape(16.dp),
-                    ambientColor = PesaMindTeal.copy(alpha = 0.25f),
-                    spotColor = PesaMindTeal.copy(alpha = 0.35f)
+                    ambientColor = getPrimaryColor().copy(alpha = 0.25f),
+                    spotColor = getPrimaryColor().copy(alpha = 0.35f)
                 )
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add Channel")
@@ -331,7 +330,7 @@ private fun ChannelFilterRow(
     onType: () -> Unit
 ) {
     val chipColors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = PesaMindTeal,
+        selectedContainerColor = getPrimaryColor(),
         selectedLabelColor = Color.White,
         selectedLeadingIconColor = Color.White
     )
@@ -423,7 +422,7 @@ private fun SkeletonCard(brush: Brush) {
         elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = PesaMindTeal.copy(0.05f))
+            .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = getPrimaryColor().copy(0.05f))
     ) {
         Row(
             modifier = Modifier
@@ -513,14 +512,14 @@ private fun ChannelEmptyState(onAddClick: () -> Unit) {
         // Icon in a soft teal pill
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = PesaMindTeal.copy(alpha = 0.10f),
+            color = getPrimaryColor().copy(alpha = 0.10f),
             modifier = Modifier.size(80.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Outlined.Inbox,
                     contentDescription = null,
-                    tint = PesaMindTeal,
+                    tint = getPrimaryColor(),
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -542,7 +541,7 @@ private fun ChannelEmptyState(onAddClick: () -> Unit) {
         Text(
             text = "Add your first financial channel to start\ntracking payments and transfers.",
             style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
@@ -551,7 +550,7 @@ private fun ChannelEmptyState(onAddClick: () -> Unit) {
         Button(
             onClick = onAddClick,
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = PesaMindTeal),
+            colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor()),
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
         ) {
             Icon(
@@ -588,9 +587,9 @@ fun ChannelCard(
         label = "pulseAlpha"
     )
 
-    val statusDotColor = if (item.status) PesaMindGreen else ExpenseRed
-    val statusChipBg = if (item.status) PesaMindGreen.copy(alpha = 0.10f)
-    else ExpenseRed.copy(alpha = 0.09f)
+    val statusDotColor = if (item.status) getTertiaryColor() else getErrorColor()
+    val statusChipBg = if (item.status) getTertiaryColor().copy(alpha = 0.10f)
+    else getErrorColor().copy(alpha = 0.09f)
 
     Card(
         modifier = Modifier
@@ -598,8 +597,8 @@ fun ChannelCard(
             .shadow(
                 elevation = 4.dp,
                 shape = RoundedCornerShape(18.dp),
-                ambientColor = PesaMindTeal.copy(alpha = 0.07f),
-                spotColor = PesaMindTeal.copy(alpha = 0.13f)
+                ambientColor = getPrimaryColor().copy(alpha = 0.07f),
+                spotColor = getPrimaryColor().copy(alpha = 0.13f)
             ),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -675,13 +674,13 @@ fun ChannelCard(
                     Icon(
                         imageVector = Icons.Outlined.Tune,
                         contentDescription = null,
-                        tint = TextSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
                         text = displayChannelType(item.channelType),
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = TextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             letterSpacing = 0.25.sp
                         )
                     )
@@ -725,7 +724,7 @@ fun ChannelCard(
                             checked = item.smsNotificationEnabled,
                             onCheckedChange = { onToggleSms() },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = PesaMindTeal,
+                                checkedThumbColor = getPrimaryColor(),
                                 uncheckedThumbColor = Color.LightGray
                             )
                         )
@@ -742,9 +741,9 @@ fun ChannelCard(
                     OutlinedButton(
                         onClick = onEdit,
                         shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, PesaMindTeal.copy(alpha = 0.55f)),
+                        border = BorderStroke(1.dp, getPrimaryColor().copy(alpha = 0.55f)),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PesaMindTeal)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = getPrimaryColor())
                     ) {
                         Icon(Icons.Outlined.Edit, "Edit", Modifier.size(15.dp))
                         Spacer(Modifier.width(5.dp))
@@ -761,8 +760,8 @@ fun ChannelCard(
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ExpenseRed.copy(alpha = 0.10f),
-                            contentColor = ExpenseRed
+                            containerColor = getErrorColor().copy(alpha = 0.10f),
+                            contentColor = getErrorColor()
                         ),
                         elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp)
                     ) {
@@ -795,14 +794,14 @@ private fun DeleteConfirmDialog(
         icon = {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = ExpenseRed.copy(alpha = 0.10f),
+                color = getErrorColor().copy(alpha = 0.10f),
                 modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Outlined.Delete,
                         contentDescription = null,
-                        tint = ExpenseRed,
+                        tint = getErrorColor(),
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -826,7 +825,7 @@ private fun DeleteConfirmDialog(
                 onClick = onConfirm,
                 enabled = !isDeleting,
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ExpenseRed)
+                colors = ButtonDefaults.buttonColors(containerColor = getErrorColor())
             ) {
                 Text(if (isDeleting) "Deleting…" else "Delete")
             }
@@ -917,7 +916,7 @@ private fun ChannelFormDialog(
                             Icon(
                                 Icons.Filled.ArrowDropDown,
                                 contentDescription = null,
-                                tint = TextSecondary
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         DropdownMenu(
@@ -973,13 +972,13 @@ private fun ChannelFormDialog(
                                         .ifBlank { "Select provider" },
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = if (channelDescription.isBlank()) TextSecondary
+                                    color = if (channelDescription.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
                                     else MaterialTheme.colorScheme.onSurface
                                 )
                                 Icon(
                                     Icons.Filled.ArrowDropDown,
                                     contentDescription = null,
-                                    tint = TextSecondary
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             DropdownMenu(
@@ -1049,7 +1048,7 @@ private fun ChannelFormDialog(
                             Text(
                                 text = if (status) "Channel is active" else "Channel is inactive",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (status) PesaMindGreen else TextSecondary
+                                color = if (status) getTertiaryColor() else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
@@ -1057,7 +1056,7 @@ private fun ChannelFormDialog(
                             onCheckedChange = { status = it },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = PesaMindTeal,
+                                checkedTrackColor = getPrimaryColor(),
                                 uncheckedThumbColor = Color.White,
                                 uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
@@ -1079,7 +1078,7 @@ private fun ChannelFormDialog(
                 },
                 enabled = isFormValid && !isSaving,
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PesaMindTeal)
+                colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor())
             ) {
                 Text(if (isSaving) "Saving…" else confirmLabel)
             }
@@ -1118,7 +1117,7 @@ private fun TypeFilterDialog(
                 Text(
                     "Show only channels of a specific type.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Box {
                     OutlinedButton(
@@ -1138,13 +1137,13 @@ private fun TypeFilterDialog(
                             text = if (type.isBlank()) "Choose a type" else displayChannelType(type),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (type.isBlank()) TextSecondary
+                            color = if (type.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
                             else MaterialTheme.colorScheme.onSurface
                         )
                         Icon(
                             Icons.Filled.ArrowDropDown,
                             contentDescription = null,
-                            tint = TextSecondary
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     DropdownMenu(
@@ -1166,7 +1165,7 @@ private fun TypeFilterDialog(
                 onClick = { onApply(type.trim()) },
                 enabled = type.isNotBlank(),
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PesaMindTeal)
+                colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor())
             ) {
                 Text("Apply")
             }
@@ -1189,7 +1188,7 @@ private fun FormSectionLabel(text: String) {
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.3.sp
         ),
-        color = TextSecondary
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
 

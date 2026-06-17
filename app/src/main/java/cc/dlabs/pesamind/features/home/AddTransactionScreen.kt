@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import cc.dlabs.pesamind.features.settings.channels.ChannelViewModel
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -40,13 +42,6 @@ import androidx.navigation.NavHostController
 import java.text.NumberFormat
 import java.util.Locale
 import androidx.compose.ui.platform.LocalLocale
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Colours — income = green tint, expense = red tint, neutral = surface
-// ─────────────────────────────────────────────────────────────────────────────
-private val IncomeGreen  = Color(0xFF00C896)
-private val ExpenseRed   = Color(0xFFFF4D6A)
-private val NeutralGray  = Color(0xFFF2F4F7)
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Transaction type constants — align with TransactionTypes.valid in ViewModel
@@ -64,6 +59,7 @@ fun AddTransactionScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val isDark = isSystemInDarkTheme()
 
     // ── Form state ────────────────────────────────────────────────────────────
     var channelId   by remember { mutableStateOf("") }
@@ -103,7 +99,11 @@ fun AddTransactionScreen(
 
     // ── Accent colour follows selected type ──────────────────────────────────
     val accentColor by animateColorAsState(
-        targetValue = if (txType == TYPE_INCOME) IncomeGreen else ExpenseRed,
+        targetValue = when (txType) {
+            TYPE_INCOME -> if (isDark) DarkColors.Income else LightColors.Income
+            TYPE_SAVING -> if (isDark) DarkColors.Savings else LightColors.Savings
+            else -> if (isDark) DarkColors.Expense else LightColors.Expense
+        },
         animationSpec = tween(300),
         label = "accentColor"
     )
@@ -115,7 +115,7 @@ fun AddTransactionScreen(
                     snackbarData = data,
                     containerColor = accentColor,
                     contentColor = Color.White,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.padding(16.dp)
                 )
             }
@@ -126,6 +126,7 @@ fun AddTransactionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(rememberScrollState())
         ) {
 
@@ -133,33 +134,41 @@ fun AddTransactionScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(accentColor)
-                    .padding(top = 16.dp, bottom = 32.dp, start = 20.dp, end = 20.dp)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(accentColor, accentColor.copy(alpha = 0.8f))
+                        )
+                    )
+                    .padding(top = 24.dp, bottom = 32.dp, start = 16.dp, end = 16.dp)
             ) {
                 // Back button
                 IconButton(
                     onClick = { navController.popBackStack() },
-                    modifier = Modifier.align(Alignment.TopStart)
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color.White
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 56.dp),
+                        .padding(top = 48.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Amount display — centre stage
                     Text(
                         text = "UGX",
-                        fontSize = 16.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                        letterSpacing = 3.sp
+                        fontSize = 14.sp,
+                        color = Color.White.copy(alpha = 0.75f),
+                        letterSpacing = 2.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = if (amountText.isEmpty()) {
@@ -173,7 +182,7 @@ fun AddTransactionScreen(
                                     }.format(number)
                         },
                         fontSize = 52.sp,
-                        fontWeight = FontWeight.Black,
+                        fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
                         textAlign = TextAlign.Center,
                         letterSpacing = (-1).sp
@@ -186,15 +195,15 @@ fun AddTransactionScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .offset(y = (-20).dp)
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
+                    .offset(y = (-20.dp))
+                    .shadow(elevation = 12.dp, shape = RoundedCornerShape(28.dp)),
+                shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
 
@@ -205,7 +214,10 @@ fun AddTransactionScreen(
                         accentColor = accentColor
                     )
 
-                    HorizontalDivider(color = NeutralGray, thickness = 1.dp)
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outline,
+                        thickness = 1.dp
+                    )
 
                     // ── Amount field ──────────────────────────────────────────
                     LabeledField(label = "Amount") {
@@ -228,11 +240,13 @@ fun AddTransactionScreen(
                                 imeAction = ImeAction.Next
                             ),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = accentColor,
-                                cursorColor = accentColor
+                                cursorColor = accentColor,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                     }
@@ -261,10 +275,12 @@ fun AddTransactionScreen(
                                 modifier = Modifier
                                     .menuAnchor()
                                     .fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = accentColor,
-                                    cursorColor = accentColor
+                                    cursorColor = accentColor,
+                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                             ExposedDropdownMenu(
@@ -298,7 +314,7 @@ fun AddTransactionScreen(
                                 capitalization = KeyboardCapitalization.Sentences,
                                 imeAction = ImeAction.Done
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth(),
                             supportingText = {
                                 Text(
@@ -311,14 +327,16 @@ fun AddTransactionScreen(
                             },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = accentColor,
-                                cursorColor = accentColor
+                                cursorColor = accentColor,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // ── Submit button ─────────────────────────────────────────────────
             val canSubmit = channelId.isNotBlank()
@@ -327,7 +345,8 @@ fun AddTransactionScreen(
                     && note.isNotBlank()
                     && !state.isSaving
 
-            Button(
+            PrimaryButton(
+                text = if (txType == TYPE_INCOME) "Record Income" else if (txType == TYPE_SAVING) "Record Savings" else "Record Expense",
                 onClick = {
                     viewModel.CreateTransaction(
                         channelID = channelId.trim(),
@@ -337,40 +356,11 @@ fun AddTransactionScreen(
                     )
                 },
                 enabled = canSubmit,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor,
-                    disabledContainerColor = accentColor.copy(alpha = 0.4f)
-                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .height(56.dp)
-            ) {
-                AnimatedVisibility(
-                    visible = state.isSaving,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                AnimatedVisibility(
-                    visible = !state.isSaving,
-                    enter = fadeIn() + slideInVertically(),
-                    exit = fadeOut()
-                ) {
-                    Text(
-                        text = if (txType == TYPE_INCOME) "Record Income" else "Record Expense",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-            }
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -386,11 +376,11 @@ private fun TransactionTypeToggle(
     onSelect: (String) -> Unit,
     accentColor: Color
 ) {
-    Row(
+     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(NeutralGray)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -403,19 +393,19 @@ private fun TransactionTypeToggle(
             )
             val textColor by animateColorAsState(
                 targetValue = if (isSelected) Color.White
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(250),
                 label = "toggleText"
             )
             val icon = if (value == TYPE_INCOME) Icons.Default.Add else Icons.Default.Remove
 
-            Row(
+             Row(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(10.dp))
                     .background(bgColor)
                     .clickable { onSelect(value) }
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -425,7 +415,7 @@ private fun TransactionTypeToggle(
                     tint = textColor,
                     modifier = Modifier.size(16.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = label,
                     color = textColor,
@@ -445,13 +435,13 @@ private fun LabeledField(
     label: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = label.uppercase(),
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.5.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
         content()
     }

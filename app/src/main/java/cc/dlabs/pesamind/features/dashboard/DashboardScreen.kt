@@ -27,6 +27,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.analytics.*
 import cc.dlabs.pesamind.core.theme.*
+import cc.dlabs.pesamind.core.theme.LightColors
+import cc.dlabs.pesamind.core.theme.DarkColors
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -256,20 +258,20 @@ private fun DashboardHeader(
         when {
             state.isRefreshing -> CircularProgressIndicator(
                 modifier    = Modifier.size(22.dp),
-                color       = PesaMindTeal,
+                color       = MaterialTheme.colorScheme.primary,
                 strokeWidth = 2.dp,
             )
             state.isOffline -> Icon(
                 Icons.Default.WifiOff,
                 contentDescription = "Offline",
-                tint               = ExpenseRed,
+                tint               = MaterialTheme.colorScheme.error,
                 modifier           = Modifier.size(20.dp),
             )
-            else -> Surface(shape = RoundedCornerShape(50), color = PesaMindTeal.copy(alpha = 0.10f)) {
+            else -> Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)) {
                 Text(
                     text     = viewModel.currentPeriodLabel,
                     style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color    = PesaMindTeal,
+                    color    = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }
@@ -317,7 +319,12 @@ private fun NetMovementCard(
 ) {
     val net        = data.netMovement
     val isPositive = net >= 0
-    val netColor   = if (isPositive) IncomeGreen else ExpenseRed
+    val isDark = isSystemInDarkTheme()
+    val netColor   = if (isPositive) {
+        if (isDark) DarkColors.Income else LightColors.Income
+    } else {
+        if (isDark) DarkColors.Expense else LightColors.Expense
+    }
 
     var animateIn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { animateIn = true }
@@ -396,11 +403,11 @@ private fun NetMovementCard(
 
                 // Income / Expense / Savings split
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    NetSplitItem(Icons.Default.ArrowDownward, "Income",   data.totalIncome.toDouble().ugxShort(),  IncomeGreen)
+                    NetSplitItem(Icons.Default.ArrowDownward, "Income",   data.totalIncome.toDouble().ugxShort(),  if (isDark) DarkColors.Income else LightColors.Income)
                     NetDivider()
-                    NetSplitItem(Icons.Default.ArrowUpward,   "Expenses", data.totalExpense.toDouble().ugxShort(), ExpenseRed)
+                    NetSplitItem(Icons.Default.ArrowUpward,   "Expenses", data.totalExpense.toDouble().ugxShort(), if (isDark) DarkColors.Expense else LightColors.Expense)
                     NetDivider()
-                    NetSplitItem(Icons.Default.Savings,       "Savings",  data.totalSavings.toDouble().ugxShort(), PesaMindTeal)
+                    NetSplitItem(Icons.Default.Savings,       "Savings",  data.totalSavings.toDouble().ugxShort(), if (isDark) DarkColors.Savings else LightColors.Savings)
                 }
             }
         }
@@ -437,14 +444,15 @@ private fun QuickStatsRow(
     health:   Health,
     modifier: Modifier = Modifier,
 ) {
+    val isDark = isSystemInDarkTheme()
     val healthColor = when {
-        health.score >= 80 -> IncomeGreen
+        health.score >= 80 -> if (isDark) DarkColors.Income else LightColors.Income
         health.score >= 60 -> Color(0xFFFF9500)
-        else               -> ExpenseRed
+        else               -> if (isDark) DarkColors.Expense else LightColors.Expense
     }
 
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        QuickStatChip("${data.transactionCount}", "Transactions", Icons.Default.CompareArrows, PesaMindTeal,    Modifier.weight(1f))
+        QuickStatChip("${data.transactionCount}", "Transactions", Icons.Default.CompareArrows, if (isDark) DarkColors.Savings else LightColors.Savings,    Modifier.weight(1f))
         QuickStatChip("${data.activeCategories}", "Categories",   Icons.Default.Tag,           Color(0xFF5856D6), Modifier.weight(1f))
         QuickStatChip(health.status.replaceFirstChar { it.uppercase() }, "Status", Icons.Default.Favorite, healthColor, Modifier.weight(1f))
     }
@@ -480,11 +488,12 @@ fun FinancialHealthCard(
     modifier: Modifier = Modifier,
 ) {
     Log.d("FinancialHealthCard", "health: $health")
+    val isDark = isSystemInDarkTheme()
     val score     = health.score
     val ringColor = when {
-        score >= 80 -> IncomeGreen
+        score >= 80 -> if (isDark) DarkColors.Income else LightColors.Income
         score >= 60 -> Color(0xFFFF9500)
-        else        -> ExpenseRed
+        else        -> if (isDark) DarkColors.Expense else LightColors.Expense
     }
     val statusLabel = when {
         score >= 90 -> "Excellent 🎯"
@@ -530,9 +539,9 @@ fun FinancialHealthCard(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         val trendIcon = when (health.trend.lowercase()) {
-                            "improving" -> Icons.Outlined.TrendingUp
-                            "declining" -> Icons.Outlined.TrendingDown
-                            else        -> Icons.Outlined.TrendingFlat
+                            "improving" -> Icons.Default.TrendingUp
+                            "declining" -> Icons.Default.TrendingDown
+                            else        -> Icons.Default.TrendingFlat
                         }
                         Icon(trendIcon, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(12.dp))
                         Text("Trend: ${health.trend.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
@@ -542,7 +551,7 @@ fun FinancialHealthCard(
 
             // Component breakdown — health.components is a Map<String, ComponentScore>
             val components = health.components
-            if (!components.isNullOrEmpty()) {
+            if (components.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     components.forEach { (name, comp) ->
@@ -558,14 +567,14 @@ fun FinancialHealthCard(
             // Strengths & Weaknesses
             val strengths  = health.strengths
             val weaknesses = health.weaknesses
-            if (!strengths.isNullOrEmpty() || !weaknesses.isNullOrEmpty()) {
+            if (strengths.isNotEmpty() || weaknesses.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (!strengths.isNullOrEmpty()) {
-                        StrengthWeaknessColumn("Strengths",  strengths,  Icons.Default.CheckCircle,  IncomeGreen, Modifier.weight(1f))
+                    if (strengths.isNotEmpty()) {
+                        StrengthWeaknessColumn("Strengths",  strengths,  Icons.Default.CheckCircle,  if (isDark) DarkColors.Income else LightColors.Income, Modifier.weight(1f))
                     }
-                    if (!weaknesses.isNullOrEmpty()) {
-                        StrengthWeaknessColumn("Weaknesses", weaknesses, Icons.Default.ErrorOutline, ExpenseRed,  Modifier.weight(1f))
+                    if (weaknesses.isNotEmpty()) {
+                        StrengthWeaknessColumn("Weaknesses", weaknesses, Icons.Default.ErrorOutline, if (isDark) DarkColors.Expense else LightColors.Expense,  Modifier.weight(1f))
                     }
                 }
             }
@@ -575,10 +584,11 @@ fun FinancialHealthCard(
 
 @Composable
 private fun HealthComponentRow(label: String, score: Int, description: String) {
+    val isDark = isSystemInDarkTheme()
     val color = when {
-        score >= 75 -> IncomeGreen
+        score >= 75 -> if (isDark) DarkColors.Income else LightColors.Income
         score >= 50 -> Color(0xFFFF9500)
-        else        -> ExpenseRed
+        else        -> if (isDark) DarkColors.Expense else LightColors.Expense
     }
     var barTarget by remember { mutableStateOf(0f) }
     LaunchedEffect(score) { barTarget = score / 100f }
@@ -622,10 +632,11 @@ private fun DashboardVelocityCard(
     data:     VelocityData,
     modifier: Modifier = Modifier,
 ) {
+    val isDark = isSystemInDarkTheme()
     val alertColor = when (data.alertLevel) {
-        "ok"      -> IncomeGreen
+        "ok"      -> if (isDark) DarkColors.Income else LightColors.Income
         "warning" -> Color(0xFFFF9500)
-        else      -> ExpenseRed
+        else      -> if (isDark) DarkColors.Expense else LightColors.Expense
     }
     val daysTotal  = data.daysElapsed + data.daysRemaining
     val dayFrac    = if (daysTotal > 0) data.daysElapsed.toFloat() / daysTotal else 0f
@@ -666,9 +677,10 @@ private fun DashboardVelocityCard(
                         val outerSz     = Size(size.width - outerStroke, size.height - outerStroke)
                         val innerTL     = Offset(innerInset, innerInset)
                         val innerSz     = Size(size.width - innerInset * 2, size.height - innerInset * 2)
+                        val dayColor = if (isDark) DarkColors.Savings else LightColors.Savings
                         // Outer track + fill (day progress)
-                        drawArc(PesaMindTeal.copy(alpha = 0.10f), -90f, 360f,                   false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
-                        drawArc(PesaMindTeal.copy(alpha = 0.45f), -90f, 360f * dayRing,         false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
+                        drawArc(dayColor.copy(alpha = 0.10f), -90f, 360f,                   false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
+                        drawArc(dayColor.copy(alpha = 0.45f), -90f, 360f * dayRing,         false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
                         // Inner track + fill (budget used)
                         drawArc(alertColor.copy(alpha = 0.10f),   -90f, 360f,                   false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
                         drawArc(alertColor,                        -90f, 360f * budgetRing,      false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
@@ -683,10 +695,10 @@ private fun DashboardVelocityCard(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     VelocityRow(Icons.Default.AttachMoney,          "Spent",       data.totalSpent.toDouble().ugxShort())
                     VelocityRow(Icons.Default.CalendarToday,        "Days left",   "${data.daysRemaining}d")
-                    VelocityRow(Icons.Default.ShowChart,            "Daily avg",   data.dailyAverage.ugxShort())
+                    VelocityRow(Icons.Default.BarChart,             "Daily avg",   data.dailyAverage.ugxShort())
                     VelocityRow(Icons.Default.TrackChanges,         "Projection",  data.projectedMonthEnd.ugxShort())
-                    data.daysUntilBudgetExhausted?.let {
-                        VelocityRow(Icons.Default.HourglassBottom, "Budget lasts", "${it.toInt()}d", valueColor = alertColor)
+                    data.daysUntilBudgetExhausted?.let { days ->
+                        VelocityRow(Icons.Default.HourglassBottom, "Budget lasts", "${days.toInt()}d", valueColor = alertColor)
                     }
                 }
             }
@@ -711,8 +723,10 @@ private fun DashboardVelocityCard(
 
 @Composable
 private fun VelocityRow(icon: ImageVector, label: String, value: String, valueColor: Color = Color.Unspecified) {
+    val isDark = isSystemInDarkTheme()
+    val dayColor = if (isDark) DarkColors.Savings else LightColors.Savings
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(icon, null, tint = PesaMindTeal, modifier = Modifier.size(10.dp).defaultMinSize(minWidth = 14.dp))
+        Icon(icon, null, tint = dayColor, modifier = Modifier.size(10.dp).defaultMinSize(minWidth = 14.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.weight(1f))
         Text(value, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = if (valueColor == Color.Unspecified) MaterialTheme.colorScheme.onSurface else valueColor)
@@ -721,7 +735,12 @@ private fun VelocityRow(icon: ImageVector, label: String, value: String, valueCo
 
 @Composable
 private fun AlertLevelBadge(level: String) {
-    val color = when (level) { "ok" -> IncomeGreen; "warning" -> Color(0xFFFF9500); else -> ExpenseRed }
+    val isDark = isSystemInDarkTheme()
+    val color = when (level) { 
+        "ok" -> if (isDark) DarkColors.Income else LightColors.Income
+        "warning" -> Color(0xFFFF9500)
+        else -> if (isDark) DarkColors.Expense else LightColors.Expense
+    }
     val icon  = when (level) { "ok" -> Icons.Default.CheckCircle; "warning" -> Icons.Default.Warning; else -> Icons.Default.Cancel }
     Surface(shape = RoundedCornerShape(50), color = color.copy(alpha = 0.10f)) {
         Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -739,9 +758,10 @@ private fun DashboardBudgetCard(
     data:     BudgetActualData,
     modifier: Modifier = Modifier,
 ) {
+    val isDark = isSystemInDarkTheme()
     val statusColor = when (data.status) {
-        "on_budget"   -> IncomeGreen
-        "over_budget" -> ExpenseRed
+        "on_budget"   -> if (isDark) DarkColors.Income else LightColors.Income
+        "over_budget" -> if (isDark) DarkColors.Expense else LightColors.Expense
         else          -> Color(0xFFFF9500)
     }
     val usageFraction = if (data.budgetTotal > 0) (data.actualTotal / data.budgetTotal).coerceIn(0.0.toLong(), 1.00.toLong()) else 0.0
@@ -760,8 +780,8 @@ private fun DashboardBudgetCard(
                     Text(data.status.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = statusColor)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BudgetCountChip("On Track", data.categoriesOnTrack,    IncomeGreen)
-                    BudgetCountChip("Over",     data.categoriesOverBudget, ExpenseRed)
+                    BudgetCountChip("On Track", data.categoriesOnTrack,    if (isDark) DarkColors.Income else LightColors.Income)
+                    BudgetCountChip("Over",     data.categoriesOverBudget, if (isDark) DarkColors.Expense else LightColors.Expense)
                 }
             }
 
@@ -833,7 +853,8 @@ private fun BudgetCountChip(label: String, count: Int, color: Color) {
 
 @Composable
 private fun BudgetItemRow(item: BudgetActualItem) {
-    val color     = if (item.budget.toDouble() == 0.0) Color(0xFFFF9500) else if (item.actual <= item.budget) IncomeGreen else ExpenseRed
+    val isDark = isSystemInDarkTheme()
+    val color     = if (item.budget.toDouble() == 0.0) Color(0xFFFF9500) else if (item.actual <= item.budget) (if (isDark) DarkColors.Income else LightColors.Income) else (if (isDark) DarkColors.Expense else LightColors.Expense)
     val usageFrac = if (item.budget > 0) (item.actual / item.budget).coerceIn(0.00.toLong(), 1.0.toLong()).toFloat() else 0f
     var barTarget by remember(item.category) { mutableStateOf(0f) }
     LaunchedEffect(item.category) { barTarget = usageFrac }
@@ -851,8 +872,8 @@ private fun BudgetItemRow(item: BudgetActualItem) {
         Box(modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(color.copy(alpha = 0.10f))) {
             Box(Modifier.fillMaxWidth(barW).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(color))
         }
-        item.transactions?.let {
-            Text("$it transaction${if (it == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
+        item.transactions?.let { txCount ->
+            Text("$txCount transaction${if (txCount == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
         }
     }
 }
@@ -865,18 +886,20 @@ private fun DashboardAnomaliesCard(
     data:     AnomalyData,
     modifier: Modifier = Modifier,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val expenseColor = if (isDark) DarkColors.Expense else LightColors.Expense
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(ExpenseRed.copy(alpha = 0.04f), RoundedCornerShape(16.dp))
-            .border(1.dp, ExpenseRed.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
+            .background(expenseColor.copy(alpha = 0.04f), RoundedCornerShape(16.dp))
+            .border(1.dp, expenseColor.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Warning, null, tint = ExpenseRed, modifier = Modifier.size(14.dp))
+                Icon(Icons.Default.Warning, null, tint = expenseColor, modifier = Modifier.size(14.dp))
                 Text("Anomalies Detected", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                if (data.criticalCount > 0) AnomalyBadge("${data.criticalCount} Critical", ExpenseRed)
+                if (data.criticalCount > 0) AnomalyBadge("${data.criticalCount} Critical", expenseColor)
                 if (data.warningCount  > 0) AnomalyBadge("${data.warningCount} Warning",   Color(0xFFFF9500))
             }
 
@@ -886,7 +909,7 @@ private fun DashboardAnomaliesCard(
                         modifier = Modifier
                             .size(7.dp)
                             .offset(y = 4.dp)
-                            .background(if (item.severity == "critical") ExpenseRed else Color(0xFFFF9500), CircleShape)
+                            .background(if (item.severity == "critical") expenseColor else Color(0xFFFF9500), CircleShape)
                     )
 //                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
 //                        Text(item.type.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
@@ -951,6 +974,8 @@ private fun DashboardSkeletonView() {
 
 @Composable
 private fun DashboardErrorView(message: String, onRetry: () -> Unit) {
+    val isDark = isSystemInDarkTheme()
+    val primaryColor = if (isDark) DarkColors.Primary else LightColors.Primary
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -962,11 +987,11 @@ private fun DashboardErrorView(message: String, onRetry: () -> Unit) {
                 Text("Couldn't load dashboard", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
                 Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), textAlign = TextAlign.Center)
             }
-            Surface(shape = RoundedCornerShape(50), color = PesaMindTeal.copy(alpha = 0.10f)) {
+            Surface(shape = RoundedCornerShape(50), color = primaryColor.copy(alpha = 0.10f)) {
                 TextButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Icon(Icons.Default.Refresh, null, tint = PesaMindTeal, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Refresh, null, tint = primaryColor, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Try Again", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = PesaMindTeal)
+                    Text("Try Again", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = primaryColor)
                 }
             }
         }
