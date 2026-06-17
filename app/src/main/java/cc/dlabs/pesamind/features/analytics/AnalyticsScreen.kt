@@ -58,6 +58,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cc.dlabs.pesamind.core.network.models.AnomalyData
+import cc.dlabs.pesamind.core.network.models.AnomalyItem
+import cc.dlabs.pesamind.core.network.models.AnomalyRecommendation
+import cc.dlabs.pesamind.core.network.models.AnomalySection
 import cc.dlabs.pesamind.core.network.models.BvaHealth
 import cc.dlabs.pesamind.core.network.models.BvaHealthComponents
 import cc.dlabs.pesamind.core.network.models.ForecastData
@@ -249,7 +253,7 @@ private fun AnalyticsScrollBody(
                     item {
                         StaggeredCard(index = 7, visible = cardsVisible) {
                             AnomaliesCard(
-                                data = anomalyData, // Now safely smart-cast to non-null 'AnomalyData'
+                                section = a.anomalies, // Now safely smart-cast to non-null 'AnomalyData'
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
                         }
@@ -2212,48 +2216,467 @@ private fun CashFlowEntryChip(entry: CashFlowEntry, total: Double, color: Color)
 
 // ─── Anomalies Card ───────────────────────────────────────────────────────────
 
+
+// ---------------------------------------------------------------------------
+//  Colour helpers
+// ---------------------------------------------------------------------------
+
+private object AnomalyColors {
+    // Severity — new mapping: "high" | "medium" | "low"
+    val High   = Color(0xFFD85A30)   // expense red
+    val Medium = Color(0xFFE07B00)   // amber
+    val Low    = Color(0xFF378ADD)   // savings blue (informational)
+
+    fun severityColor(severity: String) = when (severity.lowercase()) {
+        "high", "critical" -> High      // accept both old and new strings
+        "medium", "warning" -> Medium
+        else                -> Low
+    }
+
+    fun severityLabel(severity: String) = when (severity.lowercase()) {
+        "high", "critical"  -> "High"
+        "medium", "warning" -> "Medium"
+        else                -> "Low"
+    }
+
+    // Sigma heat colour — the higher the sigma the redder the badge
+    fun sigmaColor(sigma: Double) = when {
+        sigma >= 10.0 -> High
+        sigma >= 5.0  -> Medium
+        else          -> Low
+    }
+
+    // Header pill
+    val CriticalBg   = Color(0xFFFFEBEE)
+    val CriticalText = Color(0xFFC62828)
+    val WarningBg    = Color(0xFFFFF3E0)
+    val WarningText  = Color(0xFFE65100)
+    val ClearBg      = Color(0xFFE8F5E9)
+    val ClearText    = Color(0xFF1B5E20)
+}
+
+// ---------------------------------------------------------------------------
+//  Top-level composable
+// ---------------------------------------------------------------------------
+
 @Composable
-private fun AnomaliesCard(
-    data:     AnomalyData,
+fun AnomaliesCard(
+    section: AnomalySection,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(LightColors.Expense, RoundedCornerShape(16.dp))
-            .border(1.dp, LightColors.Expense, RoundedCornerShape(16.dp))
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Warning, null, tint = LightColors.Expense, modifier = Modifier.size(14.dp))
-                Text("Anomalies Detected", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                if (data.criticalCount > 0) AnomalyBadge("${data.criticalCount} Critical", LightColors.Expense)
-                if (data.warningCount  > 0) AnomalyBadge("${data.warningCount} Warning",   Color(0xFFFF9500))
+    val d = section.data
+
+    // Decide overall severity for header accent
+    val headerColor = when {
+        d.criticalCount > 0 -> AnomalyColors.High
+        d.warningCount  > 0 -> AnomalyColors.Medium
+        else                -> AnomalyColors.Low
+    }
+
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            // ── Header ────────────────────────────────────────────────────
+            AnomalyHeader(
+                data        = d,
+                headerColor = headerColor,
+                period      = section.metadata.period,
+            )
+
+            if (d.items.isEmpty()) {
+                // ── Empty state ───────────────────────────────────────────
+                AnomalyEmptyState()
+            } else {
+                // ── Item list ─────────────────────────────────────────────
+                d.items?.forEachIndexed { idx, item ->
+                    if (idx > 0) {
+                        HorizontalDivider(
+                            color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f),
+                            thickness = 0.5.dp,
+                        )
+                    }
+                    AnomalyItemRow(item = item)
+                }
             }
-            data.items?.forEach { item ->
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .offset(y = 4.dp)
-                            .background(if (item.severity == "critical") LightColors.Expense else Color(0xFFFF9500), CircleShape)
-                    )
-//                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-//                        Text(item.type.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-//                        Text(item.message, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-//                    }
+
+            // ── Recommendations ───────────────────────────────────────────
+            if (section.recommendations.isNotEmpty()) {
+                HorizontalDivider(
+                    color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f),
+                    thickness = 0.5.dp,
+                )
+                section.recommendations.forEach { rec ->
+                    AnomalyAlert(rec = rec)
                 }
             }
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+//  Header
+// ---------------------------------------------------------------------------
+
 @Composable
-private fun AnomalyBadge(text: String, color: Color) {
-    Surface(shape = RoundedCornerShape(50), color = color) {
-        Text(text, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 9.sp), color = color, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp))
+private fun AnomalyHeader(
+    data: AnomalyData,
+    headerColor: Color,
+    period: String,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text  = "Anomalies",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(headerColor, CircleShape)
+                )
+                Text(
+                    text  = if (data.anomaliesDetected == 0) "Nothing unusual"
+                    else "${data.anomaliesDetected} detected",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = headerColor,
+                )
+                Text(
+                    text  = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .30f),
+                )
+                Text(
+                    text  = period.toDisplayPeriod(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                )
+            }
+        }
+
+        // Count pills — only render non-zero counts
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (data.criticalCount > 0) {
+                AnomalyCountPill(
+                    label = "${data.criticalCount} High",
+                    bg    = AnomalyColors.CriticalBg,
+                    text  = AnomalyColors.CriticalText,
+                )
+            }
+            if (data.warningCount > 0) {
+                AnomalyCountPill(
+                    label = "${data.warningCount} Med",
+                    bg    = AnomalyColors.WarningBg,
+                    text  = AnomalyColors.WarningText,
+                )
+            }
+            if (data.criticalCount == 0 && data.warningCount == 0) {
+                AnomalyCountPill(
+                    label = "Clear",
+                    bg    = AnomalyColors.ClearBg,
+                    text  = AnomalyColors.ClearText,
+                )
+            }
+        }
     }
 }
+
+@Composable
+private fun AnomalyCountPill(label: String, bg: Color, text: Color) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = bg,
+    ) {
+        Text(
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize   = 10.sp,
+            ),
+            color    = text,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Item row — signature element: severity accent bar on the left
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AnomalyItemRow(item: AnomalyItem) {
+    val severityColor = AnomalyColors.severityColor(item.severity)
+    val sigmaColor    = AnomalyColors.sigmaColor(item.sigmaMultiple)
+
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment     = Alignment.Top,
+    ) {
+        // ── Severity accent bar (the signature visual move) ───────────────
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .width(3.dp)
+                .height(52.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(severityColor)
+        )
+
+        // ── Content ───────────────────────────────────────────────────────
+        Column(
+            modifier            = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Type + category
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text  = item.type.replace("_", " ").replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    // Severity chip
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = severityColor.copy(alpha = .12f),
+                    ) {
+                        Text(
+                            text     = AnomalyColors.severityLabel(item.severity),
+                            style    = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize   = 9.sp,
+                            ),
+                            color    = severityColor,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                // Sigma badge — the "how weird is this" number
+                SigmaBadge(sigma = item.sigmaMultiple, color = sigmaColor)
+            }
+
+            // Category
+            Text(
+                text  = item.category,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+
+            // Amount vs normal range
+            AnomalyRangeRow(item = item, severityColor = severityColor)
+        }
+    }
+}
+
+@Composable
+private fun SigmaBadge(sigma: Double, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = color.copy(alpha = .10f),
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            Text(
+                text  = "σ",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize   = 9.sp,
+                ),
+                color = color,
+            )
+            Text(
+                text  = "${"%.1f".format(sigma)}×",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize   = 9.sp,
+                ),
+                color = color,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnomalyRangeRow(item: AnomalyItem, severityColor: Color) {
+    // Fraction of amount within the normal range (capped at 1f for the bar)
+    val rangeSpan = (item.normalMax - item.normalMin).coerceAtLeast(1.0)
+    val fraction  = ((item.amount - item.normalMin) / rangeSpan)
+        .toFloat()
+        .coerceAtLeast(0f)
+
+    // Animate bar fill
+    var barTarget by remember(item.amount) { mutableStateOf(0f) }
+    LaunchedEffect(item.amount) { barTarget = fraction.coerceAtMost(1f) }
+    val animBar by animateFloatAsState(
+        targetValue   = barTarget,
+        animationSpec = spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessMediumLow),
+        label         = "anomaly_bar_${item.category}",
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text  = "UGX ${item.amount.ugxShort()}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = severityColor,
+            )
+            Text(
+                text  = "normal ${item.normalMin.ugxShort()}–${item.normalMax.ugxShort()}",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+            )
+        }
+
+        // Range bar — normal range is the track, amount marker shows where it fell
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(severityColor.copy(alpha = .10f))
+        ) {
+            // Normal range fill (full width = within normal)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color(0xFF1D9E75).copy(alpha = .20f))
+            )
+            // Actual spend marker — extends to show how far past normal it went
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animBar.coerceAtMost(1f))
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(severityColor)
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Empty state
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AnomalyEmptyState() {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector        = Icons.Default.CheckCircle,
+            contentDescription = null,
+            tint               = AnomalyColors.Low,
+            modifier           = Modifier.size(14.dp),
+        )
+        Text(
+            text  = "No unusual activity this period",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Severity-aware recommendation alert — same pattern as ForecastAlert
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AnomalyAlert(rec: AnomalyRecommendation) {
+    val bgColor   = alertBg(rec.severity)
+    val textColor = alertText(rec.severity)
+    val icon      = alertIcon(rec.severity)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = bgColor,
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top,
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = null,
+                tint               = textColor,
+                modifier           = Modifier
+                    .size(13.dp)
+                    .padding(top = 1.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (rec.title.isNotBlank()) {
+                    Text(
+                        text  = rec.title,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = textColor,
+                    )
+                }
+                Text(
+                    text  = rec.message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor.copy(alpha = .85f),
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Shared alert colour helpers (duplicate from ForecastAlert — move to
+//  a shared AlertColors.kt in your common module)
+// ---------------------------------------------------------------------------
+
+private fun alertBg(severity: String) = when (severity.lowercase()) {
+    "critical" -> Color(0xFFFFEBEE)
+    "warning"  -> Color(0xFFFFF8E1)
+    "success"  -> Color(0xFFE8F5E9)
+    else       -> Color(0xFFE3F2FD)
+}
+
+private fun alertText(severity: String) = when (severity.lowercase()) {
+    "critical" -> Color(0xFFC62828)
+    "warning"  -> Color(0xFFE65100)
+    "success"  -> Color(0xFF1B5E20)
+    else       -> Color(0xFF0D47A1)
+}
+
+private fun alertIcon(severity: String) = when (severity.lowercase()) {
+    "critical" -> Icons.Default.Cancel
+    "warning"  -> Icons.Default.Warning
+    "success"  -> Icons.Default.CheckCircle
+    else       -> Icons.Default.Info
+}
+
+// ---------------------------------------------------------------------------
+//  Extensions — move to shared FormatUtils.kt
+// ---------------------------------------------------------------------------
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 

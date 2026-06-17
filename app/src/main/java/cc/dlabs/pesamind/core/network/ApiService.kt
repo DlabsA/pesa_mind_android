@@ -1,6 +1,5 @@
 package cc.dlabs.pesamind.core.network
 import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
-import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
@@ -10,6 +9,7 @@ import cc.dlabs.pesamind.core.network.analytics.Health
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
 import cc.dlabs.pesamind.core.network.models.AnalyticResponse
+import cc.dlabs.pesamind.core.network.models.AnomalySection
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -180,7 +180,7 @@ interface ApiService {
     ): Response<BudgetVsActualResponse>
 
     @GET("analytics/anomalies")
-    suspend fun getAnomalies(): Response<AnomaliesResponse>
+    suspend fun getAnomalies(): Response<AnomalySection>
 
     @GET("analytics/financial-health")
     suspend fun getFinancialHealth(): Response<FinancialHealthResponse>

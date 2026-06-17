@@ -1,7 +1,6 @@
 package cc.dlabs.pesamind.core.network.models
 
 import com.google.gson.annotations.SerializedName
-import cc.dlabs.pesamind.core.network.analytics.AnomalyData
 import cc.dlabs.pesamind.core.network.analytics.Health
 
 data class RegisterRequest(
@@ -581,10 +580,6 @@ data class CashFlowEntry(
 
 // ─── Anomalies ────────────────────────────────────────────────────────────────
 
-data class AnomalySection(
-    @SerializedName("data") val data: AnomalyData,
-    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
-)
 
 // Note: AnomalyData should be defined elsewhere (likely already exists)
 // ─── Shared ───────────────────────────────────────────────────────────────────
@@ -600,7 +595,7 @@ data class AnalyticsRecommendation(
 //    kotlin
 data class AnomalyData(
     @SerializedName("anomalies_detected") val anomaliesDetected: Int,
-    @SerializedName("items") val items: List<AnomalyItem>?,
+    @SerializedName("items") val items: List<AnomalyItem>,
     @SerializedName("critical_count") val criticalCount: Int,
     @SerializedName("warning_count") val warningCount: Int,
 )
@@ -615,4 +610,27 @@ data class AnomalyItem(
     @SerializedName("severity") val severity: String,
     @SerializedName("sigma_multiple") val sigmaMultiple: Double,
     @SerializedName("detected_at") val detectedAt: String,
+)
+
+
+
+data class AnomalyMetadata(
+    val period: String,
+    val generatedAt: String,
+    val currency: String,
+    val timezone: String,
+)
+
+data class AnomalyRecommendation(
+    val type: String,
+    val title: String,
+    val message: String,
+    val confidence: Double,
+    val severity: String,
+)
+
+data class AnomalySection(
+    val data: AnomalyData,
+    val metadata: AnomalyMetadata,
+    val recommendations: List<AnomalyRecommendation> = emptyList(),
 )

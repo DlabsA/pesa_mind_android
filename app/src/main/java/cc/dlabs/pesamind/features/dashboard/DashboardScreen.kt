@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.analytics.*
+import cc.dlabs.pesamind.core.network.models.AnomalyData
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.theme.DarkColors
+import cc.dlabs.pesamind.features.analytics.AnomaliesCard
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -193,8 +195,8 @@ private fun DashboardScrollBody(
                 if ((d.anomalies.data.anomaliesDetected) > 0) {
                     item {
                         StaggeredCard(index = 5, visible = cardsVisible) {
-                            DashboardAnomaliesCard(
-                                data     = d.anomalies.data,
+                            AnomaliesCard(
+                                section     = d.anomalies,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
                         }
@@ -881,45 +883,7 @@ private fun BudgetItemRow(item: BudgetActualItem) {
 // ─── Anomalies Card ───────────────────────────────────────────────────────────
 // Receives AnomaliesData directly (from DashboardResponse.anomalies.data)
 
-@Composable
-private fun DashboardAnomaliesCard(
-    data:     AnomalyData,
-    modifier: Modifier = Modifier,
-) {
-    val isDark = isSystemInDarkTheme()
-    val expenseColor = if (isDark) DarkColors.Expense else LightColors.Expense
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(expenseColor.copy(alpha = 0.04f), RoundedCornerShape(16.dp))
-            .border(1.dp, expenseColor.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Warning, null, tint = expenseColor, modifier = Modifier.size(14.dp))
-                Text("Anomalies Detected", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                if (data.criticalCount > 0) AnomalyBadge("${data.criticalCount} Critical", expenseColor)
-                if (data.warningCount  > 0) AnomalyBadge("${data.warningCount} Warning",   Color(0xFFFF9500))
-            }
-
-            data.items?.forEach { item ->
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .offset(y = 4.dp)
-                            .background(if (item.severity == "critical") expenseColor else Color(0xFFFF9500), CircleShape)
-                    )
-//                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-//                        Text(item.type.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-//                        Text(item.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-//                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun AnomalyBadge(text: String, color: Color) {
