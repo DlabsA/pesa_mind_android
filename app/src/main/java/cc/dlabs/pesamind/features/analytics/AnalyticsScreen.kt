@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.analytics
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -19,8 +20,6 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -41,6 +40,26 @@ import cc.dlabs.pesamind.features.dashboard.FinancialHealthCard
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import cc.dlabs.pesamind.core.network.models.BvaHealth
+import cc.dlabs.pesamind.core.network.models.BvaHealthComponents
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -1034,87 +1053,517 @@ private fun StatPillComposable(label: String, value: String, color: Color, modif
 
 // ─── Budget vs Actual Card ────────────────────────────────────────────────────
 
+
+// ---------------------------------------------------------------------------
+//  Colour tokens (match PesaMind palette already used in MonthlyTrendsCard)
+// ---------------------------------------------------------------------------
+
+private object BvaColors {
+    // Status colours — intentionally reuse TrendColors semantics
+    val UnderBudget = Color(0xFF1D9E75)   // green  (income green)
+    val OnBudget    = Color(0xFF378ADD)   // blue   (savings blue)
+    val OverBudget  = Color(0xFFD85A30)   // red    (expense red)
+
+    val IncomeLine  = Color(0xFF1D9E75)
+    val ExpenseLine = Color(0xFFD85A30)
+    val SavingsLine = Color(0xFF378ADD)
+
+    // Health pill backgrounds (muted)
+    val ExcellentBg   = Color(0xFFE1F5EE)
+    val ExcellentText = Color(0xFF085041)
+    val GoodBg        = Color(0xFFE3F0FB)
+    val GoodText      = Color(0xFF1A4A7A)
+    val FairBg        = Color(0xFFFFF3E0)
+    val FairText      = Color(0xFF7A4A00)
+    val PoorBg        = Color(0xFFFFEBEE)
+    val PoorText      = Color(0xFF7A1A1A)
+
+    // Track background
+    val TrackBg = Color(0xFFEEEEEE)
+
+    // Divider
+    val Divider = Color(0xFFE0E0E0)
+}
+
+private fun statusColor(status: String) = when (status) {
+    "under_budget" -> BvaColors.UnderBudget
+    "over_budget"  -> BvaColors.OverBudget
+    else           -> BvaColors.OnBudget
+}
+
+private fun statusLabel(status: String) = when (status) {
+    "under_budget" -> "Under budget"
+    "over_budget"  -> "Over budget"
+    else           -> "On budget"
+}
+
+private data class HealthPillColors(val bg: Color, val text: Color)
+
+private fun healthPillColors(status: String) = when (status) {
+    "excellent" -> HealthPillColors(BvaColors.ExcellentBg, BvaColors.ExcellentText)
+    "good"      -> HealthPillColors(BvaColors.GoodBg,      BvaColors.GoodText)
+    "fair"      -> HealthPillColors(BvaColors.FairBg,      BvaColors.FairText)
+    else        -> HealthPillColors(BvaColors.PoorBg,      BvaColors.PoorText)
+}
+
+// ---------------------------------------------------------------------------
+//  Top-level composable
+// ---------------------------------------------------------------------------
+
+/**
+ * Usage (in your LazyColumn, identical call-site to the old card):
+ *
+ *   a.budgetVsActual?.let { bva ->
+ *       item {
+ *           StaggeredCard(index = 4, visible = cardsVisible) {
+ *               BudgetVsActualCard(
+ *                   section  = bva,
+ *                   modifier = Modifier.padding(horizontal = 16.dp),
+ *               )
+ *           }
+ *       }
+ *   }
+ */
 @Composable
-private fun BudgetVsActualCard(
+fun BudgetVsActualCard(
     section: BudgetVsActualSection,
     modifier: Modifier = Modifier,
 ) {
-    val d = section.data
-    val statusColor = when (d.status) {
-        "on_budget"   -> LightColors.Income
-        "over_budget" -> LightColors.Expense
-        else          -> Color(0xFFFF9500)
-    }
+    val d      = section.data
+    val health = section.health
+    val comps  = health.components
 
+    val accentColor  = statusColor(d.status)
+    val pillColors   = healthPillColors(health.status)
+
+    // ── Usage fraction (0f–1f+) ──────────────────────────────────────────
+    val rawFraction = if (d.budgetTotal > 0)
+        (d.actualTotal / d.budgetTotal).toFloat().coerceAtLeast(0f)
+    else 0f
+
+    // Animate bar fill on first composition / data change
     var barTarget by remember { mutableStateOf(0f) }
-    LaunchedEffect(d) { barTarget = d.usageFraction }
-    val barW by animateFloatAsState(barTarget, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow), label = "budget_bar")
+    LaunchedEffect(d) { barTarget = rawFraction.coerceAtMost(1f) }
+    val animatedBar by animateFloatAsState(
+        targetValue   = barTarget,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessLow),
+        label         = "bva_bar",
+    )
 
     AnalyticsCard(modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Budget vs Actual", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
-                    Text(d.status.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = statusColor)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BudgetCountChip("On Track", d.categoriesOnTrack,    LightColors.Income)
-                    BudgetCountChip("Over",     d.categoriesOverBudget, LightColors.Expense)
-                }
-            }
+            // ── Header ────────────────────────────────────────────────────
+            BvaHeader(
+                period      = d.period,
+                status      = d.status,
+                accentColor = accentColor,
+                health      = health,
+                pillColors  = pillColors,
+            )
 
-            // Progress bar
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        if (d.actualTotal == 0.0) "Nothing spent yet" else "${d.actualTotal.ugxShort()} spent",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        if (d.budgetTotal > 0) "of ${d.budgetTotal.ugxShort()}" else "No budget set",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Box(modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(statusColor)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(barW)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(Brush.horizontalGradient(listOf(statusColor, statusColor)))
-                    )
-                }
-                if (d.budgetTotal > 0) {
-                    Text("${(d.usageFraction * 100).toInt()}% utilised", style = MaterialTheme.typography.labelSmall, color = statusColor)
-                }
-            }
+            // ── Primary progress bar ──────────────────────────────────────
+            BvaBudgetBar(
+                actualTotal    = d.actualTotal,
+                budgetTotal    = d.budgetTotal,
+                animatedFrac   = animatedBar,
+                rawFraction    = rawFraction,
+                variance       = d.variance,
+                variancePct    = d.variancePercent,
+                status         = d.status,
+                accentColor    = accentColor,
+            )
 
-            // Category rows (top 3)
-            val items = d.items
-            if (!items.isNullOrEmpty()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.take(3).forEach { item -> BudgetLineItemRow(item) }
-                    if (items.size > 3) {
-                        Text(
-                            "+ ${items.size - 3} more categories",
-                            style     = MaterialTheme.typography.labelSmall,
-                            color     = MaterialTheme.colorScheme.onSurface,
-                            modifier  = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(13.dp))
-                    Text("No budget categories configured", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                }
+            HorizontalDivider(
+                color     = BvaColors.Divider,
+                thickness = 0.5.dp,
+            )
+
+            // ── Component breakdown (Expense / Income / Savings) ──────────
+            BvaComponentRows(comps = comps)
+
+            // ── Recommendations (if any) ──────────────────────────────────
+            if (section.recommendations.isNotEmpty()) {
+                HorizontalDivider(color = BvaColors.Divider, thickness = 0.5.dp)
+                BvaRecommendations(items = section.recommendations)
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Header
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaHeader(
+    period: String,
+    status: String,
+    accentColor: Color,
+    health: BvaHealth,
+    pillColors: HealthPillColors,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text  = "Budget vs Actual",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                // Coloured dot
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(accentColor, CircleShape)
+                )
+                Text(
+                    text  = statusLabel(status),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                )
+                Text(
+                    text  = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .35f),
+                )
+                Text(
+                    text  = period.toDisplayPeriod(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                )
+            }
+        }
+
+        // Health score pill — benchmarked against HealthScorePill in MonthlyTrendsCard
+        BvaHealthPill(
+            score      = health.score,
+            status     = health.status,
+            pillColors = pillColors,
+        )
+    }
+}
+
+@Composable
+private fun BvaHealthPill(score: Int, status: String, pillColors: HealthPillColors) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = pillColors.bg,
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            Text(
+                text  = "$score",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize   = 11.sp,
+                ),
+                color = pillColors.text,
+            )
+            Text(
+                text  = status.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = pillColors.text.copy(alpha = .75f),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Primary budget progress bar
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaBudgetBar(
+    actualTotal:  Double,
+    budgetTotal:  Double,
+    animatedFrac: Float,
+    rawFraction:  Float,
+    variance:     Double,
+    variancePct:  Double,
+    status:       String,
+    accentColor:  Color,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        // Spent / Budget labels
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.Bottom,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    text  = "${actualTotal.ugxShort()} spent",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = "of ${budgetTotal.ugxShort()} budget",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f),
+                )
+            }
+            // Variance badge
+            VarianceBadge(variance = variance, variancePct = variancePct, status = status, accentColor = accentColor)
+        }
+
+        // Track + fill
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(BvaColors.TrackBg),
+        ) {
+            // Fill — gradient from accentColor faded → accentColor solid
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedFrac)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                accentColor.copy(alpha = .65f),
+                                accentColor,
+                            )
+                        )
+                    ),
+            )
+        }
+
+        // Usage % label
+        Text(
+            text  = "${(rawFraction * 100).toInt()}% utilised",
+            style = MaterialTheme.typography.labelSmall,
+            color = accentColor,
+        )
+    }
+}
+
+@Composable
+private fun VarianceBadge(
+    variance:    Double,
+    variancePct: Double,
+    status:      String,
+    accentColor: Color,
+) {
+    val pctStr  = "${"%.0f".format(kotlin.math.abs(variancePct))}%"
+    val label   = when (status) {
+        "under_budget" -> "$pctStr saved"
+        "over_budget"  -> "$pctStr over"
+        else           -> "on track"
+    }
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = accentColor.copy(alpha = .12f),
+    ) {
+        Text(
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color    = accentColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Component breakdown rows (Expense / Income / Savings)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaComponentRows(comps: BvaHealthComponents) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        BvaComponentRow(
+            label      = "Expenses",
+            actual     = comps.expense.actual,
+            budgeted   = comps.expense.budgeted,
+            variance   = comps.expense.variance,
+            accentColor = BvaColors.ExpenseLine,
+            // For expenses: positive variance = under (good); negative = over (bad)
+            positiveIsGood = true,
+        )
+        BvaComponentRow(
+            label      = "Income",
+            actual     = comps.income.actual,
+            budgeted   = comps.income.budgeted,
+            variance   = comps.income.variance,
+            accentColor = BvaColors.IncomeLine,
+            // For income: negative variance means actual < budgeted (shortfall)
+            positiveIsGood = false,
+        )
+        BvaComponentRow(
+            label      = "Savings",
+            actual     = comps.savings.actual,
+            budgeted   = comps.savings.budgeted,
+            variance   = comps.savings.variance,
+            accentColor = BvaColors.SavingsLine,
+            // For savings: positive variance = saved more than planned (great)
+            positiveIsGood = false,
+        )
+    }
+}
+
+@Composable
+private fun BvaComponentRow(
+    label:          String,
+    actual:         Double,
+    budgeted:       Double,
+    variance:       Double,
+    accentColor:    Color,
+    positiveIsGood: Boolean,       // controls the sign-of-variance colour logic
+) {
+    val fraction = if (budgeted > 0)
+        (actual / budgeted).toFloat().coerceIn(0f, 1f)
+    else 0f
+
+    // Animate mini-bar
+    var barTarget by remember(actual, budgeted) { mutableStateOf(0f) }
+    LaunchedEffect(actual, budgeted) { barTarget = fraction }
+    val animBar by animateFloatAsState(
+        targetValue   = barTarget,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+        label         = "comp_bar_$label",
+    )
+
+    // Variance label colour logic
+    val varianceGood = if (positiveIsGood) variance >= 0 else variance <= 0
+    val varianceColor = if (varianceGood) BvaColors.UnderBudget else BvaColors.OverBudget
+    val variancePrefix = if (variance >= 0) "+" else ""
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            // Label + actual
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(accentColor, CircleShape)
+                )
+                Text(
+                    text  = label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            // Actual / budgeted · variance
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text  = "${actual.ugxShort()} / ${budgeted.ugxShort()}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                )
+                Text(
+                    text  = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .3f),
+                )
+                Text(
+                    text  = "$variancePrefix${variance.ugxShort()}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = varianceColor,
+                )
+            }
+        }
+
+        // Mini bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(accentColor.copy(alpha = .12f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animBar)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(accentColor.copy(alpha = .6f), accentColor)
+                        )
+                    ),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Recommendations
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaRecommendations(items: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text  = "Recommendations",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize   = 10.sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+        )
+        items.forEach { rec ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.Top,
+            ) {
+                Text(
+                    text  = "•",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f),
+                )
+                Text(
+                    text  = rec,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Extensions — identical to MonthlyTrendsCard so they can share one file
+// ---------------------------------------------------------------------------
+
+
+
+/**
+ * "2026-06"  →  "June 2026"
+ */
+private fun String.toDisplayPeriod(): String {
+    return try {
+        val parts = split("-")
+        val year  = parts[0]
+        val month = java.time.Month.of(parts[1].toInt())
+            .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+        "$month $year"
+    } catch (_: Exception) {
+        this
     }
 }
 

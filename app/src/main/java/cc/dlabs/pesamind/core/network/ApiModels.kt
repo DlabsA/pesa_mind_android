@@ -410,10 +410,72 @@ data class SpendingVelocityData(
 
 // ─── Budget vs Actual ─────────────────────────────────────────────────────────
 
+
+data class BvaExpenseComponent(
+    val actual: Double,
+    val budgeted: Double,
+    val variance: Double,
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+)
+
+data class BvaIncomeComponent(
+    val actual: Double,
+    val budgeted: Double,
+    val variance: Double,
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+)
+
+data class BvaSavingsComponent(
+    val actual: Double,
+    val budgeted: Double,
+    val variance: Double,
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+)
+
+data class BvaHealthComponents(
+    val expense: BvaExpenseComponent,
+    val income: BvaIncomeComponent,
+    val savings: BvaSavingsComponent,
+)
+
+data class BvaHealth(
+    val score: Int,
+    val status: String,   // "excellent" | "good" | "fair" | "poor"
+    val trend: String,    // "stable" | "improving" | "declining"
+    val components: BvaHealthComponents,
+)
+
+data class BvaData(
+    val period: String,           // "2026-06"
+    @SerializedName("budget_total")
+    val budgetTotal: Double,
+    @SerializedName("actual_total")
+    val actualTotal: Double,
+    val variance: Double,         // positive = under budget (saved), negative = over
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+    val status: String,           // "under_budget" | "on_budget" | "over_budget"
+)
+
+data class BvaMetadata(
+    val period: String,
+    @SerializedName("generated_at")
+    val generatedAt: String,
+    val currency: String,
+    val timezone: String,
+)
+
+/**
+ * The full budget_vs_actual block returned by the Django backend.
+ */
 data class BudgetVsActualSection(
-    @SerializedName("data") val data: BudgetVsActualData,
-    @SerializedName("health") val health: Health,
-    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
+    val data: BvaData,
+    val metadata: BvaMetadata,
+    val health: BvaHealth,
+    val recommendations: List<String> = emptyList(),
 )
 
 data class BudgetVsActualData(
