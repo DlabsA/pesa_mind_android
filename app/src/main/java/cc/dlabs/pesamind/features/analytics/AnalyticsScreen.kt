@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.dlabs.pesamind.core.network.models.BvaHealth
 import cc.dlabs.pesamind.core.network.models.BvaHealthComponents
+import cc.dlabs.pesamind.core.network.models.ForecastData
+import cc.dlabs.pesamind.core.network.models.ForecastRecommendation
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -1611,151 +1613,468 @@ private fun BudgetLineItemRow(item: BudgetLineItem) {
 
 // ─── Expense Forecast Card ────────────────────────────────────────────────────
 
+
+// ---------------------------------------------------------------------------
+//  Colour helpers
+// ---------------------------------------------------------------------------
+
+private object ForecastColors {
+    val Exceed    = Color(0xFFD85A30)   // expense red  — will exceed
+    val OnTrack   = Color(0xFF1D9E75)   // income green — on track
+    val Actual    = Color(0xFF378ADD)   // savings blue — actual bar
+    val BudgetBar = Color(0xFFBDBDBD)   // neutral grey — budget reference bar
+
+    // Severity → alert chip colours
+    fun alertBg(severity: String)   = when (severity) {
+        "critical" -> Color(0xFFFFEBEE)
+        "warning"  -> Color(0xFFFFF8E1)
+        "success"  -> Color(0xFFE8F5E9)
+        else       -> Color(0xFFE3F2FD)   // info / default
+    }
+    fun alertText(severity: String) = when (severity) {
+        "critical" -> Color(0xFFC62828)
+        "warning"  -> Color(0xFFE65100)
+        "success"  -> Color(0xFF1B5E20)
+        else       -> Color(0xFF0D47A1)
+    }
+    fun alertIcon(severity: String) = when (severity) {
+        "critical" -> Icons.Default.Cancel
+        "warning"  -> Icons.Default.Warning
+        "success"  -> Icons.Default.CheckCircle
+        else       -> Icons.Default.Info
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Top-level composable
+// ---------------------------------------------------------------------------
+
 @Composable
-private fun ExpenseForecastCard(
+fun ExpenseForecastCard(
     section: ExpenseForecastSection,
     modifier: Modifier = Modifier,
 ) {
-    val d           = section.data
-    val exceedColor = if (d.willExceedBudget) LightColors.Expense else LightColors.Income
+    val d          = section.data
+    val exceedColor = if (d.willExceedBudget) ForecastColors.Exceed else ForecastColors.OnTrack
 
+    // Compute the common max so every bar is on the same scale
+    val maxVal = remember(d) {
+        maxOf(d.projectedTotal, d.budgetLimit, d.actualSpent, 1.0)
+    }
+
+    // Animate targets
     var ringTarget   by remember { mutableStateOf(0f) }
     var actualTarget by remember { mutableStateOf(0f) }
     var projTarget   by remember { mutableStateOf(0f) }
+    var budgetTarget by remember { mutableStateOf(0f) }
 
     LaunchedEffect(d) {
-        ringTarget   = d.confidence.toFloat()
-        val maxVal   = maxOf(d.projectedTotal, d.budgetLimit, 1.0)
-        actualTarget = (d.actualSpent / maxVal).toFloat().coerceIn(0f, 1f)
+        ringTarget   = d.confidence.toFloat().coerceIn(0f, 1f)
+        actualTarget = (d.actualSpent   / maxVal).toFloat().coerceIn(0f, 1f)
         projTarget   = (d.projectedTotal / maxVal).toFloat().coerceIn(0f, 1f)
+        budgetTarget = (d.budgetLimit   / maxVal).toFloat().coerceIn(0f, 1f)
     }
 
     val ringProg   by animateFloatAsState(ringTarget,   spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessLow), label = "forecast_ring")
-    val actualProg by animateFloatAsState(actualTarget, spring(dampingRatio = 0.7f,  stiffness = Spring.StiffnessLow), label = "actual_bar")
+    val actualProg by animateFloatAsState(actualTarget, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow), label = "actual_bar")
     val projProg   by animateFloatAsState(projTarget,   spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessLow), label = "proj_bar")
+    val budgetProg by animateFloatAsState(budgetTarget, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow), label = "budget_bar")
 
     AnalyticsCard(modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
-            // Header
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Expense Forecast", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
-                    Text(if (d.willExceedBudget) "Over budget projected" else "On track", style = MaterialTheme.typography.labelSmall, color = exceedColor)
-                }
-                HealthScorePill(section.data.confidencePct)
-            }
+            // ── Header ────────────────────────────────────────────────────
+            ForecastHeader(
+                period      = d.period,
+                exceed      = d.willExceedBudget,
+                exceedColor = exceedColor,
+                confidencePct = d.confidencePct,
+            )
 
-            // Projection hero + confidence ring
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                // Confidence ring
-                Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val stroke = 10.dp.toPx()
-                        val inset  = stroke / 2f
-                        val tl     = Offset(inset, inset)
-                        val sz     = Size(size.width - stroke, size.height - stroke)
-                        drawArc(exceedColor, -90f, 360f,             false, tl, sz, style = Stroke(stroke, cap = StrokeCap.Round))
-                        drawArc(exceedColor,                     -90f, 360f * ringProg,  false, tl, sz, style = Stroke(stroke, cap = StrokeCap.Round))
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${d.confidencePct}%", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold), color = exceedColor)
-                        Text("conf.", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
+            // ── Hero: confidence ring + projection figure ─────────────────
+            ForecastHero(
+                d           = d,
+                exceedColor = exceedColor,
+                ringProg    = ringProg,
+            )
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Month-end projection", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-                    Text(
-                        d.projectedTotal.ugxFull(),
-                        style    = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
-                        color    = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(
-                            if (d.willExceedBudget) Icons.Default.Cancel else Icons.Default.CheckCircle,
-                            null, tint = exceedColor, modifier = Modifier.size(12.dp),
-                        )
-                        Text(
-                            if (d.willExceedBudget) "Will exceed budget" else "Within budget",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = exceedColor,
-                        )
-                    }
-                }
-            }
-
-            // Burn stats row
+            // ── Burn stats row ────────────────────────────────────────────
             if (d.dailyBurnRate > 0) {
-                Row(
-                    modifier    = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background, RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    ForecastStat("Daily burn",  d.dailyBurnRate.ugxShort())
-                    VerticalDivider(modifier = Modifier.height(28.dp))
-                    ForecastStat("Days in",     "${d.daysElapsed}")
-                    VerticalDivider(modifier = Modifier.height(28.dp))
-                    ForecastStat("Budget",      d.budgetLimit.ugxShort())
-                }
+                ForecastBurnRow(d = d)
             }
 
-            // Comparison bars
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface)
+            HorizontalDivider(
+                color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .10f),
+                thickness = 0.5.dp,
+            )
+
+            // ── Comparison bars ───────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ForecastBar("Actual",    d.actualSpent,    LightColors.Savings,     actualProg)
-                ForecastBar("Projected", d.projectedTotal, exceedColor,      projProg)
-                ForecastBar("Budget",    d.budgetLimit,    MaterialTheme.colorScheme.onSurface,
-                    (d.budgetLimit / maxOf(d.projectedTotal, d.budgetLimit, 1.0)).toFloat(), isStatic = true)
+                ForecastBar(
+                    label    = "Actual spent",
+                    value    = d.actualSpent,
+                    color    = ForecastColors.Actual,
+                    progress = actualProg,
+                )
+                ForecastBar(
+                    label    = "Projected total",
+                    value    = d.projectedTotal,
+                    color    = exceedColor,
+                    progress = projProg,
+                )
+                ForecastBar(
+                    label    = "Budget limit",
+                    value    = d.budgetLimit,
+                    color    = ForecastColors.BudgetBar,
+                    progress = budgetProg,
+                    isStatic = true,
+                )
             }
 
-            // First recommendation
-            section.recommendations.firstOrNull()?.let { rec ->
-                Row(
-                    modifier  = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFFF9500), RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment     = Alignment.Top,
-                ) {
-                    Icon(Icons.Default.Lightbulb, null, tint = Color(0xFFFF9500), modifier = Modifier.size(13.dp).padding(top = 1.dp))
-                    Text(rec.message, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-                }
+            // ── Variance callout (new field) ──────────────────────────────
+            ForecastVarianceChip(
+                variance    = d.projectedVariance,
+                exceed      = d.willExceedBudget,
+                exceedColor = exceedColor,
+            )
+
+            // ── Recommendations ───────────────────────────────────────────
+            section.recommendations.forEach { rec ->
+                ForecastAlert(rec = rec)
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Sub-composables
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ForecastHeader(
+    period: String,
+    exceed: Boolean,
+    exceedColor: Color,
+    confidencePct: Int,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text  = "Expense Forecast",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(exceedColor, CircleShape)
+                )
+                Text(
+                    text  = if (exceed) "Over budget projected" else "On track",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = exceedColor,
+                )
+                Text("·", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .3f))
+                Text(
+                    text  = period.toDisplayPeriod(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                )
+            }
+        }
+
+        // Confidence pill — mirrors HealthScorePill pattern from MonthlyTrendsCard
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = exceedColor.copy(alpha = .12f),
+        ) {
+            Text(
+                text     = "$confidencePct% conf.",
+                style    = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize   = 10.sp,
+                ),
+                color    = exceedColor,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ForecastHero(
+    d: ForecastData,
+    exceedColor: Color,
+    ringProg: Float,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        // ── Confidence arc ring ──────────────────────────────────────────
+        Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokePx = 9.dp.toPx()
+                val inset    = strokePx / 2f
+                val arcTl    = Offset(inset, inset)
+                val arcSz    = Size(size.width - strokePx, size.height - strokePx)
+
+                // Track
+                drawArc(
+                    color       = exceedColor.copy(alpha = .15f),
+                    startAngle  = -90f,
+                    sweepAngle  = 360f,
+                    useCenter   = false,
+                    topLeft     = arcTl,
+                    size        = arcSz,
+                    style       = Stroke(strokePx, cap = StrokeCap.Round),
+                )
+                // Fill
+                drawArc(
+                    color       = exceedColor,
+                    startAngle  = -90f,
+                    sweepAngle  = 360f * ringProg,
+                    useCenter   = false,
+                    topLeft     = arcTl,
+                    size        = arcSz,
+                    style       = Stroke(strokePx, cap = StrokeCap.Round),
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text  = "${d.confidencePct}%",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize   = 14.sp,
+                    ),
+                    color = exceedColor,
+                )
+                Text(
+                    text  = "conf.",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f),
+                )
+            }
+        }
+
+        // ── Projection figure ────────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                text  = "Month-end projection",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+            Text(
+                text     = d.projectedTotal.ugxFull(),
+                style    = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight    = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp,
+                ),
+                color    = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = if (d.willExceedBudget) Icons.Default.Cancel else Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint     = exceedColor,
+                    modifier = Modifier.size(12.dp),
+                )
+                Text(
+                    text  = if (d.willExceedBudget) "Will exceed budget" else "Within budget",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = exceedColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForecastBurnRow(d: ForecastData) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            modifier              = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            ForecastStat(label = "Daily burn",  value = d.dailyBurnRate.ugxShort())
+            VerticalDivider(modifier = Modifier.height(24.dp))
+            ForecastStat(label = "Days elapsed", value = "${d.daysElapsed}")
+            VerticalDivider(modifier = Modifier.height(24.dp))
+            ForecastStat(label = "Budget",       value = d.budgetLimit.ugxShort())
         }
     }
 }
 
 @Composable
 private fun ForecastStat(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(value, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurface)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text  = value,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f),
+        )
     }
 }
 
 @Composable
-private fun ForecastBar(label: String, value: Double, color: Color, progress: Float, isStatic: Boolean = false) {
+private fun ForecastBar(
+    label: String,
+    value: Double,
+    color: Color,
+    progress: Float,
+    isStatic: Boolean = false,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
-            Text(value.ugxShort(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = color)
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isStatic) .55f else 1f),
+            )
+            Text(
+                text  = value.ugxShort(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = color,
+            )
         }
-        Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(color)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(7.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color.copy(alpha = .12f)),
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(progress.coerceIn(0f, 1f))
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(4.dp))
-                    .background(if (isStatic) color else color)
+                    .background(
+                        if (isStatic) color.copy(alpha = .45f) else color
+                    ),
             )
         }
     }
 }
+
+/** Shows projected over/under variance as a compact inline chip */
+@Composable
+private fun ForecastVarianceChip(
+    variance: Double,
+    exceed: Boolean,
+    exceedColor: Color,
+) {
+    val absVariance = kotlin.math.abs(variance)
+    val label = if (exceed)
+        "Projected ${absVariance.ugxShort()} over budget"
+    else
+        "Projected ${absVariance.ugxShort()} under budget"
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = exceedColor.copy(alpha = .08f),
+        border   = androidx.compose.foundation.BorderStroke(
+            width = 0.5.dp,
+            color = exceedColor.copy(alpha = .30f),
+        ),
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector        = if (exceed) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                contentDescription = null,
+                tint               = exceedColor,
+                modifier           = Modifier.size(13.dp),
+            )
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = exceedColor,
+            )
+        }
+    }
+}
+
+/** Severity-aware recommendation chip */
+@Composable
+private fun ForecastAlert(rec: ForecastRecommendation) {
+    val bgColor   = ForecastColors.alertBg(rec.severity)
+    val textColor = ForecastColors.alertText(rec.severity)
+    val icon      = ForecastColors.alertIcon(rec.severity)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = bgColor,
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top,
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = null,
+                tint               = textColor,
+                modifier           = Modifier
+                    .size(13.dp)
+                    .padding(top = 1.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (rec.title.isNotBlank()) {
+                    Text(
+                        text  = rec.title,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = textColor,
+                    )
+                }
+                Text(
+                    text  = rec.message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor.copy(alpha = .85f),
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Extensions — shared with BudgetVsActualCard; move to FormatUtils.kt
+// ---------------------------------------------------------------------------
 
 // ─── Cash Flow Waterfall Card ─────────────────────────────────────────────────
 

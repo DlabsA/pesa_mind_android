@@ -5,7 +5,6 @@ import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
 import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
-import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
 import cc.dlabs.pesamind.core.network.analytics.FinancialHealthResponse
 import cc.dlabs.pesamind.core.network.analytics.Health
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
@@ -35,6 +34,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.ExpenseForecastSection
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
@@ -165,7 +165,7 @@ interface ApiService {
     suspend fun getMonthlyTrends(): Response<MonthlyTrendsResponse>
 
     @GET("analytics/expense-forecast")
-    suspend fun getExpenseForecast(): Response<ExpenseForecastResponse>
+    suspend fun getExpenseForecast(): Response<ExpenseForecastSection>
 
     @GET("analytics/cash-flow-waterfall")
     suspend fun getCashFlowWaterfall(

@@ -507,24 +507,49 @@ data class BudgetLineItem(
 
 // ─── Expense Forecast ─────────────────────────────────────────────────────────
 
-data class ExpenseForecastSection(
-    @SerializedName("data") val data: ExpenseForecastData,
-    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
+data class ForecastData(
+    val period: String,             // "2026-06"
+    @SerializedName("days_elapsed")
+    val daysElapsed: Int,           // 16
+    @SerializedName("days_remaining")
+    val dailyBurnRate: Double,      // 7250.0
+    @SerializedName("actual_spent")
+    val actualSpent: Double,        // 116000.0
+    @SerializedName("projected_total")
+    val projectedTotal: Double,     // 217500.0
+    @SerializedName("budget_limit")
+    val budgetLimit: Double,        // 200000.0
+    @SerializedName("amount_variance")
+    val projectedVariance: Double,  // 17500.0  (+ve = over, -ve = under)
+    @SerializedName("will_exceed_budget")
+    val willExceedBudget: Boolean,  // true
+    val confidence: Double,         // 0.0–1.0
+) {
+    /** Derived — no separate backend field needed */
+    val confidencePct: Int get() = (confidence * 100).toInt().coerceIn(0, 100)
+}
+
+data class ForecastRecommendation(
+    val type: String,       // "alert" | "tip" | ...
+    val title: String,
+    val message: String,
+    val confidence: Double, // 0.0–1.0
+    val severity: String,   // "warning" | "critical" | "info" | "success"
 )
 
-data class ExpenseForecastData(
-    @SerializedName("period") val period: String,
-    @SerializedName("days_elapsed") val daysElapsed: Int,
-    @SerializedName("daily_burn_rate") val dailyBurnRate: Double,
-    @SerializedName("actual_spent") val actualSpent: Double,
-    @SerializedName("projected_total") val projectedTotal: Double,
-    @SerializedName("budget_limit") val budgetLimit: Double,
-    @SerializedName("projected_variance") val projectedVariance: Double,
-    @SerializedName("will_exceed_budget") val willExceedBudget: Boolean,
-    @SerializedName("confidence") val confidence: Double,
-) {
-    val confidencePct: Int get() = (confidence * 100).toInt()
-}
+data class ForecastMetadata(
+    val period: String,
+    val generatedAt: String,
+    val currency: String,
+    val timezone: String,
+)
+
+data class ExpenseForecastSection(
+    val data: ForecastData,
+    val metadata: ForecastMetadata,
+    val recommendations: List<ForecastRecommendation> = emptyList(),
+)
+
 
 // ─── Cash Flow Waterfall ──────────────────────────────────────────────────────
 
