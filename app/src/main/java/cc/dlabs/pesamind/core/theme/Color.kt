@@ -50,15 +50,15 @@ object LightColors {
     val TextMuted = Color(0xFF6B8280)
 
     // Financial Semantics
-    val Income = Color(0xFF1A7A3C)
-    val IncomeBg = Color(0xFFE8F5EE)
+    val Income = Color(0xFF1D9E75)
+    val IncomeBg = Color(0xFFE1F5EE)
     val IncomeFg = Color(0xFF0E4A25)
 
-    val Expense = Color(0xFFC0392B)
+    val Expense = Color(0xFFD85A30)
     val ExpenseBg = Color(0xFFFDECEA)
     val ExpenseFg = Color(0xFF7B1A14)
 
-    val Savings = Color(0xFF5A6E6C)
+    val Savings = Color(0xFF378ADD)
     val SavingsBg = Color(0xFFEAEEEE)
     val SavingsFg = Color(0xFF2E3D3C)
 
@@ -95,15 +95,15 @@ object DarkColors {
     val TextMuted = Color(0xFF5A7D77)
 
     // Financial Semantics (adjusted for dark mode visibility)
-    val Income = Color(0xFF4ADE80)
-    val IncomeBg = Color(0xFF0A2E1A)
+    val Income = Color(0xFF1D9E75)
+    val IncomeBg = Color(0xFFE1F5EE)
     val IncomeFg = Color(0xFF86EFAC)
 
-    val Expense = Color(0xFFF87171)
+    val Expense = Color(0xFFD85A30)
     val ExpenseBg = Color(0xFF2C0F0E)
     val ExpenseFg = Color(0xFFFCA5A5)
 
-    val Savings = Color(0xFF94A3A0)
+    val Savings = Color(0XFF378ADD)
     val SavingsBg = Color(0xFF1A2523)
     val SavingsFg = Color(0xFFB8CAC7)
 
@@ -149,11 +149,6 @@ object Radius {
 @Composable
 fun getPrimaryColor(): Color = MaterialTheme.colorScheme.primary
 
-/**
- * Get the secondary color dynamically based on current theme
- */
-@Composable
-fun getSecondaryColor(): Color = MaterialTheme.colorScheme.secondary
 
 /**
  * Get the tertiary (income) color dynamically based on current theme
@@ -232,3 +227,7 @@ val BackgroundLight = LightColors.Background
     level = DeprecationLevel.WARNING
 )
 val TextSecondary = LightColors.TextSecondary
+val ChipActive     = Color(0xFF378ADD)
+val NetPos  = Color(0xFF639922)
+val NetNeg  = Color(0xFFE24B4A)
+val IncomeText = Color(0xFF085041)

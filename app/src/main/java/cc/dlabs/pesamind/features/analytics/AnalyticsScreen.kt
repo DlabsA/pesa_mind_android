@@ -604,25 +604,24 @@ private enum class TrendMetric(val label: String) {
     EXPENSE("Expense"), INCOME("Income"), SAVINGS("Savings"), NET("Net")
 }
 
-private object TrendColors {
-    val Income  = Color(0xFF1D9E75)
-    val Expense = Color(0xFFD85A30)
-    val Savings = Color(0xFF378ADD)
-    val NetPos  = Color(0xFF639922)
-    val NetNeg  = Color(0xFFE24B4A)
-
-    val IncomeBg  = Color(0xFFE1F5EE)
-    val IncomeText = Color(0xFF085041)
-
-    val ChipActive     = Color(0xFF378ADD)
-    val ChipActiveText = Color.White
-}
+//private object TrendColors {
+//    val Income  = Color(0xFF1D9E75)
+//    val Expense = Color(0xFFD85A30)
+//    val Savings = Color(0xFF378ADD)
+//
+//
+//    val IncomeBg  = Color(0xFFE1F5EE)
+//    val IncomeText = Color(0xFF085041)
+//
+//    val ChipActive     = Color(0xFF378ADD)
+//    val ChipActiveText = Color.White
+//}
 
 private fun TrendMetric.barColor(value: Double): Color = when (this) {
-    TrendMetric.EXPENSE -> TrendColors.Expense
-    TrendMetric.INCOME  -> TrendColors.Income
-    TrendMetric.SAVINGS -> TrendColors.Savings
-    TrendMetric.NET     -> if (value >= 0) TrendColors.NetPos else TrendColors.NetNeg
+    TrendMetric.EXPENSE -> LightColors.Expense
+    TrendMetric.INCOME  -> LightColors.Income
+    TrendMetric.SAVINGS -> LightColors.Savings
+    TrendMetric.NET     -> if (value >= 0) NetPos else NetNeg
 }
 
 private fun MonthEntry.valueFor(metric: TrendMetric): Double = when (metric) {
@@ -739,12 +738,12 @@ private fun TrendsHeaderComposable(trend: String, healthScore: Int) {
 private fun HealthScorePillComposable(score: Int) {
     Surface(
         shape = CircleShape,
-        color = TrendColors.IncomeBg,
+        color = LightColors.IncomeBg,
     ) {
         Text(
             text     = "Score $score",
             style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-            color    = TrendColors.IncomeText,
+            color    = IncomeText,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
     }
@@ -769,11 +768,11 @@ private fun MetricChipRowComposable(
 @Composable
 private fun MetricChipComposable(label: String, isActive: Boolean, onClick: () -> Unit) {
     val bgColor   by animateColorAsState(
-        if (isActive) TrendColors.ChipActive else MaterialTheme.colorScheme.surfaceVariant,
+        if (isActive) ChipActive else MaterialTheme.colorScheme.surfaceVariant,
         label = "chip_bg",
     )
     val textColor by animateColorAsState(
-        if (isActive) TrendColors.ChipActiveText else MaterialTheme.colorScheme.onSurfaceVariant,
+        if (isActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
         label = "chip_text",
     )
     Surface(
@@ -986,7 +985,7 @@ private fun MonthLabelRowComposable(months: List<MonthEntry>, selectedIndex: Int
                     fontSize   = 8.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color     = if (isSelected) TrendColors.ChipActive
+                color     = if (isSelected) ChipActive
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
                 modifier  = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
@@ -1001,9 +1000,9 @@ private fun SummaryStatsRowComposable(summary: MonthSummary) {
         modifier              = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatPillComposable(label = "Avg income",  value = summary.avgIncome.ugxShort(),  color = TrendColors.Income,  modifier = Modifier.weight(1f))
-        StatPillComposable(label = "Avg expense", value = summary.avgExpense.ugxShort(), color = TrendColors.Expense, modifier = Modifier.weight(1f))
-        StatPillComposable(label = "Avg savings", value = summary.avgSavings.ugxShort(), color = TrendColors.Savings, modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg income",  value = summary.avgIncome.ugxShort(),  color = LightColors.Income,  modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg expense", value = summary.avgExpense.ugxShort(), color = LightColors.Expense, modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg savings", value = summary.avgSavings.ugxShort(), color = LightColors.Savings, modifier = Modifier.weight(1f))
     }
 }
 
