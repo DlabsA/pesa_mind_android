@@ -39,7 +39,7 @@ class TokenRefreshInterceptor : Interceptor {
             return response
         }
 
-        Log.w(TAG, "🔴 Got 401 response for ${originalRequest.url}")
+        Log.w(TAG, "Got 401 response for ${originalRequest.url}")
         response.close()
 
         // Synchronized block to prevent multiple refresh attempts

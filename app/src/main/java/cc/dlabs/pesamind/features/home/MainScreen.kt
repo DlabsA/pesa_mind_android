@@ -39,7 +39,7 @@ fun MainScreen(rootNav: NavHostController) {
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
+//                tonalElevation = 8.dp
             ) {
                 val currentEntry by navController.currentBackStackEntryAsState()
                 val current = currentEntry?.destination?.route

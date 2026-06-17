@@ -279,20 +279,20 @@ private fun AnalyticsHeader(
         when {
             state.isRefreshing -> CircularProgressIndicator(
                 modifier    = Modifier.size(22.dp),
-                color       = MaterialTheme.colorScheme.surface,
+                color       = MaterialTheme.colorScheme.secondary,
                 strokeWidth = 2.dp,
             )
             state.isOffline -> Icon(
                 Icons.Default.WifiOff,
                 contentDescription = "Offline",
-                tint               = LightColors.Expense,
+                tint               = MaterialTheme.colorScheme.error,
                 modifier           = Modifier.size(20.dp),
             )
-            else -> Surface(shape = RoundedCornerShape(50), color = LightColors.Savings) {
+            else -> Surface(shape = RoundedCornerShape(70), color = MaterialTheme.colorScheme.surface) {
                 Text(
                     text     = viewModel.currentPeriodLabel,
                     style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color    = LightColors.Savings,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }

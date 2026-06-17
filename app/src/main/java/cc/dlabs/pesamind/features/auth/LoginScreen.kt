@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.auth
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,8 +46,16 @@ fun LoginScreen(navController: NavHostController) {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.accessToken != null && body.refreshToken != null) {
+                        Log.d("Login", "Login successful")
+                        Log.d("Login", "Access Token: ${body.accessToken}")
+                        Log.d("Login", "Refresh Token: ${body.refreshToken}")
+
                         // Save tokens
                         TokenManager.saveTokens(body.accessToken, body.refreshToken)
+                        Log.d("TOKEN", "Tokens saved successfully")
+                        Log.d("TOKEN", "Available tokens: ${TokenManager.getToken()}")
+
+                        Log.d("TOKEN", "Available tokens: ${TokenManager.getRefreshToken()}")
 
                          if (body.profile != null) {
                              AccountManager.saveAccount(
