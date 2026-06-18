@@ -1,98 +1,69 @@
 package cc.dlabs.pesamind.features.auth
 
-import android.util.Log
+// Features/Auth/Views/LoginScreen.kt
+import cc.dlabs.pesamind.R
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.*
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
-import cc.dlabs.pesamind.core.network.ApiClient
-import cc.dlabs.pesamind.core.network.models.AuthProfile
-import cc.dlabs.pesamind.core.network.models.LoginRequest
-import cc.dlabs.pesamind.core.storage.AccountManager
-import cc.dlabs.pesamind.core.storage.TokenManager
-import cc.dlabs.pesamind.core.storage.TokenManager.LockState
-import kotlinx.coroutines.launch
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
-fun LoginScreen(navController: NavHostController) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+fun LoginScreen(
+    navController: NavHostController,
+    vm: AuthViewModel = viewModel(),
+) {
+    val form      by vm.loginForm.collectAsStateWithLifecycle()
+    val authState by vm.authState.collectAsStateWithLifecycle()
 
-    val scope = rememberCoroutineScope()
-    val teal = MaterialTheme.colorScheme.primary
+    val focusManager    = LocalFocusManager.current
+    val passwordFocus   = remember { FocusRequester() }
 
-    fun doLogin() {
-        if (email.isBlank() || password.isBlank()) {
-            errorMessage = "Please fill in all fields"
-            return
-        }
-        scope.launch {
-            isLoading = true
-            errorMessage = null
-            try {
-                val response = ApiClient.api.login(LoginRequest(email.trim(), password))
-                if (response.isSuccessful) {
-                    val body = response.body()
-                    if (body?.accessToken != null && body.refreshToken != null) {
-                        Log.d("Login", "Login successful")
-                        Log.d("Login", "Access Token: ${body.accessToken}")
-                        Log.d("Login", "Refresh Token: ${body.refreshToken}")
+    val isLoading    = authState is AuthUiState.Loading
+    val errorMessage = (authState as? AuthUiState.Error)?.message
 
-                        // Save tokens
-                        TokenManager.saveTokens(body.accessToken, body.refreshToken)
-                        Log.d("TOKEN", "Tokens saved successfully")
-                        Log.d("TOKEN", "Available tokens: ${TokenManager.getToken()}")
-
-                        Log.d("TOKEN", "Available tokens: ${TokenManager.getRefreshToken()}")
-
-                         if (body.profile != null) {
-                             AccountManager.saveAccount(
-                                 body.profile.id ?: "",
-                                 email = email.trim(),
-                                 body.profile.username ?: "",
-                                 body.profile.balance?.toString() ?: "",
-                                 body.profile.type ?: ""
-                             )
-                         }
-
-                        // Check if user has set PIN or pattern
-                        val destination = when (TokenManager.getLockState()) {
-                            LockState.NONE -> Routes.LockSetup.route
-                            LockState.PIN -> Routes.PinUnlock.route
-                            LockState.PATTERN -> Routes.PatternUnlock.route
-                        }
-                        navController.navigate(destination) {
-                            popUpTo(Routes.Login.route) { inclusive = true }
-                        }
-                    } else {
-                        errorMessage = body?.error ?: "Invalid email or password"
-                    }
-                } else {
-                    errorMessage = when (response.code()) {
-                        401 -> "Invalid email or password"
-                        404 -> "Account not found"
-                        else -> "Login failed (${response.code()})"
-                    }
-                }
-            } catch (t: Throwable) {
-                errorMessage = when (t) {
-                    is ExceptionInInitializerError -> "Check API base URL in ApiClient (invalid host or format)."
-                    else -> "Cannot reach server. Check your connection."
-                }
-            } finally {
-                isLoading = false
+    // Navigate on success
+    LaunchedEffect(authState) {
+        if (authState is AuthUiState.LoginSuccess) {
+            val destination = (authState as AuthUiState.LoginSuccess).destination
+            navController.navigate(destination) {
+                popUpTo(Routes.Login.route) { inclusive = true }
             }
         }
     }
@@ -100,74 +71,186 @@ fun LoginScreen(navController: NavHostController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .verticalScroll(rememberScrollState())
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Text("Welcome Back", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E2240))
-        Text(
-            "Sign in to your account",
-            fontSize = 14.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(top = 4.dp, bottom = 32.dp)
-        )
 
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true,
-            isError = errorMessage != null
-        )
+        // ── Hero ──────────────────────────────────────────────────────────────
+        LoginHero()
 
-        Spacer(Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
-            isError = errorMessage != null
-        )
-
-        // Error message
-        if (errorMessage != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = errorMessage!!,
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 13.sp
-            )
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        Button(
-            onClick = { doLogin() },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = teal),
-            enabled = !isLoading
+        // ── Form card (overlaps hero by 30dp, matching Swift's .offset(y: -30)) ──
+        Column(
+            modifier = Modifier
+                .offset(y = (-80).dp)
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-            } else {
-                Text("Sign In", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+
+            // Error banner
+            AnimatedVisibility(
+                visible = errorMessage != null,
+                enter   = fadeIn() + slideInVertically { -it / 2 },
+                exit    = fadeOut(),
+            ) {
+                errorMessage?.let { ErrorBanner(message = it) }
+            }
+
+            Text(
+                text       = "Welcome Back",
+                fontSize   = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color      = MaterialTheme.colorScheme.onSurface,
+            )
+
+            // Email
+            AuthTextField(
+                value         = form.email,
+                onValueChange = vm::onLoginEmailChange,
+                label         = "Email address",
+                placeholder   = "you@example.com",
+                leadingIcon   = Icons.Outlined.Email,
+                errorMessage  = form.emailError,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction    = ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { passwordFocus.requestFocus() }
+                ),
+            )
+
+            // Password
+            var passwordVisible by remember { mutableStateOf(false) }
+            AuthTextField(
+                value         = form.password,
+                onValueChange = vm::onLoginPasswordChange,
+                label         = "Password",
+                placeholder   = "Enter your password",
+                leadingIcon   = Icons.Outlined.Lock,
+                errorMessage  = form.passwordError,
+                trailingIcon  = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                onTrailingIconClick = { passwordVisible = !passwordVisible },
+                visualTransformation = if (passwordVisible) VisualTransformation.None
+                else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction    = ImeAction.Go,
+                ),
+                keyboardActions = KeyboardActions(
+                    onGo = {
+                        focusManager.clearFocus()
+                        vm.login()
+                    }
+                ),
+                modifier = Modifier.focusRequester(passwordFocus),
+            )
+
+            // Forgot password
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                TextButton(onClick = { /* TODO: navigate to reset */ }) {
+                    Text(
+                        text  = "Forgot password?",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 14.sp,
+                    )
+                }
+            }
+
+            // Sign in button
+            Button(
+                onClick  = {
+                    focusManager.clearFocus()
+                    vm.login()
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape    = RoundedCornerShape(12.dp),
+                enabled  = !isLoading,
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color       = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier    = Modifier.size(20.dp),
+                    )
+                } else {
+                    Text("Sign In", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // Divider
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("or", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            // Create account
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(onClick = { navController.navigate(Routes.Register.route) }) {
+                    Text("Don't have an account? ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                    Text("Create one", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(16.dp))
+// ── Hero ──────────────────────────────────────────────────────────────────────
 
-        TextButton(onClick = { navController.navigate(Routes.Register.route) }) {
-            Text("Don't have an account? ", color = Color.Gray)
-            Text("Sign Up", color = teal, fontWeight = FontWeight.SemiBold)
+@Composable
+fun LoginHero() {
+    Box(
+        modifier        = Modifier
+            .fillMaxWidth()
+            .height(380.dp)
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary,
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Decorative circles — matches Swift's Circle().fill(white.opacity(0.06))
+        Box(
+            Modifier
+                .size(160.dp)
+                .offset(x = 120.dp, y = (-30).dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.White.copy(alpha = 0.06f))
+        )
+        Box(
+            Modifier
+                .size(100.dp)
+                .offset(x = (-100).dp, y = 10.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.White.copy(alpha = 0.05f))
+        )
+
+        // Logo placeholder — swap for your actual Image("Logo") asset
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.mipmap.ic_launcher_foreground),
+                contentDescription = "App Logo",
+                modifier = Modifier.size(100.dp)
+            )
         }
     }
 }

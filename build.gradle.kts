@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.compose.compiler) apply false
     id("com.google.dagger.hilt.android") version "2.51.1" apply false
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 val installGitHooks by tasks.registering(Exec::class) {
