@@ -6,12 +6,13 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 import android.util.Log
+import cc.dlabs.pesamind.core.storage.AuthManager
 
 /**
  * Interceptor that handles 401 Unauthorized responses by:
- * 1. Attempting to refresh the authentication token (max 1 attempt per request)
- * 2. Retrying the original request with the new token
- * 3. Clearing tokens and failing if refresh fails (prevents infinite loops)
+ * 1. Attempting to refresh the authentication token (ONE attempt per request chain)
+ * 2. Rebuilding and retrying the original request with the new token
+ * 3. Clearing tokens and logging out if refresh fails (prevents infinite loops)
  */
 class TokenRefreshInterceptor : Interceptor {
     
@@ -42,11 +43,11 @@ class TokenRefreshInterceptor : Interceptor {
         Log.w(TAG, "Got 401 response for ${originalRequest.url}")
         response.close()
 
-        // Synchronized block to prevent multiple refresh attempts
+        // Synchronized block to prevent multiple concurrent refresh attempts
         synchronized(this) {
             // Check again after acquiring lock (another thread might have already refreshed)
             if (isRefreshing) {
-                Log.d(TAG, "Another thread is already refreshing, returning original request")
+                Log.d(TAG, "Another thread is already refreshing, waiting...")
                 return chain.proceed(originalRequest)
             }
 
@@ -54,7 +55,7 @@ class TokenRefreshInterceptor : Interceptor {
         }
 
         return try {
-            // Attempt to refresh the token
+            // Attempt to refresh the token (ONE TIME ONLY)
             Log.d(TAG, "Attempting to refresh token...")
             val refreshed = refreshToken()
             
@@ -62,21 +63,45 @@ class TokenRefreshInterceptor : Interceptor {
                 isRefreshing = false
                 refreshAttemptedForThisChain.set(true)
                 Log.d(TAG, "✓ Token refreshed successfully, retrying request")
-                // Retry the original request with the new token (ONE MORE TIME ONLY)
-                chain.proceed(originalRequest)
+                
+                // Rebuild the request with the new token
+                val newToken = runBlocking { TokenManager.getToken() }
+                val retryRequest = originalRequest.newBuilder()
+                    .removeHeader("Authorization")
+                    .apply {
+                        if (!newToken.isNullOrEmpty()) {
+                            addHeader("Authorization", "Bearer $newToken")
+                        }
+                    }
+                    .build()
+                
+                // Retry with the new token (ONE MORE TIME ONLY)
+                chain.proceed(retryRequest)
             } else {
+                // Refresh failed - logout and clear everything
                 isRefreshing = false
-                Log.e(TAG, "✗ Token refresh failed, returning 401")
-                // Refresh failed, return 401 without retrying
+                Log.e(TAG, "✗ Token refresh failed, logging out")
+                handleLogout()
                 response
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception during token refresh: ${e.message}", e)
             e.printStackTrace()
             isRefreshing = false
-            // Clear tokens on error to prevent infinite loops
-            runBlocking { TokenManager.clearTokens() }
+            // Clear tokens on error and logout to prevent infinite loops
+            handleLogout()
             response
+        }
+    }
+    
+    /**
+     * Handle logout: clear tokens and notify the app
+     */
+    private fun handleLogout() {
+        runBlocking {
+            TokenManager.clearTokens()
+            // Call AuthManager to trigger logout event/navigation
+            AuthManager.logout()
         }
     }
 
@@ -91,7 +116,6 @@ class TokenRefreshInterceptor : Interceptor {
             if (refreshTokenValue.isNullOrEmpty()) {
                 // No refresh token available, cannot refresh
                 Log.e(TAG, "No refresh token available")
-                TokenManager.clearTokens()
                 false
             } else {
                 Log.d(TAG, "Sending refresh token request...")
@@ -110,16 +134,14 @@ class TokenRefreshInterceptor : Interceptor {
                     Log.d(TAG, "✓ New tokens saved successfully")
                     true
                 } else {
-                    // Refresh failed, clear tokens
+                    // Refresh failed
                     Log.e(TAG, "Refresh failed with code: ${response.code()}")
-                    TokenManager.clearTokens()
                     false
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error refreshing token: ${e.message}", e)
             e.printStackTrace()
-            TokenManager.clearTokens()
             false
         }
     }
