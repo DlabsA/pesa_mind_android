@@ -48,13 +48,14 @@ class SMSMessageProcessor(
 
     // ── Public entry point ────────────────────────────────────────────────────
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     suspend fun processMessage(
         senderId: String,
         content: String,
         timestamp: Long,
         simInfo: Int,
         receivingSimNumber: String
-    ) = withContext(Dispatchers.IO) @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS) {
+    ) = withContext(Dispatchers.IO) {
         try {
             if (senderId.isBlank() || content.isBlank()) {
                 Log.w(TAG, "Empty sender or content")
