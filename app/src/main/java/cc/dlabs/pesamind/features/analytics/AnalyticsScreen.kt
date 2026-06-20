@@ -1,72 +1,90 @@
 package cc.dlabs.pesamind.features.analytics
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import android.util.Log
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.*
+import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.analytics.*
-import cc.dlabs.pesamind.core.theme.ExpenseRed
-import cc.dlabs.pesamind.core.theme.IncomeGreen
-import cc.dlabs.pesamind.core.theme.PesaMindTeal
-import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.core.network.models.AnalyticResponse
+import cc.dlabs.pesamind.core.network.models.BudgetLineItem
+import cc.dlabs.pesamind.core.network.models.BudgetVsActualSection
+import cc.dlabs.pesamind.core.network.models.CashFlowEntry
+import cc.dlabs.pesamind.core.network.models.CashFlowWaterfallSection
+import cc.dlabs.pesamind.core.network.models.ExpenseForecastSection
+import cc.dlabs.pesamind.core.network.models.MonthEntry
+import cc.dlabs.pesamind.core.network.models.MonthlyTrendsSection
+import cc.dlabs.pesamind.core.network.models.MonthSummary
+import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
+import cc.dlabs.pesamind.core.network.models.SummarySection
+import cc.dlabs.pesamind.core.theme.*
+import cc.dlabs.pesamind.features.dashboard.FinancialHealthCard
 import java.text.NumberFormat
-import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import cc.dlabs.pesamind.core.network.models.AnomalyData
+import cc.dlabs.pesamind.core.network.models.AnomalyItem
+import cc.dlabs.pesamind.core.network.models.AnomalyRecommendation
+import cc.dlabs.pesamind.core.network.models.AnomalySection
+import cc.dlabs.pesamind.core.network.models.BvaHealth
+import cc.dlabs.pesamind.core.network.models.BvaHealthComponents
+import cc.dlabs.pesamind.core.network.models.ForecastData
+import cc.dlabs.pesamind.core.network.models.ForecastRecommendation
 
-// ─── Formatter ────────────────────────────────────────────────────────────────
+// ─── Formatters ───────────────────────────────────────────────────────────────
 
-private val numFmt = NumberFormat.getNumberInstance(Locale.US)
-private fun Long.ugx() = numFmt.format(this)
-private fun Double.ugx() = numFmt.format(this.toLong())
-
-private val MONTH_ABBRS = listOf(
-    "Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
-)
-private fun String.toMonthAbbr(): String {
-    val monthIndex = this.substringAfter("-").toIntOrNull() ?: return this
-    return MONTH_ABBRS.getOrElse(monthIndex - 1) { this }
+private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
+private fun Double.ugxFull()  = "UGX ${ugxFmt.format(this.toLong())}"
+private fun Double.ugxShort() = when {
+    this >= 1_000_000_000 -> "UGX ${String.format("%.1fB", this / 1_000_000_000)}"
+    this >= 1_000_000     -> "UGX ${String.format("%.1fM", this / 1_000_000)}"
+    this >= 1_000         -> "UGX ${String.format("%.0fK", this / 1_000)}"
+    else                  -> "UGX ${ugxFmt.format(this.toLong())}"
+}
+private fun Double.amountShort() = when {
+    this >= 1_000_000_000 -> String.format("%.1fB", this / 1_000_000_000)
+    this >= 1_000_000     -> String.format("%.1fM", this / 1_000_000)
+    this >= 1_000         -> String.format("%.0fK", this / 1_000)
+    else                  -> "${ugxFmt.format(this.toLong())}"
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// ─── Root Screen ──────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,424 +92,903 @@ fun AnalyticsScreen(
     navController: NavController,
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val state by viewModel.state.collectAsState()
 
-    // ViewModel.init already calls loadAllData() — no LaunchedEffect needed here.
-    LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearError()      // clear after showing
-        }
-    }
+    LaunchedEffect(Unit) { viewModel.load() }
 
-    val initial = uiState.userDisplayName.firstOrNull()?.uppercase() ?: "U"
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        AnimatedContent(
+            targetState = state.phase,
+            transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
+            label = "analytics_phase_switch"
+        ) { phase ->
+            when {
+                phase is AnalyticsPhase.Loading && state.analytics == null ->
+                    AnalyticsSkeletonView()
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = uiState.isLoading,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
+                phase is AnalyticsPhase.Error && state.analytics == null ->
+                    AnalyticsErrorView(message = phase.message) { viewModel.load() }
 
-                // ── Header ───────────────────────────────────────────────────
-                item(key = "header") {
-                    AnalyticsHeader(
-                        displayName = uiState.userDisplayName,
-                        initial = initial,
-                        onBack = { navController.popBackStack() }
+                else ->
+                    AnalyticsScrollBody(
+                        state     = state,
+                        viewModel = viewModel,
+                        onRefresh = { viewModel.refresh() },
                     )
-                }
-
-                // ── Section: Overview ────────────────────────────────────────
-                item(key = "section_overview") { SectionHeader("Overview") }
-
-                item(key = "key_metrics") {
-                    if (uiState.isLoading && uiState.summary == null) {
-                        ShimmerCard(height = 110, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    } else {
-                        uiState.summary?.data?.let { KeyMetricsCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
-                    }
-                }
-
-                item(key = "health") {
-                    uiState.summary?.health?.let {
-                        HealthScoreCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    }
-                }
-
-                // ── Section: Spending ────────────────────────────────────────
-                item(key = "section_spending") { SectionHeader("Spending") }
-
-                item(key = "velocity") {
-                    if (uiState.isLoading && uiState.spendingVelocity == null) {
-                        ShimmerCard(height = 130, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    } else {
-                        uiState.spendingVelocity?.data?.let {
-                            SpendingVelocityCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                        }
-                    }
-                }
-
-                item(key = "utilization") {
-                    uiState.budgetUtilization?.let {
-                        BudgetUtilizationCard(it.budgetUtilization, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    }
-                }
-
-                item(key = "forecast") {
-                    uiState.expenseForecast?.data?.let {
-                        ExpenseForecastCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    }
-                }
-
-                // ── Section: Cash Flow ───────────────────────────────────────
-                item(key = "section_cashflow") { SectionHeader("Cash Flow") }
-
-                item(key = "cashflow") {
-                    uiState.cashFlow?.data?.let {
-                        CashFlowCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    }
-                }
-
-                item(key = "bva") {
-                    uiState.budgetVsActual?.data?.let {
-                        BudgetVsActualCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    }
-                }
-
-                // ── Section: Trends ──────────────────────────────────────────
-                item(key = "section_trends") { SectionHeader("Monthly Trends") }
-
-                item(key = "trends") {
-                    if (uiState.isLoading && uiState.monthlyTrends == null) {
-                        ShimmerCard(height = 200, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    } else {
-                        uiState.monthlyTrends?.data?.let {
-                            MonthlyTrendsCard(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                        }
-                    }
-                }
-
-                // ── Section: Alerts ──────────────────────────────────────────
-                uiState.anomalies?.data?.let { anomalies ->
-                    if (anomalies.criticalCount > 0) {
-                        item(key = "section_alerts") { SectionHeader("Alerts") }
-
-                        item(key = "anomaly_header") {
-                            AnomalyHeaderCard(anomalies, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                        }
-
-                        // Anomaly items directly as LazyColumn items — avoids nested scroll
-                        itemsIndexed(
-                            items = anomalies.items,
-                            key = { _, item -> "anomaly_${item.category}_${item.amount}" }
-                        ) { _, item ->
-                            AnomalyItemCard(item, Modifier.padding(horizontal = 16.dp, vertical = 3.dp))
-                        }
-                    }
-                }
-
-                // ── Section: Recommendations ─────────────────────────────────
-                uiState.summary?.recommendations?.takeIf { it.isNotEmpty() }?.let { recs ->
-                    item(key = "section_recs") { SectionHeader("Recommendations") }
-                    item(key = "recommendations") {
-                        // Horizontal carousel — no nested scroll issue since axis differs
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(recs, key = { "rec_${it.title}" }) { rec ->
-                                RecommendationCard(rec)
-                            }
-                        }
-                    }
-                }
-
-                item(key = "bottom_space") { Spacer(Modifier.height(8.dp)) }
             }
         }
     }
+}
+
+// ─── Scroll Body ──────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AnalyticsScrollBody(
+    state:     AnalyticsUiState,
+    viewModel: AnalyticsViewModel,
+    onRefresh: () -> Unit,
+) {
+    var cardsVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { cardsVisible = true }
+
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh    = onRefresh,
+        modifier     = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(
+            contentPadding      = PaddingValues(bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier            = Modifier.fillMaxSize()
+        ) {
+
+            // ── Header
+            item {
+                AnalyticsHeader(
+                    state     = state,
+                    viewModel = viewModel,
+                    modifier  = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 8.dp),
+                )
+            }
+
+            // ── Offline banner
+            if (state.isOffline) {
+                item {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter   = slideInVertically() + fadeIn(),
+                        exit    = slideOutVertically() + fadeOut(),
+                    ) {
+                        AnalyticsOfflineBanner(
+                            caption  = viewModel.formattedLastUpdated,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                }
+            }
+
+            state.analytics?.let { a ->
+                // Summary Metrics
+                a.summary?.let { summary ->
+                    item {
+                        StaggeredCard(index = 1, visible = cardsVisible) {
+                            SummaryMetricsCard(
+                                data = summary,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Spending Velocity
+                a.spendingVelocity?.let { velocity ->
+                    item {
+                        StaggeredCard(index = 2, visible = cardsVisible) {
+                            SpendingVelocityCard(
+                                section = velocity,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Monthly Trends
+                a.monthlyTrends?.let { trends ->
+                    item {
+                        StaggeredCard(index = 3, visible = cardsVisible) {
+                            MonthlyTrendsCard(
+                                section = trends,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Budget vs Actual
+                a.budgetVsActual?.let { bva ->
+                    item {
+                        StaggeredCard(index = 4, visible = cardsVisible) {
+                            BudgetVsActualCard(
+                                section = bva,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Expense Forecast
+                a.expenseForecast?.let { forecast ->
+                    item {
+                        StaggeredCard(index = 5, visible = cardsVisible) {
+                            ExpenseForecastCard(
+                                section = forecast,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Cash Flow Waterfall
+                a.cashFlowWaterfall?.let { cashFlow ->
+                    item {
+                        StaggeredCard(index = 6, visible = cardsVisible) {
+                            CashFlowCard(
+                                section = cashFlow,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Anomalies
+                val anomalyData = a.anomalies?.data
+                if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
+                    item {
+                        StaggeredCard(index = 7, visible = cardsVisible) {
+                            AnomaliesCard(
+                                section = a.anomalies, // Now safely smart-cast to non-null 'AnomalyData'
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Stagger wrapper ──────────────────────────────────────────────────────────
+
+@Composable
+private fun StaggeredCard(index: Int, visible: Boolean, content: @Composable () -> Unit) {
+    val delayMs = (index * 70).coerceAtMost(350)
+    val alpha by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = tween(380, delayMs, FastOutSlowInEasing),
+        label         = "stagger_alpha_$index",
+    )
+    val offsetY by animateFloatAsState(
+        targetValue   = if (visible) 0f else 28f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
+        label         = "stagger_offset_$index",
+    )
+    Box(Modifier.graphicsLayer { this.alpha = alpha; translationY = offsetY }) { content() }
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 @Composable
-private fun AnalyticsHeader(displayName: String, initial: String, onBack: () -> Unit) {
+private fun AnalyticsHeader(
+    state:    AnalyticsUiState,
+    viewModel: AnalyticsViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text  = viewModel.greetingText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            )
+            Text(
+                text          = "Analytics",
+                style         = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color         = MaterialTheme.colorScheme.onBackground,
+                letterSpacing = (-0.5).sp,
+            )
+            Text(
+                text  = viewModel.currentPeriodLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+        when {
+            state.isRefreshing -> CircularProgressIndicator(
+                modifier    = Modifier.size(22.dp),
+                color       = MaterialTheme.colorScheme.secondary,
+                strokeWidth = 2.dp,
+            )
+            state.isOffline -> Icon(
+                Icons.Default.WifiOff,
+                contentDescription = "Offline",
+                tint               = MaterialTheme.colorScheme.error,
+                modifier           = Modifier.size(20.dp),
+            )
+            else -> Surface(shape = RoundedCornerShape(70), color = MaterialTheme.colorScheme.surface) {
+                Text(
+                    text     = viewModel.currentPeriodLabel,
+                    style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+            }
+        }
+    }
+}
+
+// ─── Offline Banner ───────────────────────────────────────────────────────────
+
+@Composable
+private fun AnalyticsOfflineBanner(caption: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(
-                Brush.verticalGradient(listOf(PesaMindTeal, PesaMindTeal.copy(alpha = 0.78f)))
+                brush = Brush.horizontalGradient(listOf(Color(0xFFFF9500), Color(0xFFFF6B00))),
+                shape = RoundedCornerShape(12.dp),
             )
     ) {
-        // Decorative circles
-        Box(
-            Modifier
-                .size(140.dp)
-                .offset((-30).dp, (-30).dp)
-                .background(Color.White.copy(alpha = 0.05f), CircleShape)
-        )
-        Box(
-            Modifier
-                .size(80.dp)
-                .align(Alignment.TopEnd)
-                .offset(20.dp, 12.dp)
-                .background(Color.White.copy(alpha = 0.07f), CircleShape)
-        )
+        Row(
+            modifier              = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.Default.AccessTime, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Column {
+                Text(
+                    "Offline — showing cached data",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                )
+                Text(caption, style = MaterialTheme.typography.labelSmall, color = Color.White)
+            }
+        }
+    }
+}
 
+// ─── Health Score Card ────────────────────────────────────────────────────────
+
+
+
+// ─── Summary Metrics Card ─────────────────────────────────────────────────────
+
+@Composable
+private fun SummaryMetricsCard(
+    data: SummarySection,
+    modifier: Modifier = Modifier,
+) {
+    val d = data.data
+    val c = data.context
+
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "This Month",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MetricChip(
+                    label        = "Income",
+                    amount       = d.totalIncome,
+                    delta        = d.totalIncome - c.totalIncome,
+                    icon         = Icons.Default.ArrowDownward,
+                    color        = LightColors.Income,
+                    modifier     = Modifier.weight(1f),
+                )
+                MetricChip(
+                    label        = "Expenses",
+                    amount       = d.totalExpense,
+                    delta        = d.totalExpense - c.totalExpense,
+                    icon         = Icons.Default.ArrowUpward,
+                    color        = LightColors.Expense,
+                    invertDelta  = true,
+                    modifier     = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MetricChip(
+                    label    = "Savings",
+                    amount   = d.totalSavings,
+                    delta    = d.totalSavings - c.totalSavings,
+                    icon     = Icons.Default.Savings,
+                    color    = LightColors.Savings,
+                    modifier = Modifier.weight(1f),
+                )
+                MetricChip(
+                    label    = "Net",
+                    amount   = d.netMovement,
+                    delta    = d.netMovement - c.netMovement,
+                    icon     = Icons.Default.ShowChart,
+                    color    = if (d.netMovement >= 0) LightColors.Income else LightColors.Expense,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricChip(
+    label:       String,
+    amount:      Double,
+    delta:       Double,
+    icon:        ImageVector,
+    color:       Color,
+    modifier:    Modifier = Modifier,
+    invertDelta: Boolean  = false,
+) {
+    val deltaPositive = if (invertDelta) delta <= 0 else delta >= 0
+    val deltaColor    = if (delta == 0.0) MaterialTheme.colorScheme.onSurface
+    else if (deltaPositive) LightColors.Income else LightColors.Expense
+
+    Surface(
+        modifier        = modifier,
+        shape           = RoundedCornerShape(12.dp),
+        color           = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(top = 20.dp, bottom = 24.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.18f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(initial, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                    Text(
-                        text = when { hour < 12 -> "Good morning" ; hour < 17 -> "Good afternoon" ; else -> "Good evening" },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.72f)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(icon, null, tint = color, modifier = Modifier.size(13.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                text     = if (amount == 0.0) "—" else amount.ugxShort(),
+                style    = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color    = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            if (delta != 0.0) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Icon(
+                        if (deltaPositive) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                        null,
+                        tint     = deltaColor,
+                        modifier = Modifier.size(9.dp),
                     )
-                    if (displayName.isNotBlank()) {
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
+                    Text(
+                        abs(delta).ugxShort(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = deltaColor,
+                    )
                 }
-                // Back button
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color.White.copy(alpha = 0.15f),
-                    modifier = Modifier.size(38.dp)
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+            } else {
+                Text(
+                    "No change",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Sub-label
-            Text(
-                "Full Analytics",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = Color.White
-            )
-            Text(
-                "Detailed breakdown of your financial activity",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.65f)
-            )
         }
     }
 }
 
-// ─── Section Header ───────────────────────────────────────────────────────────
-
+// ─── Spending Velocity Card ───────────────────────────────────────────────────
 @Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title.uppercase(),
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp
-        ),
-        color = TextSecondary,
-        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 4.dp)
-    )
-}
+private fun SpendingVelocityCard(
+    section: SpendingVelocitySection?,
+    modifier: Modifier = Modifier,
+) {
+    val d = section?.data ?: return  // ← Skip entirely if data is null
 
-// ─── Key Metrics ──────────────────────────────────────────────────────────────
+    val alertColor = when (d.alertLevel) {
+        "ok"      -> LightColors.Income
+        "warning" -> Color(0xFFFF9500)
+        else      -> LightColors.Expense
+    }
 
-@Composable
-private fun KeyMetricsCard(data: SummaryData, modifier: Modifier = Modifier) {
+    var dayRingTarget    by remember { mutableStateOf(0f) }
+    var budgetRingTarget by remember { mutableStateOf(0f) }
+    LaunchedEffect(d) {
+        dayRingTarget    = d.dayFraction
+        budgetRingTarget = d.budgetUsedFraction
+    }
+    val dayRing    by animateFloatAsState(dayRingTarget,    spring(dampingRatio = 0.7f,  stiffness = Spring.StiffnessLow), label = "day_ring")
+    val budgetRing by animateFloatAsState(budgetRingTarget, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessLow), label = "budget_ring")
+
     AnalyticsCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            MetricCell("Income", data.totalIncome, IncomeGreen, Icons.Outlined.TrendingUp, Modifier.weight(1f))
-            MetricDivider()
-            MetricCell("Expense", data.totalExpense, ExpenseRed, Icons.Outlined.TrendingDown, Modifier.weight(1f))
-            MetricDivider()
-            MetricCell("Savings", data.totalSavings, PesaMindTeal, Icons.Outlined.Savings, Modifier.weight(1f))
-            MetricDivider()
-            MetricCell(
-                label = "Net",
-                value = data.netMovement,
-                color = if (data.netMovement >= 0) IncomeGreen else ExpenseRed,
-                icon = if (data.netMovement >= 0) Icons.Outlined.TrendingUp else Icons.Outlined.TrendingDown,
-                modifier = Modifier.weight(1f)
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            // Title row
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Spending Velocity", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                    Text("Day ${d.daysElapsed} of ${d.daysTotal}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+                }
+                AlertLevelBadge(level = d.alertLevel, alertColor = alertColor)
+            }
+
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                // Nested rings: outer = day progress, inner = budget used
+                Box(modifier = Modifier.size(100.dp), contentAlignment = Alignment.Center) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val outerStroke = 8.dp.toPx()
+                        val innerStroke = 9.dp.toPx()
+                        val outerInset  = outerStroke / 2f
+                        val innerInset  = outerStroke + 8.dp.toPx() + innerStroke / 2f
+                        val outerTL     = Offset(outerInset, outerInset)
+                        val outerSz     = Size(size.width - outerStroke, size.height - outerStroke)
+                        val innerTL     = Offset(innerInset, innerInset)
+                        val innerSz     = Size(size.width - innerInset * 2, size.height - innerInset * 2)
+                        drawArc(LightColors.Savings.copy(alpha = 0.10f), -90f, 360f,              false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
+                        drawArc(LightColors.Savings, -90f, 360f * dayRing,    false, outerTL, outerSz, style = Stroke(outerStroke, cap = StrokeCap.Round))
+                        drawArc(alertColor.copy(alpha = 0.10f),   -90f, 360f,              false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
+                        drawArc(alertColor,-90f, 360f * budgetRing, false, innerTL, innerSz, style = Stroke(innerStroke, cap = StrokeCap.Round))
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "${(d.budgetUsedFraction * 100).toInt()}%",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = alertColor,
+                        )
+                        Text("used", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VelocityRow(Icons.Default.AttachMoney,   "Spent",       d.totalSpent.ugxShort())
+                    VelocityRow(Icons.Default.CalendarToday, "Days left",   "${d.daysRemaining}d")
+                    VelocityRow(Icons.Default.ShowChart,     "Daily avg",   d.dailyAverage.ugxShort())
+                    VelocityRow(Icons.Default.TrackChanges,  "Projection",  d.projectedMonthEnd.ugxShort())
+                    d.daysUntilBudgetExhausted?.let {
+                        VelocityRow(Icons.Default.HourglassBottom, "Budget lasts", "${it.toInt()}d", valueColor = alertColor)
+                    }
+                }
+            }
+
+            // Pattern footer
+            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier              = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        if (d.alertLevel == "ok") Icons.Default.CheckCircle else Icons.Default.Warning,
+                        null, tint = alertColor, modifier = Modifier.size(11.dp),
+                    )
+                    Text(
+                        d.spendingPattern.replace("_", " ").replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = alertColor,
+                    )
+                    Text("·", color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "Limit: ${d.budgetLimit.ugxShort()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun MetricCell(label: String, value: Long, color: Color, icon: ImageVector, modifier: Modifier) {
-    Column(
-        modifier = modifier.padding(vertical = 4.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Surface(shape = RoundedCornerShape(7.dp), color = color.copy(alpha = 0.12f), modifier = Modifier.size(26.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+private fun VelocityRow(icon: ImageVector, label: String, value: String, valueColor: Color = Color.Unspecified) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Icon(icon, null, tint = LightColors.Savings, modifier = Modifier.size(10.dp).defaultMinSize(minWidth = 14.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = if (valueColor == Color.Unspecified) MaterialTheme.colorScheme.onSurface else valueColor)
+    }
+}
+
+@Composable
+private fun AlertLevelBadge(level: String, alertColor: Color) {
+    val color = when (level) { "ok" -> LightColors.Income.copy(alpha = 0.10f); "warning" -> Color(0xFFFF9500).copy(alpha = 0.10f); else -> LightColors.Expense.copy(alpha = 0.10f)}
+    val icon  = when (level) { "ok" -> Icons.Default.CheckCircle; "warning" -> Icons.Default.Warning; else -> Icons.Default.Cancel }
+    Surface(shape = RoundedCornerShape(50), color = color) {
+        Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(icon, null, tint = alertColor, modifier = Modifier.size(10.dp))
+            Text(level.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+// ─── Monthly Trends Card ──────────────────────────────────────────────────────
+
+private enum class TrendMetric(val label: String) {
+    EXPENSE("Expense"), INCOME("Income"), SAVINGS("Savings"), NET("Net")
+}
+
+//private object TrendColors {
+//    val Income  = Color(0xFF1D9E75)
+//    val Expense = Color(0xFFD85A30)
+//    val Savings = Color(0xFF378ADD)
+//
+//
+//    val IncomeBg  = Color(0xFFE1F5EE)
+//    val IncomeText = Color(0xFF085041)
+//
+//    val ChipActive     = Color(0xFF378ADD)
+//    val ChipActiveText = Color.White
+//}
+
+private fun TrendMetric.barColor(value: Double): Color = when (this) {
+    TrendMetric.EXPENSE -> LightColors.Expense
+    TrendMetric.INCOME  -> LightColors.Income
+    TrendMetric.SAVINGS -> LightColors.Savings
+    TrendMetric.NET     -> if (value >= 0) NetPos else NetNeg
+}
+
+private fun MonthEntry.valueFor(metric: TrendMetric): Double = when (metric) {
+    TrendMetric.EXPENSE -> expense
+    TrendMetric.INCOME  -> income
+    TrendMetric.SAVINGS -> savings
+    TrendMetric.NET     -> net
+}
+
+@Composable
+private fun MonthlyTrendsCard(
+    section: MonthlyTrendsSection,
+    modifier: Modifier = Modifier,
+) {
+    val months  = section.data.months
+    val summary = section.data.summary
+
+    var metric        by remember { mutableStateOf(TrendMetric.EXPENSE) }
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+
+    // Animate bars to full height on first composition and on metric change.
+    var animTrigger by remember { mutableStateOf(0) }
+    var animPct by remember { mutableStateOf(0f) }
+    LaunchedEffect(animTrigger) { 
+        animPct = 1f 
+    }
+    val springPct by animateFloatAsState(
+        targetValue   = animPct,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
+        label         = "bar_spring",
+    )
+
+    val maxVal = remember(months, metric) {
+        months.maxOfOrNull { abs(it.valueFor(metric)) }?.takeIf { it > 0 } ?: 1.0
+    }
+
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            // ── Header ────────────────────────────────────────────────────
+            TrendsHeaderComposable(
+                trend       = summary.incomeTrend,
+                healthScore = section.health.score,
+            )
+
+            // ── Metric chips ──────────────────────────────────────────────
+            MetricChipRowComposable(
+                active   = metric,
+                onSelect = { m ->
+                    metric        = m
+                    selectedIndex = null
+                    animTrigger++
+                },
+            )
+
+            // ── Tooltip / always visible ──────────────────────────────────
+            BarTooltipComposable(
+                selectedIndex = selectedIndex,
+                months        = months,
+                metric        = metric,
+            )
+
+            // ── Bar chart with values ─────────────────────────────────────
+            BarChartComposable(
+                months        = months,
+                metric        = metric,
+                maxVal        = maxVal,
+                animatedPct   = springPct,
+                selectedIndex = selectedIndex,
+                onBarClick    = { idx ->
+                    selectedIndex = if (selectedIndex == idx) null else idx
+                },
+            )
+
+            // ── Month labels ──────────────────────────────────────────────
+            MonthLabelRowComposable(months = months, selectedIndex = selectedIndex)
+
+            // ── Summary stats ─────────────────────────────────────────────
+            if (summary.avgIncome + summary.avgExpense > 0) {
+                HorizontalDivider(
+                    color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
+                    thickness = 0.5.dp,
+                )
+                SummaryStatsRowComposable(summary = summary)
             }
         }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun TrendsHeaderComposable(trend: String, healthScore: Int) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text  = "Monthly Trends",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text  = trend.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+        }
+        HealthScorePillComposable(score = healthScore)
+    }
+}
+
+@Composable
+private fun HealthScorePillComposable(score: Int) {
+    Surface(
+        shape = CircleShape,
+        color = LightColors.IncomeBg,
+    ) {
         Text(
-            text = value.ugx(),
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-            color = color,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            text     = "Score $score",
+            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+            color    = IncomeText,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
     }
 }
 
 @Composable
-private fun MetricDivider() {
-    Box(
-        Modifier
-            .width(1.dp)
-            .height(56.dp)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-    )
+private fun MetricChipRowComposable(
+    active: TrendMetric,
+    onSelect: (TrendMetric) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TrendMetric.entries.forEach { m ->
+            MetricChipComposable(
+                label      = m.label,
+                isActive   = m == active,
+                onClick    = { onSelect(m) },
+            )
+        }
+    }
 }
 
-// ─── Health Score ─────────────────────────────────────────────────────────────
+@Composable
+private fun MetricChipComposable(label: String, isActive: Boolean, onClick: () -> Unit) {
+    val bgColor   by animateColorAsState(
+        if (isActive) ChipActive else MaterialTheme.colorScheme.surfaceVariant,
+        label = "chip_bg",
+    )
+    val textColor by animateColorAsState(
+        if (isActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "chip_text",
+    )
+    Surface(
+        shape   = CircleShape,
+        color   = bgColor,
+        border  = if (!isActive) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = .35f)) else null,
+        modifier = Modifier.clickable(
+            indication            = null,
+            interactionSource     = remember { MutableInteractionSource() },
+            onClick               = onClick,
+        ),
+    ) {
+        Text(
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color    = textColor,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+        )
+    }
+}
 
 @Composable
-private fun HealthScoreCard(health: Health, modifier: Modifier = Modifier) {
-    val scoreColor = when (health.status.lowercase()) {
-        "good", "excellent" -> IncomeGreen
-        "fair" -> Color(0xFFF39C12)
-        else -> ExpenseRed
-    }
-    val animatedScore by animateFloatAsState(
-        targetValue = health.score / 100f,
-        animationSpec = tween(1200, easing = FastOutSlowInEasing),
-        label = "health_score"
-    )
-
-    AnalyticsCard(modifier = modifier, title = "Financial Health") {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            // Score arc
-            Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val stroke = 8.dp.toPx()
-                    val inset = stroke / 2f
-                    // Track
-                    drawArc(
-                        color = scoreColor.copy(alpha = 0.15f),
-                        startAngle = 135f, sweepAngle = 270f,
-                        useCenter = false,
-                        topLeft = Offset(inset, inset),
-                        size = Size(size.width - stroke, size.height - stroke),
-                        style = Stroke(stroke, cap = StrokeCap.Round)
-                    )
-                    // Fill
-                    drawArc(
-                        color = scoreColor,
-                        startAngle = 135f, sweepAngle = 270f * animatedScore,
-                        useCenter = false,
-                        topLeft = Offset(inset, inset),
-                        size = Size(size.width - stroke, size.height - stroke),
-                        style = Stroke(stroke, cap = StrokeCap.Round)
-                    )
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "${health.score}",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = scoreColor
-                        ),
-                        fontSize = 22.sp
-                    )
-                    Text("/100", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 9.sp)
-                }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    health.status.replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = scoreColor
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val trendIcon = when (health.trend.lowercase()) {
-                        "improving" -> Icons.Outlined.TrendingUp
-                        "declining" -> Icons.Outlined.TrendingDown
-                        else -> Icons.Outlined.TrendingFlat
-                    }
-                    Icon(trendIcon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                    Text(
-                        "Trend: ${health.trend.replaceFirstChar { it.uppercase() }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                // Animated score bar
+private fun BarTooltipComposable(
+    selectedIndex: Int?,
+    months: List<MonthEntry>,
+    metric: TrendMetric,
+) {
+    val tooltipBg = MaterialTheme.colorScheme.surfaceVariant
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tooltipBg, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (selectedIndex != null && selectedIndex < months.size) {
+            val m = months[selectedIndex]
+            val v = m.valueFor(metric)
+            val valueColor = metric.barColor(v)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                // Colored dot indicator
                 Box(
                     modifier = Modifier
+                        .size(8.dp)
+                        .background(valueColor, CircleShape)
+                )
+                Text(
+                    text  = "${m.shortLabel} ${m.date.take(4)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = v.ugxShort(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = valueColor,
+                )
+                Text(
+                    text  = "· ${m.transactionCount} txns",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+                )
+            }
+        } else {
+            // Show total of all months
+            val totalValue = months.sumOf { it.valueFor(metric) }
+            val totalColor = metric.barColor(totalValue)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(totalColor, CircleShape)
+                )
+                Text(
+                    text  = "Total",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = totalValue.ugxShort(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = totalColor,
+                )
+                Text(
+                    text  = "· ${months.sumOf { it.transactionCount }} txns",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BarChartComposable(
+    months: List<MonthEntry>,
+    metric: TrendMetric,
+    maxVal: Double,
+    animatedPct: Float,
+    selectedIndex: Int?,
+    onBarClick: (Int) -> Unit,
+) {
+    val hasSelection = selectedIndex != null
+    Row(
+        modifier              = Modifier
+            .fillMaxWidth()
+            .height(110.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment     = Alignment.Bottom,
+    ) {
+        months.forEachIndexed { idx, month ->
+            val value    = month.valueFor(metric)
+            val fraction = (abs(value) / maxVal).toFloat()
+            val barHeightDp = (90f * fraction * animatedPct).coerceAtLeast(3f).dp
+            val barColor = metric.barColor(value)
+            val isSelected = selectedIndex == idx
+            // Dim unselected bars when something is selected
+            val barAlpha by animateFloatAsState(
+                targetValue   = when {
+                    !hasSelection -> 1f
+                    isSelected    -> 1f
+                    else          -> 0.25f
+                },
+                animationSpec = tween(180),
+                label         = "bar_alpha_$idx",
+            )
+            // Scale selected bar slightly up for emphasis
+            val barScale by animateFloatAsState(
+                targetValue   = if (isSelected) 1.04f else 1f,
+                animationSpec = spring(Spring.DampingRatioMediumBouncy),
+                label         = "bar_scale_$idx",
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(
+                        indication        = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick           = { onBarClick(idx) },
+                    ),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Column(
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(scoreColor.copy(alpha = 0.12f))
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Bottom,
                 ) {
+                    // Value text above bar
+                    Text(
+                        text  = value.amountShort(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize   = 7.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color     = barColor,
+                        maxLines  = 1,
+                    )
+                    Spacer(Modifier.height(2.dp))
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(animatedScore)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(scoreColor)
+                            .fillMaxWidth()
+                            .height(barHeightDp)
+                            .graphicsLayer {
+                                alpha  = barAlpha
+                                scaleX = barScale
+                                scaleY = barScale
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                            }
+                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                            .background(barColor)
+                            // Selected: white inner border for "lifted" feel
+                            .then(
+                                if (isSelected)
+                                    Modifier.border(
+                                        width = 1.5.dp,
+                                        color = Color.White.copy(alpha = .55f),
+                                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp),
+                                    )
+                                else Modifier
+                            )
                     )
                 }
             }
@@ -499,546 +996,1393 @@ private fun HealthScoreCard(health: Health, modifier: Modifier = Modifier) {
     }
 }
 
-// ─── Spending Velocity ────────────────────────────────────────────────────────
+@Composable
+private fun MonthLabelRowComposable(months: List<MonthEntry>, selectedIndex: Int?) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        months.forEachIndexed { idx, m ->
+            val isSelected = selectedIndex == idx
+            Text(
+                text  = m.shortLabel,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize   = 8.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color     = if (isSelected) ChipActive
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                modifier  = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
 
 @Composable
-private fun SpendingVelocityCard(velocity: VelocityData, modifier: Modifier = Modifier) {
-    val isAlert = velocity.alertLevel != "ok"
-    val barColor = if (isAlert) ExpenseRed else PesaMindTeal
-    val progress = remember(velocity.totalSpent, velocity.budgetLimit) {
-        (velocity.totalSpent.toFloat() / velocity.budgetLimit.toFloat()).coerceIn(0f, 1f)
+private fun SummaryStatsRowComposable(summary: MonthSummary) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        StatPillComposable(label = "Avg income",  value = summary.avgIncome.ugxShort(),  color = LightColors.Income,  modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg expense", value = summary.avgExpense.ugxShort(), color = LightColors.Expense, modifier = Modifier.weight(1f))
+        StatPillComposable(label = "Avg savings", value = summary.avgSavings.ugxShort(), color = LightColors.Savings, modifier = Modifier.weight(1f))
     }
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
-        label = "velocity_progress"
+}
+
+@Composable
+private fun StatPillComposable(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape    = RoundedCornerShape(8.dp),
+        color    = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(
+            modifier              = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalAlignment   = Alignment.CenterHorizontally,
+            verticalArrangement   = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+            Text(
+                text  = value,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = color,
+            )
+        }
+    }
+}
+
+// ─── Budget vs Actual Card ────────────────────────────────────────────────────
+
+
+// ---------------------------------------------------------------------------
+//  Colour tokens (match PesaMind palette already used in MonthlyTrendsCard)
+// ---------------------------------------------------------------------------
+
+private object BvaColors {
+    // Status colours — intentionally reuse TrendColors semantics
+    val UnderBudget = Color(0xFF1D9E75)   // green  (income green)
+    val OnBudget    = Color(0xFF378ADD)   // blue   (savings blue)
+    val OverBudget  = Color(0xFFD85A30)   // red    (expense red)
+
+    val IncomeLine  = Color(0xFF1D9E75)
+    val ExpenseLine = Color(0xFFD85A30)
+    val SavingsLine = Color(0xFF378ADD)
+
+    // Health pill backgrounds (muted)
+    val ExcellentBg   = Color(0xFFE1F5EE)
+    val ExcellentText = Color(0xFF085041)
+    val GoodBg        = Color(0xFFE3F0FB)
+    val GoodText      = Color(0xFF1A4A7A)
+    val FairBg        = Color(0xFFFFF3E0)
+    val FairText      = Color(0xFF7A4A00)
+    val PoorBg        = Color(0xFFFFEBEE)
+    val PoorText      = Color(0xFF7A1A1A)
+
+    // Track background
+    val TrackBg = Color(0xFFEEEEEE)
+
+    // Divider
+    val Divider = Color(0xFFE0E0E0)
+}
+
+private fun statusColor(status: String) = when (status) {
+    "under_budget" -> BvaColors.UnderBudget
+    "over_budget"  -> BvaColors.OverBudget
+    else           -> BvaColors.OnBudget
+}
+
+private fun statusLabel(status: String) = when (status) {
+    "under_budget" -> "Under budget"
+    "over_budget"  -> "Over budget"
+    else           -> "On budget"
+}
+
+private data class HealthPillColors(val bg: Color, val text: Color)
+
+private fun healthPillColors(status: String) = when (status) {
+    "excellent" -> HealthPillColors(BvaColors.ExcellentBg, BvaColors.ExcellentText)
+    "good"      -> HealthPillColors(BvaColors.GoodBg,      BvaColors.GoodText)
+    "fair"      -> HealthPillColors(BvaColors.FairBg,      BvaColors.FairText)
+    else        -> HealthPillColors(BvaColors.PoorBg,      BvaColors.PoorText)
+}
+
+// ---------------------------------------------------------------------------
+//  Top-level composable
+// ---------------------------------------------------------------------------
+
+/**
+ * Usage (in your LazyColumn, identical call-site to the old card):
+ *
+ *   a.budgetVsActual?.let { bva ->
+ *       item {
+ *           StaggeredCard(index = 4, visible = cardsVisible) {
+ *               BudgetVsActualCard(
+ *                   section  = bva,
+ *                   modifier = Modifier.padding(horizontal = 16.dp),
+ *               )
+ *           }
+ *       }
+ *   }
+ */
+@Composable
+fun BudgetVsActualCard(
+    section: BudgetVsActualSection,
+    modifier: Modifier = Modifier,
+) {
+    val d      = section.data
+    val health = section.health
+    val comps  = health.components
+
+    val accentColor  = statusColor(d.status)
+    val pillColors   = healthPillColors(health.status)
+
+    // ── Usage fraction (0f–1f+) ──────────────────────────────────────────
+    val rawFraction = if (d.budgetTotal > 0)
+        (d.actualTotal / d.budgetTotal).toFloat().coerceAtLeast(0f)
+    else 0f
+
+    // Animate bar fill on first composition / data change
+    var barTarget by remember { mutableStateOf(0f) }
+    LaunchedEffect(d) { barTarget = rawFraction.coerceAtMost(1f) }
+    val animatedBar by animateFloatAsState(
+        targetValue   = barTarget,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessLow),
+        label         = "bva_bar",
     )
 
-    AnalyticsCard(modifier = modifier, title = "Spending Velocity") {
-        // Stat row
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-            VelocityStat("Daily Avg", velocity.dailyAverage.ugx())
-            VelocityStat("Projected", velocity.projectedMonthEnd.ugx(),
-                if (velocity.projectedMonthEnd > velocity.budgetLimit) ExpenseRed else PesaMindTeal,
-                Modifier.weight(1f)
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            // ── Header ────────────────────────────────────────────────────
+            BvaHeader(
+                period      = d.period,
+                status      = d.status,
+                accentColor = accentColor,
+                health      = health,
+                pillColors  = pillColors,
             )
-            VelocityStat("Pattern", velocity.spendingPattern.replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f))
+
+            // ── Primary progress bar ──────────────────────────────────────
+            BvaBudgetBar(
+                actualTotal    = d.actualTotal,
+                budgetTotal    = d.budgetTotal,
+                animatedFrac   = animatedBar,
+                rawFraction    = rawFraction,
+                variance       = d.variance,
+                variancePct    = d.variancePercent,
+                status         = d.status,
+                accentColor    = accentColor,
+            )
+
+            HorizontalDivider(
+                color     = BvaColors.Divider,
+                thickness = 0.5.dp,
+            )
+
+            // ── Component breakdown (Expense / Income / Savings) ──────────
+            BvaComponentRows(comps = comps)
+
+            // ── Recommendations (if any) ──────────────────────────────────
+            if (section.recommendations.isNotEmpty()) {
+                HorizontalDivider(color = BvaColors.Divider, thickness = 0.5.dp)
+                BvaRecommendations(items = section.recommendations)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Header
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaHeader(
+    period: String,
+    status: String,
+    accentColor: Color,
+    health: BvaHealth,
+    pillColors: HealthPillColors,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text  = "Budget vs Actual",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                // Coloured dot
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(accentColor, CircleShape)
+                )
+                Text(
+                    text  = statusLabel(status),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                )
+                Text(
+                    text  = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .35f),
+                )
+                Text(
+                    text  = period.toDisplayPeriod(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                )
+            }
         }
 
-        Spacer(Modifier.height(14.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-        Spacer(Modifier.height(14.dp))
+        // Health score pill — benchmarked against HealthScorePill in MonthlyTrendsCard
+        BvaHealthPill(
+            score      = health.score,
+            status     = health.status,
+            pillColors = pillColors,
+        )
+    }
+}
 
-        // Custom progress track
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+@Composable
+private fun BvaHealthPill(score: Int, status: String, pillColors: HealthPillColors) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = pillColors.bg,
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
             Text(
-                text = "${velocity.totalSpent.ugx()} UGX",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = barColor
+                text  = "$score",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize   = 11.sp,
+                ),
+                color = pillColors.text,
             )
             Text(
-                text = "of ${velocity.budgetLimit.ugx()} UGX",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary
+                text  = status.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = pillColors.text.copy(alpha = .75f),
             )
         }
-        Spacer(Modifier.height(6.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Primary budget progress bar
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaBudgetBar(
+    actualTotal:  Double,
+    budgetTotal:  Double,
+    animatedFrac: Float,
+    rawFraction:  Float,
+    variance:     Double,
+    variancePct:  Double,
+    status:       String,
+    accentColor:  Color,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        // Spent / Budget labels
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.Bottom,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    text  = "${actualTotal.ugxShort()} spent",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = "of ${budgetTotal.ugxShort()} budget",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f),
+                )
+            }
+            // Variance badge
+            VarianceBadge(variance = variance, variancePct = variancePct, status = status, accentColor = accentColor)
+        }
+
+        // Track + fill
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(10.dp)
                 .clip(RoundedCornerShape(5.dp))
-                .background(barColor.copy(alpha = 0.12f))
+                .background(BvaColors.TrackBg),
         ) {
+            // Fill — gradient from accentColor faded → accentColor solid
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(animatedProgress)
+                    .fillMaxWidth(animatedFrac)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(5.dp))
                     .background(
-                        Brush.horizontalGradient(listOf(barColor.copy(alpha = 0.7f), barColor))
-                    )
+                        Brush.horizontalGradient(
+                            listOf(
+                                accentColor.copy(alpha = .65f),
+                                accentColor,
+                            )
+                        )
+                    ),
             )
         }
-        Spacer(Modifier.height(6.dp))
+
+        // Usage % label
         Text(
-            "${(progress * 100).toInt()}% of budget consumed",
+            text  = "${(rawFraction * 100).toInt()}% utilised",
             style = MaterialTheme.typography.labelSmall,
-            color = if (isAlert) ExpenseRed else TextSecondary
+            color = accentColor,
         )
     }
 }
 
 @Composable
-private fun VelocityStat(label: String, value: String, valueColor: Color = MaterialTheme.colorScheme.onSurface, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(3.dp))
+private fun VarianceBadge(
+    variance:    Double,
+    variancePct: Double,
+    status:      String,
+    accentColor: Color,
+) {
+    val pctStr  = "${"%.0f".format(kotlin.math.abs(variancePct))}%"
+    val label   = when (status) {
+        "under_budget" -> "$pctStr saved"
+        "over_budget"  -> "$pctStr over"
+        else           -> "on track"
+    }
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = accentColor.copy(alpha = .12f),
+    ) {
         Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = valueColor, fontSize = 12.sp)) { append(value) }
-            },
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color    = accentColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }
 
-// ─── Budget Utilization ───────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+//  Component breakdown rows (Expense / Income / Savings)
+// ---------------------------------------------------------------------------
 
 @Composable
-private fun BudgetUtilizationCard(utilization: Double, modifier: Modifier = Modifier) {
-    val pct = utilization.coerceIn(0.0, 200.0)
-    val color = when {
-        pct <= 80 -> IncomeGreen
-        pct <= 100 -> PesaMindTeal
-        pct <= 130 -> Color(0xFFF39C12)
-        else -> ExpenseRed
-    }
-    val label = when {
-        pct <= 80 -> "On track  🎯"
-        pct <= 100 -> "Near limit"
-        pct <= 130 -> "Over budget"
-        else -> "Critical"
-    }
-
-    AnalyticsCard(modifier = modifier, title = "Budget Utilization") {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    "${pct.toInt()}%",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = color
-                    )
-                )
-                Surface(shape = RoundedCornerShape(6.dp), color = color.copy(alpha = 0.12f)) {
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = color,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-            // Segmented bar
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                val segments = 10
-                val filled = (pct / 10).toInt().coerceIn(0, segments)
-                repeat(segments) { idx ->
-                    Box(
-                        modifier = Modifier
-                            .width(14.dp)
-                            .height(32.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (idx < filled) color else color.copy(alpha = 0.12f))
-                    )
-                }
-            }
-        }
+private fun BvaComponentRows(comps: BvaHealthComponents) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        BvaComponentRow(
+            label      = "Expenses",
+            actual     = comps.expense.actual,
+            budgeted   = comps.expense.budgeted,
+            variance   = comps.expense.variance,
+            accentColor = BvaColors.ExpenseLine,
+            // For expenses: positive variance = under (good); negative = over (bad)
+            positiveIsGood = true,
+        )
+        BvaComponentRow(
+            label      = "Income",
+            actual     = comps.income.actual,
+            budgeted   = comps.income.budgeted,
+            variance   = comps.income.variance,
+            accentColor = BvaColors.IncomeLine,
+            // For income: negative variance means actual < budgeted (shortfall)
+            positiveIsGood = false,
+        )
+        BvaComponentRow(
+            label      = "Savings",
+            actual     = comps.savings.actual,
+            budgeted   = comps.savings.budgeted,
+            variance   = comps.savings.variance,
+            accentColor = BvaColors.SavingsLine,
+            // For savings: positive variance = saved more than planned (great)
+            positiveIsGood = false,
+        )
     }
 }
 
-// ─── Expense Forecast ─────────────────────────────────────────────────────────
-
 @Composable
-private fun ExpenseForecastCard(forecast: ForecastData, modifier: Modifier = Modifier) {
-    val willExceed = forecast.willExceedBudget
-    val accentColor = if (willExceed) ExpenseRed else IncomeGreen
-    val progress = remember(forecast.actualSpent, forecast.budgetLimit) {
-        (forecast.actualSpent.toFloat() / forecast.budgetLimit.toFloat()).coerceIn(0f, 1f)
-    }
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
-        label = "forecast_progress"
+private fun BvaComponentRow(
+    label:          String,
+    actual:         Double,
+    budgeted:       Double,
+    variance:       Double,
+    accentColor:    Color,
+    positiveIsGood: Boolean,       // controls the sign-of-variance colour logic
+) {
+    val fraction = if (budgeted > 0)
+        (actual / budgeted).toFloat().coerceIn(0f, 1f)
+    else 0f
+
+    // Animate mini-bar
+    var barTarget by remember(actual, budgeted) { mutableStateOf(0f) }
+    LaunchedEffect(actual, budgeted) { barTarget = fraction }
+    val animBar by animateFloatAsState(
+        targetValue   = barTarget,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+        label         = "comp_bar_$label",
     )
 
-    AnalyticsCard(modifier = modifier, title = "Expense Forecast") {
-        // Will exceed banner
-        if (willExceed) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = ExpenseRed.copy(alpha = 0.08f),
-                modifier = Modifier.fillMaxWidth()
+    // Variance label colour logic
+    val varianceGood = if (positiveIsGood) variance >= 0 else variance <= 0
+    val varianceColor = if (varianceGood) BvaColors.UnderBudget else BvaColors.OverBudget
+    val variancePrefix = if (variance >= 0) "+" else ""
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            // Label + actual
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = ExpenseRed, modifier = Modifier.size(16.dp))
-                    Text(
-                        "Projected to exceed budget",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = ExpenseRed
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(accentColor, CircleShape)
+                )
+                Text(
+                    text  = label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
-            Spacer(Modifier.height(12.dp))
+            // Actual / budgeted · variance
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text  = "${actual.ugxShort()} / ${budgeted.ugxShort()}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                )
+                Text(
+                    text  = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .3f),
+                )
+                Text(
+                    text  = "$variancePrefix${variance.ugxShort()}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = varianceColor,
+                )
+            }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-            ForecastStat("Daily Burn", forecast.dailyBurnRate.ugx(), modifier = Modifier.weight(1f))
-            ForecastStat("Projected", forecast.projectedTotal.ugx(), accentColor, Modifier.weight(1f))
-            ForecastStat("Confidence", "${(forecast.confidence * 100).toInt()}%", modifier = Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(14.dp))
+        // Mini bar
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(accentColor.copy(alpha = 0.12f))
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(accentColor.copy(alpha = .12f)),
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(animatedProgress)
+                    .fillMaxWidth(animBar)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(accentColor.copy(alpha = .6f), accentColor)
+                        )
+                    ),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Recommendations
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BvaRecommendations(items: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text  = "Recommendations",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize   = 10.sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+        )
+        items.forEach { rec ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.Top,
+            ) {
+                Text(
+                    text  = "•",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f),
+                )
+                Text(
+                    text  = rec,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Extensions — identical to MonthlyTrendsCard so they can share one file
+// ---------------------------------------------------------------------------
+
+
+
+/**
+ * "2026-06"  →  "June 2026"
+ */
+private fun String.toDisplayPeriod(): String {
+    return try {
+        val parts = split("-")
+        val year  = parts[0]
+        val month = java.time.Month.of(parts[1].toInt())
+            .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+        "$month $year"
+    } catch (_: Exception) {
+        this
+    }
+}
+
+@Composable
+private fun BudgetCountChip(label: String, count: Int, color: Color) {
+    Surface(shape = RoundedCornerShape(6.dp), color = color) {
+        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("$count", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold), color = color)
+            Text(label,    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun BudgetLineItemRow(item: BudgetLineItem) {
+    val color = if (item.status == "over_budget") LightColors.Expense else LightColors.Income
+    var barTarget by remember(item.category) { mutableStateOf(0f) }
+    LaunchedEffect(item.category) { barTarget = item.usageFraction }
+    val barW by animateFloatAsState(barTarget, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow), label = "item_${item.category}")
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(item.category, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                if (item.budget > 0) "${item.actual.ugxShort()} / ${item.budget.ugxShort()}" else item.actual.ugxShort(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(color)) {
+            Box(Modifier.fillMaxWidth(barW).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(color))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                item.status.replace("_", " ").replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.SemiBold),
+                color = color,
+            )
+            item.transactions?.let {
+                Text("$it txn${if (it == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+// ─── Expense Forecast Card ────────────────────────────────────────────────────
+
+
+// ---------------------------------------------------------------------------
+//  Colour helpers
+// ---------------------------------------------------------------------------
+
+private object ForecastColors {
+    val Exceed    = Color(0xFFD85A30)   // expense red  — will exceed
+    val OnTrack   = Color(0xFF1D9E75)   // income green — on track
+    val Actual    = Color(0xFF378ADD)   // savings blue — actual bar
+    val BudgetBar = Color(0xFFBDBDBD)   // neutral grey — budget reference bar
+
+    // Severity → alert chip colours
+    fun alertBg(severity: String)   = when (severity) {
+        "critical" -> Color(0xFFFFEBEE)
+        "warning"  -> Color(0xFFFFF8E1)
+        "success"  -> Color(0xFFE8F5E9)
+        else       -> Color(0xFFE3F2FD)   // info / default
+    }
+    fun alertText(severity: String) = when (severity) {
+        "critical" -> Color(0xFFC62828)
+        "warning"  -> Color(0xFFE65100)
+        "success"  -> Color(0xFF1B5E20)
+        else       -> Color(0xFF0D47A1)
+    }
+    fun alertIcon(severity: String) = when (severity) {
+        "critical" -> Icons.Default.Cancel
+        "warning"  -> Icons.Default.Warning
+        "success"  -> Icons.Default.CheckCircle
+        else       -> Icons.Default.Info
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Top-level composable
+// ---------------------------------------------------------------------------
+
+@Composable
+fun ExpenseForecastCard(
+    section: ExpenseForecastSection,
+    modifier: Modifier = Modifier,
+) {
+    val d          = section.data
+    val exceedColor = if (d.willExceedBudget) ForecastColors.Exceed else ForecastColors.OnTrack
+
+    // Compute the common max so every bar is on the same scale
+    val maxVal = remember(d) {
+        maxOf(d.projectedTotal, d.budgetLimit, d.actualSpent, 1.0)
+    }
+
+    // Animate targets
+    var ringTarget   by remember { mutableStateOf(0f) }
+    var actualTarget by remember { mutableStateOf(0f) }
+    var projTarget   by remember { mutableStateOf(0f) }
+    var budgetTarget by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(d) {
+        ringTarget   = d.confidence.toFloat().coerceIn(0f, 1f)
+        actualTarget = (d.actualSpent   / maxVal).toFloat().coerceIn(0f, 1f)
+        projTarget   = (d.projectedTotal / maxVal).toFloat().coerceIn(0f, 1f)
+        budgetTarget = (d.budgetLimit   / maxVal).toFloat().coerceIn(0f, 1f)
+    }
+
+    val ringProg   by animateFloatAsState(ringTarget,   spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessLow), label = "forecast_ring")
+    val actualProg by animateFloatAsState(actualTarget, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow), label = "actual_bar")
+    val projProg   by animateFloatAsState(projTarget,   spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessLow), label = "proj_bar")
+    val budgetProg by animateFloatAsState(budgetTarget, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow), label = "budget_bar")
+
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            // ── Header ────────────────────────────────────────────────────
+            ForecastHeader(
+                period      = d.period,
+                exceed      = d.willExceedBudget,
+                exceedColor = exceedColor,
+                confidencePct = d.confidencePct,
+            )
+
+            // ── Hero: confidence ring + projection figure ─────────────────
+            ForecastHero(
+                d           = d,
+                exceedColor = exceedColor,
+                ringProg    = ringProg,
+            )
+
+            // ── Burn stats row ────────────────────────────────────────────
+            if (d.dailyBurnRate > 0) {
+                ForecastBurnRow(d = d)
+            }
+
+            HorizontalDivider(
+                color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .10f),
+                thickness = 0.5.dp,
+            )
+
+            // ── Comparison bars ───────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                ForecastBar(
+                    label    = "Actual spent",
+                    value    = d.actualSpent,
+                    color    = ForecastColors.Actual,
+                    progress = actualProg,
+                )
+                ForecastBar(
+                    label    = "Projected total",
+                    value    = d.projectedTotal,
+                    color    = exceedColor,
+                    progress = projProg,
+                )
+                ForecastBar(
+                    label    = "Budget limit",
+                    value    = d.budgetLimit,
+                    color    = ForecastColors.BudgetBar,
+                    progress = budgetProg,
+                    isStatic = true,
+                )
+            }
+
+            // ── Variance callout (new field) ──────────────────────────────
+            ForecastVarianceChip(
+                variance    = d.projectedVariance,
+                exceed      = d.willExceedBudget,
+                exceedColor = exceedColor,
+            )
+
+            // ── Recommendations ───────────────────────────────────────────
+            section.recommendations.forEach { rec ->
+                ForecastAlert(rec = rec)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Sub-composables
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ForecastHeader(
+    period: String,
+    exceed: Boolean,
+    exceedColor: Color,
+    confidencePct: Int,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text  = "Expense Forecast",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(exceedColor, CircleShape)
+                )
+                Text(
+                    text  = if (exceed) "Over budget projected" else "On track",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = exceedColor,
+                )
+                Text("·", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .3f))
+                Text(
+                    text  = period.toDisplayPeriod(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                )
+            }
+        }
+
+        // Confidence pill — mirrors HealthScorePill pattern from MonthlyTrendsCard
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = exceedColor.copy(alpha = .12f),
+        ) {
+            Text(
+                text     = "$confidencePct% conf.",
+                style    = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize   = 10.sp,
+                ),
+                color    = exceedColor,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ForecastHero(
+    d: ForecastData,
+    exceedColor: Color,
+    ringProg: Float,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        // ── Confidence arc ring ──────────────────────────────────────────
+        Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokePx = 9.dp.toPx()
+                val inset    = strokePx / 2f
+                val arcTl    = Offset(inset, inset)
+                val arcSz    = Size(size.width - strokePx, size.height - strokePx)
+
+                // Track
+                drawArc(
+                    color       = exceedColor.copy(alpha = .15f),
+                    startAngle  = -90f,
+                    sweepAngle  = 360f,
+                    useCenter   = false,
+                    topLeft     = arcTl,
+                    size        = arcSz,
+                    style       = Stroke(strokePx, cap = StrokeCap.Round),
+                )
+                // Fill
+                drawArc(
+                    color       = exceedColor,
+                    startAngle  = -90f,
+                    sweepAngle  = 360f * ringProg,
+                    useCenter   = false,
+                    topLeft     = arcTl,
+                    size        = arcSz,
+                    style       = Stroke(strokePx, cap = StrokeCap.Round),
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text  = "${d.confidencePct}%",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize   = 14.sp,
+                    ),
+                    color = exceedColor,
+                )
+                Text(
+                    text  = "conf.",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f),
+                )
+            }
+        }
+
+        // ── Projection figure ────────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                text  = "Month-end projection",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+            Text(
+                text     = d.projectedTotal.ugxFull(),
+                style    = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight    = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp,
+                ),
+                color    = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = if (d.willExceedBudget) Icons.Default.Cancel else Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint     = exceedColor,
+                    modifier = Modifier.size(12.dp),
+                )
+                Text(
+                    text  = if (d.willExceedBudget) "Will exceed budget" else "Within budget",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = exceedColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForecastBurnRow(d: ForecastData) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            modifier              = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            ForecastStat(label = "Daily burn",  value = d.dailyBurnRate.ugxShort())
+            VerticalDivider(modifier = Modifier.height(24.dp))
+            ForecastStat(label = "Days elapsed", value = "${d.daysElapsed}")
+            VerticalDivider(modifier = Modifier.height(24.dp))
+            ForecastStat(label = "Budget",       value = d.budgetLimit.ugxShort())
+        }
+    }
+}
+
+@Composable
+private fun ForecastStat(label: String, value: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text  = value,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f),
+        )
+    }
+}
+
+@Composable
+private fun ForecastBar(
+    label: String,
+    value: Double,
+    color: Color,
+    progress: Float,
+    isStatic: Boolean = false,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isStatic) .55f else 1f),
+            )
+            Text(
+                text  = value.ugxShort(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = color,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(7.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color.copy(alpha = .12f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress.coerceIn(0f, 1f))
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.7f), accentColor)))
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "${forecast.actualSpent.ugx()} spent of ${forecast.budgetLimit.ugx()} UGX budget",
-            style = MaterialTheme.typography.labelSmall,
-            color = TextSecondary
-        )
-    }
-}
-
-@Composable
-private fun ForecastStat(label: String, value: String, valueColor: Color = MaterialTheme.colorScheme.onSurface, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontSize = 10.sp, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(3.dp))
-        Text(value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = valueColor), textAlign = TextAlign.Center)
-    }
-}
-
-// ─── Cash Flow ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun CashFlowCard(cashFlow: WaterfallData, modifier: Modifier = Modifier) {
-    AnalyticsCard(modifier = modifier, title = "Cash Flow") {
-        // Summary row
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CashFlowMetric("Income", cashFlow.income.total, IncomeGreen, Modifier.weight(1f))
-            CashFlowMetric("Expenses", cashFlow.expenses.total, ExpenseRed, Modifier.weight(1f))
-            CashFlowMetric("Savings", cashFlow.savingsTransfers, PesaMindTeal, Modifier.weight(1f))
-        }
-
-        val topCategories = remember(cashFlow) { cashFlow.expenses.categories.take(3) }
-        if (topCategories.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Top Expense Categories",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = TextSecondary
-            )
-            Spacer(Modifier.height(8.dp))
-            val maxAmount = remember(topCategories) { topCategories.maxOfOrNull { it.amount }?.toFloat()?.coerceAtLeast(1f) ?: 1f }
-            topCategories.forEach { cat ->
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(cat.channel, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                        Text(
-                            cat.amount.ugx() + " UGX",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = ExpenseRed
-                        )
-                    }
-                    Spacer(Modifier.height(3.dp))
-                    val barPct = cat.amount.toFloat() / maxAmount
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(ExpenseRed.copy(alpha = 0.12f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(barPct)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(ExpenseRed.copy(alpha = 0.6f))
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CashFlowMetric(label: String, value: Long, color: Color, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = color.copy(alpha = 0.08f)
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = color, fontSize = 10.sp)
-            Spacer(Modifier.height(3.dp))
-            Text(
-                value.ugx(),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 11.sp
+                    .background(
+                        if (isStatic) color.copy(alpha = .45f) else color
+                    ),
             )
         }
     }
 }
 
-// ─── Budget vs Actual ─────────────────────────────────────────────────────────
-
+/** Shows projected over/under variance as a compact inline chip */
 @Composable
-private fun BudgetVsActualCard(budgetActual: BudgetActualData, modifier: Modifier = Modifier) {
-    AnalyticsCard(modifier = modifier, title = "Budget vs Actual") {
-        // Summary metrics
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            BvaMetric("Budget", budgetActual.budgetTotal, PesaMindTeal, Modifier.weight(1f))
-            BvaMetric("Actual", budgetActual.actualTotal, ExpenseRed, Modifier.weight(1f))
-            BvaMetric(
-                label = "Variance",
-                value = abs(budgetActual.variance),
-                color = if (budgetActual.variance < 0) ExpenseRed else IncomeGreen,
-                prefix = if (budgetActual.variance < 0) "−" else "+",
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        if (budgetActual.categoriesOverBudget > 0) {
-            Spacer(Modifier.height(10.dp))
-            Surface(shape = RoundedCornerShape(8.dp), color = ExpenseRed.copy(alpha = 0.07f)) {
-                Text(
-                    "${budgetActual.categoriesOverBudget} ${if (budgetActual.categoriesOverBudget == 1) "category" else "categories"} over budget",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                    color = ExpenseRed,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                )
-            }
-        }
-
-        val topItems = remember(budgetActual) { budgetActual.items.take(3) }
-        if (topItems.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            Spacer(Modifier.height(10.dp))
-            Text("Category Breakdown", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = TextSecondary)
-            Spacer(Modifier.height(8.dp))
-            topItems.forEach { item ->
-                val itemProgress = remember(item) { if (item.budget > 0) (item.actual.toFloat() / item.budget.toFloat()).coerceIn(0f, 1.5f) else 0f }
-                val isOver = item.actual > item.budget
-                Column(modifier = Modifier.padding(vertical = 5.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(item.category, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text(
-                            "${item.actual.ugx()} / ${item.budget.ugx()}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isOver) ExpenseRed else TextSecondary,
-                            fontSize = 10.sp
-                        )
-                    }
-                    Spacer(Modifier.height(3.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(itemProgress.coerceIn(0f, 1f))
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(if (isOver) ExpenseRed else PesaMindTeal)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BvaMetric(label: String, value: Long, color: Color, modifier: Modifier = Modifier, prefix: String = "") {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(shape = RoundedCornerShape(6.dp), color = color.copy(alpha = 0.10f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = color,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                fontSize = 10.sp
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = buildAnnotatedString {
-                if (prefix.isNotEmpty()) withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = color, fontSize = 12.sp)) { append(prefix) }
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = color, fontSize = 12.sp)) { append(value.ugx()) }
-            },
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-// ─── Monthly Trends Chart ─────────────────────────────────────────────────────
-
-@Composable
-private fun MonthlyTrendsCard(trends: TrendsData, modifier: Modifier = Modifier) {
-    // Derive the 6-item list once, memoized
-    val last6 = remember(trends) { trends.months.takeLast(6) }
-    if (last6.isEmpty()) return
-
-    AnalyticsCard(modifier = modifier, title = "Monthly Trends") {
-        // Legend
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            LegendDot("Income", IncomeGreen)
-            LegendDot("Expense", ExpenseRed)
-        }
-        Spacer(Modifier.height(4.dp))
-
-        // Trend summary pills
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TrendPill("Income", trends.summary.incomeTrend)
-            TrendPill("Expense", trends.summary.expenseTrend)
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // Dual-series line chart
-        val incomePoints = remember(last6) { last6.map { it.income.toFloat() } }
-        val expensePoints = remember(last6) { last6.map { it.expense.toFloat() } }
-        val monthLabels = remember(last6) { last6.map { it.date.toMonthAbbr() } }
-        val maxVal = remember(incomePoints, expensePoints) {
-            maxOf(incomePoints.maxOrNull() ?: 1f, expensePoints.maxOrNull() ?: 1f).coerceAtLeast(1f)
-        }
-
-        GradientLineChart(
-            series = listOf(
-                LineSeries(incomePoints, IncomeGreen, "Income"),
-                LineSeries(expensePoints, ExpenseRed, "Expense")
-            ),
-            labels = monthLabels,
-            maxValue = maxVal,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-        )
-    }
-}
-
-private data class LineSeries(val points: List<Float>, val color: Color, val label: String)
-
-@Composable
-private fun GradientLineChart(
-    series: List<LineSeries>,
-    labels: List<String>,
-    maxValue: Float,
-    modifier: Modifier = Modifier
+private fun ForecastVarianceChip(
+    variance: Double,
+    exceed: Boolean,
+    exceedColor: Color,
 ) {
-    val chartHeight = 110.dp
-    val labelHeight = 18.dp
+    val absVariance = kotlin.math.abs(variance)
+    val label = if (exceed)
+        "Projected ${absVariance.ugxShort()} over budget"
+    else
+        "Projected ${absVariance.ugxShort()} under budget"
 
-    Column(modifier = modifier) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(chartHeight)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = exceedColor.copy(alpha = .08f),
+        border   = androidx.compose.foundation.BorderStroke(
+            width = 0.5.dp,
+            color = exceedColor.copy(alpha = .30f),
+        ),
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment     = Alignment.CenterVertically,
         ) {
-            if (series.isEmpty() || series.first().points.size < 2) return@Canvas
+            Icon(
+                imageVector        = if (exceed) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                contentDescription = null,
+                tint               = exceedColor,
+                modifier           = Modifier.size(13.dp),
+            )
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = exceedColor,
+            )
+        }
+    }
+}
 
-            val pointCount = series.first().points.size
-            val stepX = size.width / (pointCount - 1).coerceAtLeast(1)
-            val chartH = size.height
+/** Severity-aware recommendation chip */
+@Composable
+private fun ForecastAlert(rec: ForecastRecommendation) {
+    val bgColor   = ForecastColors.alertBg(rec.severity)
+    val textColor = ForecastColors.alertText(rec.severity)
+    val icon      = ForecastColors.alertIcon(rec.severity)
 
-            series.forEach { line ->
-                val pts = line.points.mapIndexed { i, v ->
-                    Offset(x = i * stepX, y = chartH - (v / maxValue) * chartH * 0.85f - chartH * 0.05f)
-                }
-
-                // Gradient fill
-                val fillPath = Path().apply {
-                    moveTo(pts.first().x, chartH)
-                    pts.forEach { lineTo(it.x, it.y) }
-                    lineTo(pts.last().x, chartH)
-                    close()
-                }
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(line.color.copy(alpha = 0.25f), line.color.copy(alpha = 0f)),
-                        startY = 0f, endY = chartH
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = bgColor,
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top,
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = null,
+                tint               = textColor,
+                modifier           = Modifier
+                    .size(13.dp)
+                    .padding(top = 1.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (rec.title.isNotBlank()) {
+                    Text(
+                        text  = rec.title,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = textColor,
                     )
+                }
+                Text(
+                    text  = rec.message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor.copy(alpha = .85f),
                 )
+            }
+        }
+    }
+}
 
-                // Line
-                val linePath = Path().apply {
-                    moveTo(pts.first().x, pts.first().y)
-                    // Smooth curve via cubic bezier
-                    for (i in 1 until pts.size) {
-                        val cp1x = pts[i - 1].x + stepX / 3f
-                        val cp1y = pts[i - 1].y
-                        val cp2x = pts[i].x - stepX / 3f
-                        val cp2y = pts[i].y
-                        cubicTo(cp1x, cp1y, cp2x, cp2y, pts[i].x, pts[i].y)
+// ---------------------------------------------------------------------------
+//  Extensions — shared with BudgetVsActualCard; move to FormatUtils.kt
+// ---------------------------------------------------------------------------
+
+// ─── Cash Flow Waterfall Card ─────────────────────────────────────────────────
+
+@Composable
+private fun CashFlowCard(
+    section: CashFlowWaterfallSection,
+    modifier: Modifier = Modifier,
+) {
+    val d   = section.data
+    val net = d.closingBalance - d.openingBalance
+
+    val allValues = listOf(d.openingBalance, d.income.total, d.expenses.total, d.savingsTransfers, d.closingBalance)
+    val maxVal    = allValues.maxOrNull()?.takeIf { it > 0 } ?: 1.0
+
+    var animated by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { animated = true }
+
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Cash Flow", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                Text("Waterfall", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+            }
+
+            // Waterfall bars
+            Row(
+                modifier              = Modifier.fillMaxWidth().height(90.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.Bottom,
+            ) {
+                val bars = listOf(
+                    Triple("Open",     d.openingBalance,   LightColors.Savings),
+                    Triple("+Income",  d.income.total,     LightColors.Income),
+                    Triple("-Expense", d.expenses.total,   LightColors.Expense),
+                    Triple("-Savings", d.savingsTransfers, Color(0xFF5856D6)),
+                    Triple("Close",    d.closingBalance,   LightColors.Savings),
+                )
+                bars.forEach { (label, value, color) ->
+                    val fraction = (value / maxVal).toFloat()
+                    val animFrac by animateFloatAsState(
+                        targetValue   = if (animated) fraction else 0f,
+                        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
+                        label         = "waterfall_$label",
+                    )
+                    Column(
+                        modifier            = Modifier.weight(1f).fillMaxHeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                    ) {
+                        Text(
+                            value.ugxShort(),
+                            style    = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp, fontWeight = FontWeight.SemiBold),
+                            color    = color,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height((90 * animFrac).dp.coerceAtLeast(if (value > 0) 4.dp else 0.dp))
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                .background(color)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp, fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
-                drawPath(linePath, color = line.color, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+            }
 
-                // Dots at endpoints
-                pts.forEach { pt ->
-                    drawCircle(color = line.color, radius = 3.5.dp.toPx(), center = pt)
-                    drawCircle(color = Color.White, radius = 1.5.dp.toPx(), center = pt)
+            // Net indicator
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    if (net >= 0) Icons.Default.NorthEast else Icons.Default.SouthEast,
+                    null,
+                    tint     = if (net >= 0) LightColors.Income else LightColors.Expense,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    if (net == 0.0) "No movement this period"
+                    else "Net ${if (net >= 0) "+" else ""}${net.ugxShort()} this period",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = if (net >= 0) LightColors.Income else LightColors.Expense,
+                )
+            }
+
+            // Income sources + expense categories summary
+            val incomeSources = d.income.sources
+            val expenseCats   = d.expenses.categories
+            if (!incomeSources.isNullOrEmpty() || !expenseCats.isNullOrEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    incomeSources?.let { sources ->
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("INCOME", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp), color = MaterialTheme.colorScheme.onSurface)
+                            sources.forEach { src ->
+                                CashFlowEntryChip(src, d.income.total, LightColors.Income)
+                            }
+                        }
+                    }
+                    expenseCats?.let { cats ->
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("EXPENSES", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp), color = MaterialTheme.colorScheme.onSurface)
+                            cats.forEach { cat ->
+                                CashFlowEntryChip(cat, d.expenses.total, LightColors.Expense)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CashFlowEntryChip(entry: CashFlowEntry, total: Double, color: Color) {
+    val fraction = if (total > 0) (entry.amount / total).toFloat().coerceIn(0f, 1f) else 0f
+    var barTarget by remember(entry.channel) { mutableStateOf(0f) }
+    LaunchedEffect(entry.channel) { barTarget = fraction }
+    val barW by animateFloatAsState(barTarget, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow), label = "cash_${entry.channel}")
+
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(entry.channel.replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Text(entry.amount.ugxShort(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = color)
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(color)) {
+            Box(Modifier.fillMaxWidth(barW).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(color))
+        }
+        entry.percent?.let {
+            Text("${it.toInt()}% of total", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+// ─── Anomalies Card ───────────────────────────────────────────────────────────
+
+
+// ---------------------------------------------------------------------------
+//  Colour helpers
+// ---------------------------------------------------------------------------
+
+private object AnomalyColors {
+    // Severity — new mapping: "high" | "medium" | "low"
+    val High   = Color(0xFFD85A30)   // expense red
+    val Medium = Color(0xFFE07B00)   // amber
+    val Low    = Color(0xFF378ADD)   // savings blue (informational)
+
+    fun severityColor(severity: String) = when (severity.lowercase()) {
+        "high", "critical" -> High      // accept both old and new strings
+        "medium", "warning" -> Medium
+        else                -> Low
+    }
+
+    fun severityLabel(severity: String) = when (severity.lowercase()) {
+        "high", "critical"  -> "High"
+        "medium", "warning" -> "Medium"
+        else                -> "Low"
+    }
+
+    // Sigma heat colour — the higher the sigma the redder the badge
+    fun sigmaColor(sigma: Double) = when {
+        sigma >= 10.0 -> High
+        sigma >= 5.0  -> Medium
+        else          -> Low
+    }
+
+    // Header pill
+    val CriticalBg   = Color(0xFFFFEBEE)
+    val CriticalText = Color(0xFFC62828)
+    val WarningBg    = Color(0xFFFFF3E0)
+    val WarningText  = Color(0xFFE65100)
+    val ClearBg      = Color(0xFFE8F5E9)
+    val ClearText    = Color(0xFF1B5E20)
+}
+
+// ---------------------------------------------------------------------------
+//  Top-level composable
+// ---------------------------------------------------------------------------
+
+@Composable
+fun AnomaliesCard(
+    section: AnomalySection,
+    modifier: Modifier = Modifier,
+) {
+    val d = section.data
+
+    // Decide overall severity for header accent
+    val headerColor = when {
+        d.criticalCount > 0 -> AnomalyColors.High
+        d.warningCount  > 0 -> AnomalyColors.Medium
+        else                -> AnomalyColors.Low
+    }
+
+    AnalyticsCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            // ── Header ────────────────────────────────────────────────────
+            AnomalyHeader(
+                data        = d,
+                headerColor = headerColor,
+                period      = section.metadata.period,
+            )
+
+            if (d.items.isEmpty()) {
+                // ── Empty state ───────────────────────────────────────────
+                AnomalyEmptyState()
+            } else {
+                // ── Item list ─────────────────────────────────────────────
+                d.items?.forEachIndexed { idx, item ->
+                    if (idx > 0) {
+                        HorizontalDivider(
+                            color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f),
+                            thickness = 0.5.dp,
+                        )
+                    }
+                    AnomalyItemRow(item = item)
                 }
             }
 
-            // Horizontal grid lines
-            val gridSteps = 3
-            repeat(gridSteps) { i ->
-                val y = chartH / gridSteps * i
-                drawLine(
-                    color = Color.Gray.copy(alpha = 0.10f),
-                    start = Offset(0f, y),
-                    end = Offset(size.width, y),
-                    strokeWidth = 1.dp.toPx()
+            // ── Recommendations ───────────────────────────────────────────
+            if (section.recommendations.isNotEmpty()) {
+                HorizontalDivider(
+                    color     = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f),
+                    thickness = 0.5.dp,
                 )
+                section.recommendations.forEach { rec ->
+                    AnomalyAlert(rec = rec)
+                }
             }
         }
+    }
+}
 
-        // Month labels
-        Row(
-            modifier = Modifier.fillMaxWidth().height(labelHeight),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            labels.forEach { label ->
+// ---------------------------------------------------------------------------
+//  Header
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AnomalyHeader(
+    data: AnomalyData,
+    headerColor: Color,
+    period: String,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text  = "Anomalies",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(headerColor, CircleShape)
+                )
                 Text(
-                    label,
+                    text  = if (data.anomaliesDetected == 0) "Nothing unusual"
+                    else "${data.anomaliesDetected} detected",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                    fontSize = 9.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
+                    color = headerColor,
+                )
+                Text(
+                    text  = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .30f),
+                )
+                Text(
+                    text  = period.toDisplayPeriod(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+                )
+            }
+        }
+
+        // Count pills — only render non-zero counts
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (data.criticalCount > 0) {
+                AnomalyCountPill(
+                    label = "${data.criticalCount} High",
+                    bg    = AnomalyColors.CriticalBg,
+                    text  = AnomalyColors.CriticalText,
+                )
+            }
+            if (data.warningCount > 0) {
+                AnomalyCountPill(
+                    label = "${data.warningCount} Med",
+                    bg    = AnomalyColors.WarningBg,
+                    text  = AnomalyColors.WarningText,
+                )
+            }
+            if (data.criticalCount == 0 && data.warningCount == 0) {
+                AnomalyCountPill(
+                    label = "Clear",
+                    bg    = AnomalyColors.ClearBg,
+                    text  = AnomalyColors.ClearText,
                 )
             }
         }
@@ -1046,257 +2390,392 @@ private fun GradientLineChart(
 }
 
 @Composable
-private fun LegendDot(label: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.size(8.dp).background(color, CircleShape))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-    }
-}
-
-@Composable
-private fun TrendPill(label: String, trend: String) {
-    val isUp = trend.lowercase().contains("up") || trend.lowercase().contains("increas")
-    val color = when {
-        label == "Income" && isUp -> IncomeGreen
-        label == "Expense" && !isUp -> IncomeGreen
-        else -> ExpenseRed
-    }
-    Surface(shape = RoundedCornerShape(20.dp), color = color.copy(alpha = 0.10f)) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = color, fontSize = 10.sp)
-            Text("·", color = color.copy(alpha = 0.5f), fontSize = 10.sp)
-            Text(trend, style = MaterialTheme.typography.labelSmall, color = color, fontSize = 10.sp)
-        }
-    }
-}
-
-// ─── Anomaly Cards ────────────────────────────────────────────────────────────
-
-@Composable
-private fun AnomalyHeaderCard(anomalies: AnomalyData, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = ExpenseRed.copy(alpha = 0.07f)),
-        elevation = CardDefaults.cardElevation(0.dp)
+private fun AnomalyCountPill(label: String, bg: Color, text: Color) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = bg,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Text(
+            text     = label,
+            style    = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize   = 10.sp,
+            ),
+            color    = text,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Item row — signature element: severity accent bar on the left
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AnomalyItemRow(item: AnomalyItem) {
+    val severityColor = AnomalyColors.severityColor(item.severity)
+    val sigmaColor    = AnomalyColors.sigmaColor(item.sigmaMultiple)
+
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment     = Alignment.Top,
+    ) {
+        // ── Severity accent bar (the signature visual move) ───────────────
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .width(3.dp)
+                .height(52.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(severityColor)
+        )
+
+        // ── Content ───────────────────────────────────────────────────────
+        Column(
+            modifier            = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Surface(shape = CircleShape, color = ExpenseRed.copy(alpha = 0.15f), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = ExpenseRed, modifier = Modifier.size(20.dp))
+            // Type + category
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text  = item.type.replace("_", " ").replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    // Severity chip
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = severityColor.copy(alpha = .12f),
+                    ) {
+                        Text(
+                            text     = AnomalyColors.severityLabel(item.severity),
+                            style    = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize   = 9.sp,
+                            ),
+                            color    = severityColor,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
+                    }
                 }
+                // Sigma badge — the "how weird is this" number
+                SigmaBadge(sigma = item.sigmaMultiple, color = sigmaColor)
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Unusual Spending Detected",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = ExpenseRed
-                )
-                Text(
-                    "${anomalies.criticalCount} critical ${if (anomalies.criticalCount == 1) "anomaly" else "anomalies"} found",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = ExpenseRed.copy(alpha = 0.75f)
-                )
-            }
+
+            // Category
+            Text(
+                text  = item.category,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+            )
+
+            // Amount vs normal range
+            AnomalyRangeRow(item = item, severityColor = severityColor)
         }
     }
 }
 
-// Placed as individual LazyColumn items — no nested scroll
 @Composable
-private fun AnomalyItemCard(item: AnomalyItem, modifier: Modifier = Modifier) {
-    val severityColor = when (item.severity.lowercase()) {
-        "high" -> ExpenseRed
-        "medium" -> Color(0xFFF39C12)
-        else -> TextSecondary
-    }
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
+private fun SigmaBadge(sigma: Double, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = color.copy(alpha = .10f),
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+            modifier              = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment     = Alignment.CenterVertically,
         ) {
-            // Severity indicator bar
+            Text(
+                text  = "σ",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize   = 9.sp,
+                ),
+                color = color,
+            )
+            Text(
+                text  = "${"%.1f".format(sigma)}×",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize   = 9.sp,
+                ),
+                color = color,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnomalyRangeRow(item: AnomalyItem, severityColor: Color) {
+    // Fraction of amount within the normal range (capped at 1f for the bar)
+    val rangeSpan = (item.normalMax - item.normalMin).coerceAtLeast(1.0)
+    val fraction  = ((item.amount - item.normalMin) / rangeSpan)
+        .toFloat()
+        .coerceAtLeast(0f)
+
+    // Animate bar fill
+    var barTarget by remember(item.amount) { mutableStateOf(0f) }
+    LaunchedEffect(item.amount) { barTarget = fraction.coerceAtMost(1f) }
+    val animBar by animateFloatAsState(
+        targetValue   = barTarget,
+        animationSpec = spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessMediumLow),
+        label         = "anomaly_bar_${item.category}",
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text  = "UGX ${item.amount.ugxShort()}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = severityColor,
+            )
+            Text(
+                text  = "normal ${item.normalMin.ugxShort()}–${item.normalMax.ugxShort()}",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f),
+            )
+        }
+
+        // Range bar — normal range is the track, amount marker shows where it fell
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(severityColor.copy(alpha = .10f))
+        ) {
+            // Normal range fill (full width = within normal)
             Box(
                 modifier = Modifier
-                    .width(3.dp)
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color(0xFF1D9E75).copy(alpha = .20f))
+            )
+            // Actual spend marker — extends to show how far past normal it went
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animBar.coerceAtMost(1f))
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
                     .background(severityColor)
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Text(
-                        item.category,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Surface(shape = RoundedCornerShape(4.dp), color = severityColor.copy(alpha = 0.15f)) {
-                        Text(
-                            item.severity.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = severityColor,
-                            fontSize = 9.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Amount: ${item.amount.ugx()} UGX",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Normal: ${item.normalMin.ugx()} – ${item.normalMax.ugx()} UGX",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                    fontSize = 11.sp
-                )
-                if (item.type == "spike") {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "⚡ ${item.sigmaMultiple.toInt()}× above normal",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = severityColor,
-                        fontSize = 10.sp
-                    )
-                }
-            }
         }
     }
 }
 
-// ─── Recommendations Carousel ─────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+//  Empty state
+// ---------------------------------------------------------------------------
 
 @Composable
-private fun RecommendationCard(rec: Recommendation) {
-    val bgColor = when (rec.severity.lowercase()) {
-        "warning" -> Color(0xFFFFF8E1)
-        "info" -> PesaMindTeal.copy(alpha = 0.06f)
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    }
-    val accentColor = when (rec.severity.lowercase()) {
-        "warning" -> Color(0xFFF39C12)
-        else -> PesaMindTeal
-    }
-    val icon = when (rec.type.lowercase()) {
-        "alert" -> Icons.Default.Warning
-        "achievement" -> Icons.Default.Star
-        else -> Icons.Default.Info
-    }
-
-    Card(
-        modifier = Modifier.width(220.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        elevation = CardDefaults.cardElevation(0.dp)
+private fun AnomalyEmptyState() {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment     = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = accentColor.copy(alpha = 0.15f),
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
-                    }
-                }
-                Text(
-                    rec.title,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                rec.message,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 11.sp
+        Icon(
+            imageVector        = Icons.Default.CheckCircle,
+            contentDescription = null,
+            tint               = AnomalyColors.Low,
+            modifier           = Modifier.size(14.dp),
+        )
+        Text(
+            text  = "No unusual activity this period",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Severity-aware recommendation alert — same pattern as ForecastAlert
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AnomalyAlert(rec: AnomalyRecommendation) {
+    val bgColor   = alertBg(rec.severity)
+    val textColor = alertText(rec.severity)
+    val icon      = alertIcon(rec.severity)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(8.dp),
+        color    = bgColor,
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top,
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = null,
+                tint               = textColor,
+                modifier           = Modifier
+                    .size(13.dp)
+                    .padding(top = 1.dp),
             )
-            if (rec.confidence > 0) {
-                Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (rec.title.isNotBlank()) {
+                    Text(
+                        text  = rec.title,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = textColor,
+                    )
+                }
                 Text(
-                    "${(rec.confidence * 100).toInt()}% confidence",
+                    text  = rec.message,
                     style = MaterialTheme.typography.labelSmall,
-                    color = accentColor,
-                    fontSize = 9.sp
+                    color = textColor.copy(alpha = .85f),
                 )
             }
         }
     }
 }
 
-// ─── Shared Card Shell ────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+//  Shared alert colour helpers (duplicate from ForecastAlert — move to
+//  a shared AlertColors.kt in your common module)
+// ---------------------------------------------------------------------------
+
+private fun alertBg(severity: String) = when (severity.lowercase()) {
+    "critical" -> Color(0xFFFFEBEE)
+    "warning"  -> Color(0xFFFFF8E1)
+    "success"  -> Color(0xFFE8F5E9)
+    else       -> Color(0xFFE3F2FD)
+}
+
+private fun alertText(severity: String) = when (severity.lowercase()) {
+    "critical" -> Color(0xFFC62828)
+    "warning"  -> Color(0xFFE65100)
+    "success"  -> Color(0xFF1B5E20)
+    else       -> Color(0xFF0D47A1)
+}
+
+private fun alertIcon(severity: String) = when (severity.lowercase()) {
+    "critical" -> Icons.Default.Cancel
+    "warning"  -> Icons.Default.Warning
+    "success"  -> Icons.Default.CheckCircle
+    else       -> Icons.Default.Info
+}
+
+// ---------------------------------------------------------------------------
+//  Extensions — move to shared FormatUtils.kt
+// ---------------------------------------------------------------------------
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
 
 @Composable
-private fun AnalyticsCard(
-    modifier: Modifier = Modifier,
-    title: String? = null,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            if (title != null) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.2).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(14.dp))
-            }
-            content()
-        }
+private fun HealthScorePill(score: Int) {
+    val color = when {
+        score >= 80 -> LightColors.Income
+        score >= 60 -> Color(0xFFFF9500)
+        else        -> LightColors.Expense
+    }
+    Surface(shape = RoundedCornerShape(50), color = color) {
+        Text(
+            "$score",
+            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+            color    = color,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+        )
     }
 }
 
-// ─── Shimmer Skeleton ─────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ShimmerCard(height: Int, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by transition.animateFloat(
-        0.25f, 0.65f,
+private fun AnalyticsSkeletonView() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        0.3f, 0.7f,
         infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "alpha"
+        label = "shimmer_alpha",
     )
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
-    ) {}
+
+    @Composable
+    fun SkeletonBlock(height: Dp, modifier: Modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = modifier
+                .height(height)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.onSurface,
+                            MaterialTheme.colorScheme.onSurface,
+                            MaterialTheme.colorScheme.onSurface,
+                        )
+                    )
+                )
+        )
+    }
+
+    Column(
+        modifier            = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        SkeletonBlock(height = 36.dp, modifier = Modifier.width(160.dp))
+        SkeletonBlock(height = 90.dp)
+        SkeletonBlock(height = 140.dp)
+        SkeletonBlock(height = 200.dp)
+        SkeletonBlock(height = 180.dp)
+        SkeletonBlock(height = 160.dp)
+    }
+}
+
+// ─── Error State ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun AnalyticsErrorView(message: String, onRetry: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier            = Modifier.padding(32.dp),
+        ) {
+            Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(52.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Couldn't load analytics", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+            }
+            Surface(shape = RoundedCornerShape(50), color = LightColors.Savings) {
+                TextButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Icon(Icons.Default.Refresh, null, tint = LightColors.Savings, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Try Again", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = LightColors.Savings)
+                }
+            }
+        }
+    }
+}
+
+// ─── Shared card shell ────────────────────────────────────────────────────────
+
+@Composable
+private fun AnalyticsCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier        = modifier.fillMaxWidth(),
+        shape           = RoundedCornerShape(16.dp),
+        color           = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp,
+        tonalElevation  = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) { content() }
+    }
 }

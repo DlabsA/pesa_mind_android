@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.core.network.models
 
 import com.google.gson.annotations.SerializedName
+import cc.dlabs.pesamind.core.network.analytics.Health
 
 data class RegisterRequest(
     val username: String = "",
@@ -283,4 +284,353 @@ data class BudgetVsActualResponse(
     val overallStatus: String = "on-track",
     @SerializedName("budget_vs_actual")
     val budgetVsActual: List<BudgetVsActualItem> = emptyList()
+)
+
+
+// ─── Top-level response ───────────────────────────────────────────────────────
+
+
+data class AnalyticResponse(
+    @SerializedName("summary") val summary: SummarySection,
+    @SerializedName("monthly_trends") val monthlyTrends: MonthlyTrendsSection,
+    @SerializedName("spending_velocity") val spendingVelocity: SpendingVelocitySection,
+    @SerializedName("budget_vs_actual") val budgetVsActual: BudgetVsActualSection,
+    @SerializedName("expense_forecast") val expenseForecast: ExpenseForecastSection,
+    @SerializedName("cash_flow_waterfall") val cashFlowWaterfall: CashFlowWaterfallSection,
+    @SerializedName("anomalies") val anomalies: AnomalySection,
+    @SerializedName("budget_utilization") val budgetUtilization: Double,
+)
+
+// ─── Summary ──────────────────────────────────────────────────────────────────
+
+data class SummarySection(
+    @SerializedName("data") val data: SummaryData,
+    @SerializedName("context") val context: SummaryContext,
+    @SerializedName("health") val health: Health,
+    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class SummaryData(
+    @SerializedName("total_income") val totalIncome: Double,
+    @SerializedName("total_expense") val totalExpense: Double,
+    @SerializedName("total_savings") val totalSavings: Double,
+    @SerializedName("net_movement") val netMovement: Double,
+    @SerializedName("transaction_count") val transactionCount: Int,
+    @SerializedName("active_categories") val activeCategories: Int,
+    @SerializedName("current_month") val currentMonth: String,
+)
+
+data class SummaryContext(
+    @SerializedName("total_income") val totalIncome: Double,
+    @SerializedName("total_expense") val totalExpense: Double,
+    @SerializedName("total_savings") val totalSavings: Double,
+    @SerializedName("net_movement") val netMovement: Double,
+    @SerializedName("transaction_count") val transactionCount: Int,
+    @SerializedName("active_categories") val activeCategories: Int,
+    @SerializedName("previous_month") val previousMonth: String,
+)
+
+// ─── Health (shared) ──────────────────────────────────────────────────────────
+
+data class Health(
+    @SerializedName("score") val score: Int,
+    @SerializedName("status") val status: String,
+    @SerializedName("trend") val trend: String,
+    @SerializedName("components") val components: Map<String, Any>? = null,
+)
+
+// ─── Monthly Trends ───────────────────────────────────────────────────────────
+
+data class MonthlyTrendsSection(
+    @SerializedName("data") val data: MonthlyTrendsData,
+    @SerializedName("health") val health: Health,
+    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class MonthlyTrendsData(
+    @SerializedName("months") val months: List<MonthEntry>,
+    @SerializedName("summary") val summary: MonthSummary,
+)
+
+data class MonthEntry(
+    @SerializedName("date") val date: String,
+    @SerializedName("income") val income: Double,
+    @SerializedName("expense") val expense: Double,
+    @SerializedName("savings") val savings: Double,
+    @SerializedName("net") val net: Double,
+    @SerializedName("transaction_count") val transactionCount: Int,
+) {
+    val shortLabel: String get() {
+        val parts = date.split("-")
+        if (parts.size < 2) return date
+        val m = parts[1].toIntOrNull() ?: return date
+        val names = listOf("Jan","Feb","Mar","Apr","May","Jun",
+            "Jul","Aug","Sep","Oct","Nov","Dec")
+        return if (m in 1..12) names[m - 1] else date
+    }
+}
+
+data class MonthSummary(
+    @SerializedName("avg_income") val avgIncome: Double,
+    @SerializedName("avg_expense") val avgExpense: Double,
+    @SerializedName("avg_savings") val avgSavings: Double,
+    @SerializedName("income_trend") val incomeTrend: String,
+    @SerializedName("expense_trend") val expenseTrend: String,
+    @SerializedName("savings_trend") val savingsTrend: String,
+    @SerializedName("highest_income_month") val highestIncomeMonth: String,
+    @SerializedName("highest_expense_month") val highestExpenseMonth: String,
+)
+
+// ─── Spending Velocity ────────────────────────────────────────────────────────
+
+data class SpendingVelocitySection(
+    @SerializedName("data") val data: SpendingVelocityData?,
+    @SerializedName("health") val health: Health,
+    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class SpendingVelocityData(
+    @SerializedName("period") val period: String,
+    @SerializedName("days_elapsed") val daysElapsed: Int,
+    @SerializedName("days_remaining") val daysRemaining: Int,
+    @SerializedName("total_spent") val totalSpent: Double,
+    @SerializedName("daily_average") val dailyAverage: Double,
+    @SerializedName("projected_month_end") val projectedMonthEnd: Double,
+    @SerializedName("budget_limit") val budgetLimit: Double,
+    @SerializedName("amount_remaining") val amountRemaining: Double,
+    @SerializedName("spending_pattern") val spendingPattern: String,
+    @SerializedName("alert_level") val alertLevel: String,
+    @SerializedName("days_until_budget_exhausted") val daysUntilBudgetExhausted: Double?,
+) {
+    val daysTotal: Int get() = daysElapsed + daysRemaining
+    val dayFraction: Float get() = if (daysTotal > 0) daysElapsed.toFloat() / daysTotal else 0f
+    val budgetUsedFraction: Float get() = if (budgetLimit > 0) (totalSpent / budgetLimit).toFloat().coerceIn(0f, 1f) else 0f
+}
+
+// ─── Budget vs Actual ─────────────────────────────────────────────────────────
+
+
+data class BvaExpenseComponent(
+    val actual: Double,
+    val budgeted: Double,
+    val variance: Double,
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+)
+
+data class BvaIncomeComponent(
+    val actual: Double,
+    val budgeted: Double,
+    val variance: Double,
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+)
+
+data class BvaSavingsComponent(
+    val actual: Double,
+    val budgeted: Double,
+    val variance: Double,
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+)
+
+data class BvaHealthComponents(
+    val expense: BvaExpenseComponent,
+    val income: BvaIncomeComponent,
+    val savings: BvaSavingsComponent,
+)
+
+data class BvaHealth(
+    val score: Int,
+    val status: String,   // "excellent" | "good" | "fair" | "poor"
+    val trend: String,    // "stable" | "improving" | "declining"
+    val components: BvaHealthComponents,
+)
+
+data class BvaData(
+    val period: String,           // "2026-06"
+    @SerializedName("budget_total")
+    val budgetTotal: Double,
+    @SerializedName("actual_total")
+    val actualTotal: Double,
+    val variance: Double,         // positive = under budget (saved), negative = over
+    @SerializedName("variance_percent")
+    val variancePercent: Double,
+    val status: String,           // "under_budget" | "on_budget" | "over_budget"
+)
+
+data class BvaMetadata(
+    val period: String,
+    @SerializedName("generated_at")
+    val generatedAt: String,
+    val currency: String,
+    val timezone: String,
+)
+
+/**
+ * The full budget_vs_actual block returned by the Django backend.
+ */
+data class BudgetVsActualSection(
+    val data: BvaData,
+    val metadata: BvaMetadata,
+    val health: BvaHealth,
+    val recommendations: List<String> = emptyList(),
+)
+
+data class BudgetVsActualData(
+    @SerializedName("period") val period: String,
+    @SerializedName("budget_total") val budgetTotal: Double,
+    @SerializedName("actual_total") val actualTotal: Double,
+    @SerializedName("variance") val variance: Double,
+    @SerializedName("variance_percent") val variancePercent: Double,
+    @SerializedName("status") val status: String,
+    @SerializedName("items") val items: List<BudgetLineItem>?,
+    @SerializedName("categories_on_track") val categoriesOnTrack: Int,
+    @SerializedName("categories_over_budget") val categoriesOverBudget: Int,
+) {
+    val usageFraction: Float get() = if (budgetTotal > 0) (actualTotal / budgetTotal).toFloat().coerceIn(0f, 1f) else 0f
+}
+
+data class BudgetLineItem(
+    @SerializedName("category") val category: String,
+    @SerializedName("budget") val budget: Double,
+    @SerializedName("actual") val actual: Double,
+    @SerializedName("variance") val variance: Double,
+    @SerializedName("variance_percent") val variancePercent: Double,
+    @SerializedName("transactions") val transactions: Int?,
+    @SerializedName("average_per_transaction") val averagePerTransaction: Double?,
+) {
+    val usageFraction: Float get() = if (budget > 0) (actual / budget).toFloat().coerceIn(0f, 1f) else 0f
+    val status: String get() = if (budget == 0.0 || actual > budget) "over_budget" else "on_budget"
+}
+
+// ─── Expense Forecast ─────────────────────────────────────────────────────────
+
+data class ForecastData(
+    val period: String,             // "2026-06"
+    @SerializedName("days_elapsed")
+    val daysElapsed: Int,           // 16
+    @SerializedName("days_remaining")
+    val dailyBurnRate: Double,      // 7250.0
+    @SerializedName("actual_spent")
+    val actualSpent: Double,        // 116000.0
+    @SerializedName("projected_total")
+    val projectedTotal: Double,     // 217500.0
+    @SerializedName("budget_limit")
+    val budgetLimit: Double,        // 200000.0
+    @SerializedName("amount_variance")
+    val projectedVariance: Double,  // 17500.0  (+ve = over, -ve = under)
+    @SerializedName("will_exceed_budget")
+    val willExceedBudget: Boolean,  // true
+    val confidence: Double,         // 0.0–1.0
+) {
+    /** Derived — no separate backend field needed */
+    val confidencePct: Int get() = (confidence * 100).toInt().coerceIn(0, 100)
+}
+
+data class ForecastRecommendation(
+    val type: String,       // "alert" | "tip" | ...
+    val title: String,
+    val message: String,
+    val confidence: Double, // 0.0–1.0
+    val severity: String,   // "warning" | "critical" | "info" | "success"
+)
+
+data class ForecastMetadata(
+    val period: String,
+    val generatedAt: String,
+    val currency: String,
+    val timezone: String,
+)
+
+data class ExpenseForecastSection(
+    val data: ForecastData,
+    val metadata: ForecastMetadata,
+    val recommendations: List<ForecastRecommendation> = emptyList(),
+)
+
+
+// ─── Cash Flow Waterfall ──────────────────────────────────────────────────────
+
+data class CashFlowWaterfallSection(
+    @SerializedName("data") val data: CashFlowData,
+    @SerializedName("recommendations") val recommendations: List<AnalyticsRecommendation>,
+)
+
+data class CashFlowData(
+    @SerializedName("opening_balance") val openingBalance: Double,
+    @SerializedName("income") val income: CashFlowSide,
+    @SerializedName("expenses") val expenses: CashFlowSide,
+    @SerializedName("savings_transfers") val savingsTransfers: Double,
+    @SerializedName("closing_balance") val closingBalance: Double,
+)
+
+data class CashFlowSide(
+    @SerializedName("total") val total: Double,
+    @SerializedName("sources") val sources: List<CashFlowEntry>? = null,
+    @SerializedName("categories") val categories: List<CashFlowEntry>? = null,
+)
+
+data class CashFlowEntry(
+    @SerializedName("channel") val channel: String,
+    @SerializedName("amount") val amount: Double,
+    @SerializedName("percent") val percent: Double?,
+    @SerializedName("transaction_count") val transactionCount: Int?,
+)
+
+// ─── Anomalies ────────────────────────────────────────────────────────────────
+
+
+// Note: AnomalyData should be defined elsewhere (likely already exists)
+// ─── Shared ───────────────────────────────────────────────────────────────────
+
+data class AnalyticsRecommendation(
+    @SerializedName("type") val type: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("message") val message: String,
+    @SerializedName("confidence") val confidence: Double,
+    @SerializedName("severity") val severity: String,
+)
+//Also update the AnomalyData class (if not already defined):
+//    kotlin
+data class AnomalyData(
+    @SerializedName("anomalies_detected") val anomaliesDetected: Int,
+    @SerializedName("items") val items: List<AnomalyItem>,
+    @SerializedName("critical_count") val criticalCount: Int,
+    @SerializedName("warning_count") val warningCount: Int,
+)
+
+data class AnomalyItem(
+    @SerializedName("transaction_id") val transactionId: String,
+    @SerializedName("type") val type: String,
+    @SerializedName("category") val category: String,
+    @SerializedName("amount") val amount: Double,
+    @SerializedName("normal_min") val normalMin: Double,
+    @SerializedName("normal_max") val normalMax: Double,
+    @SerializedName("severity") val severity: String,
+    @SerializedName("sigma_multiple") val sigmaMultiple: Double,
+    @SerializedName("detected_at") val detectedAt: String,
+)
+
+
+
+data class AnomalyMetadata(
+    val period: String,
+    val generatedAt: String,
+    val currency: String,
+    val timezone: String,
+)
+
+data class AnomalyRecommendation(
+    val type: String,
+    val title: String,
+    val message: String,
+    val confidence: Double,
+    val severity: String,
+)
+
+data class AnomalySection(
+    val data: AnomalyData,
+    val metadata: AnomalyMetadata,
+    val recommendations: List<AnomalyRecommendation> = emptyList(),
 )

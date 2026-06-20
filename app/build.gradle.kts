@@ -13,9 +13,8 @@ android {
     defaultConfig {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
-        targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,6 +38,13 @@ android {
     buildFeatures {
         viewBinding = true
         compose = true
+    }
+    sourceSets {
+        getByName("main") {
+            assets {
+                srcDirs("src/main/assets")
+            }
+        }
     }
 }
 
@@ -70,6 +76,7 @@ dependencies {
     implementation(libs.foundation)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.foundation.foundation)
+    implementation(libs.androidx.compose.ui.graphics)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

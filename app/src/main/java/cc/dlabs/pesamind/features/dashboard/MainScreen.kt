@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import cc.dlabs.pesamind.core.navigation.Routes
-import cc.dlabs.pesamind.core.theme.PesaMindTeal
+import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.features.analytics.AnalyticsScreen
 import cc.dlabs.pesamind.features.tools.BudgetScreen
 import cc.dlabs.pesamind.features.settings.SettingsScreen
@@ -49,7 +49,7 @@ fun MainScreen(rootNav: NavHostController) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { rootNav.navigate(Routes.AddTransaction.route) },
-                containerColor = PesaMindTeal
+                containerColor = MaterialTheme.colorScheme.tertiary
             ) { Icon(Icons.Filled.Add, contentDescription = "Add") }
         },
         floatingActionButtonPosition = FabPosition.Center,

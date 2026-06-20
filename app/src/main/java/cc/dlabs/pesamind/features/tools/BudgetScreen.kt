@@ -31,19 +31,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Analytics
-import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.WbSunny
@@ -53,13 +43,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -70,17 +55,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +82,7 @@ import cc.dlabs.pesamind.core.theme.PesaMindGreen
 import cc.dlabs.pesamind.core.theme.PesaMindNavy
 import cc.dlabs.pesamind.core.theme.PesaMindTeal
 import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.features.analytics.AnalyticsUiState
 import coil3.compose.AsyncImage
 import okhttp3.Route
 import java.text.NumberFormat
@@ -168,10 +149,12 @@ fun BudgetScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            DashboardHeader(
-                state = state,
-                onBack = { navController.popBackStack() },
-                initial = initial
+            BudgetHeader(
+                state     = state,
+                viewModel = vm,
+                modifier  = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp),
             )
         }
     ) { padding ->
@@ -187,7 +170,6 @@ fun BudgetScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
             ) {
-
                 // ── Body content
                 Column(
                     modifier = Modifier
@@ -217,7 +199,7 @@ fun BudgetScreen(
                         nextMonth = state.nextMonthIndex,
                         nextYear = state.nextMonthYear,
                         hasExisting = state.hasNextMonthBudget,
-                        onSetBudget = {navController.navigate(Routes.SetMonthlyBudget.createRoute(currentMonth, currentYear))}
+                        onSetBudget = {navController.navigate(Routes.SetMonthlyBudget.createRoute(nextMonth, currentYear))}
                     )
 
                     // Current monthly budget
@@ -239,92 +221,54 @@ fun BudgetScreen(
 }
 
 // ─── Dashboard Header ─────────────────────────────────────────────────────────
-
 @Composable
-public fun DashboardHeader(
-    state: DashboardUiState,
-    onBack: () -> Unit,
-    initial: String = "U"
+private fun BudgetHeader(
+    state:    DashboardUiState,
+    viewModel: BudgetViewModel,
+    modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(PesaMindTeal, PesaMindTeal.copy(alpha = 0.75f))
-                )
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text  = state.greetingText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             )
-    ) {
-        // Greeting + avatar row centered lower in the hero
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Avatar
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = PesaMindTeal.copy(alpha = 0.15f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = initial,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.75f)
-                    )
-                }
-            }
-
-            Column {
-                val now = Calendar.getInstance()
-                val hour = now.get(Calendar.HOUR_OF_DAY)
-                val greeting = when {
-                    hour < 12 -> "Good morning"
-                    hour < 17 -> "Good afternoon"
-                    else      -> "Good evening"
-                }
+            Text(
+                text          = "Budgets",
+                style         = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color         = MaterialTheme.colorScheme.onBackground,
+                letterSpacing = (-0.5).sp,
+            )
+            Text(
+                text  = state.currentPeriodLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+        when {
+            state.isRefreshing -> CircularProgressIndicator(
+                modifier    = Modifier.size(22.dp),
+                color       = MaterialTheme.colorScheme.secondary,
+                strokeWidth = 2.dp,
+            )
+            state.isOffline -> Icon(
+                Icons.Default.WifiOff,
+                contentDescription = "Offline",
+                tint               = MaterialTheme.colorScheme.error,
+                modifier           = Modifier.size(20.dp),
+            )
+            else -> Surface(shape = RoundedCornerShape(70), color = MaterialTheme.colorScheme.surface) {
                 Text(
-                    text = greeting,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.75f)
+                    text     = state.currentPeriodLabel,
+                    style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
-                if (state.userDisplayName.isNotBlank()) {
-                    Text(
-                        text = state.userDisplayName,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.3).sp
-                        ),
-                        color = Color.White
-                    )
-                }
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            // Cache indicator pill
-            if (state.isFromCache) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "Cached",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
             }
         }
     }
 }
-
 
 // ─── Yearly Budget Card ───────────────────────────────────────────────────────
 

@@ -1,14 +1,15 @@
 package cc.dlabs.pesamind.core.network
 import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
-import cc.dlabs.pesamind.core.network.analytics.AnomaliesResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.CashFlowWaterfallResponse
-import cc.dlabs.pesamind.core.network.analytics.ExpenseForecastResponse
+import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
 import cc.dlabs.pesamind.core.network.analytics.FinancialHealthResponse
 import cc.dlabs.pesamind.core.network.analytics.Health
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
+import cc.dlabs.pesamind.core.network.models.AnalyticResponse
+import cc.dlabs.pesamind.core.network.models.AnomalySection
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -33,6 +34,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.ExpenseForecastSection
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
@@ -163,7 +165,7 @@ interface ApiService {
     suspend fun getMonthlyTrends(): Response<MonthlyTrendsResponse>
 
     @GET("analytics/expense-forecast")
-    suspend fun getExpenseForecast(): Response<ExpenseForecastResponse>
+    suspend fun getExpenseForecast(): Response<ExpenseForecastSection>
 
     @GET("analytics/cash-flow-waterfall")
     suspend fun getCashFlowWaterfall(
@@ -178,8 +180,15 @@ interface ApiService {
     ): Response<BudgetVsActualResponse>
 
     @GET("analytics/anomalies")
-    suspend fun getAnomalies(): Response<AnomaliesResponse>
+    suspend fun getAnomalies(): Response<AnomalySection>
 
     @GET("analytics/financial-health")
     suspend fun getFinancialHealth(): Response<FinancialHealthResponse>
+
+    @GET("data/dashboard")
+    suspend fun getDashboard(
+    ): Response<DashboardResponse>
+    @GET("data/analytics")
+    suspend fun getAnalytics(
+    ): Response<AnalyticResponse>
 }

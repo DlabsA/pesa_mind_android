@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.features.settings.channels.ChannelDescMobileMoney
 import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
 import cc.dlabs.pesamind.features.settings.notifications.MessageSender
 import com.google.gson.Gson
@@ -136,16 +137,23 @@ object ChannelManager {
     suspend fun isSmsAllowedForSender(receivingSimNumber: String, simInfo: Int, senderID: String): ChannelInfo? {
         if (!isInitialized()) return null
 
+        val channelTypeMatched = when (senderID) {
+            MessageSender.MTNMobMoney -> ChannelTypes.MOBILE_MONEY
+            MessageSender.airtelmoney -> ChannelTypes.MOBILE_MONEY
+            MessageSender.stanbicbank -> ChannelTypes.BANK
+            else -> null // Return null if no match
+        }
+
+
         // Get existing channels (cached)
         val channels = getChannels()
         val matchingChannel = channels.find {
-            it.channelType != "CASH" &&
-                    it.description.equals(receivingSimNumber, ignoreCase = true)
+            it.channelType == channelTypeMatched
         }
 
         // If found, return it
         if (matchingChannel != null) {
-            return ChannelInfo(matchingChannel, matchingChannel.smsNotificationEnabled)
+            return ChannelInfo(matchingChannel, true)
         }
 
         // Otherwise, create a new channel
@@ -169,6 +177,7 @@ object ChannelManager {
                     // Refresh local cache
                     val updatedChannels = channels + it
                     saveChannels(updatedChannels)
+                    return ChannelInfo(it, true)
                 }
             } else {
                 Log.e("ChannelManager", "Error creating channel for sender $senderID: ${response.errorBody()?.string()}")

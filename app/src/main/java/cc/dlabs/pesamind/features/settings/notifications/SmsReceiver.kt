@@ -23,6 +23,7 @@ class SmsReceiver : BroadcastReceiver() {
         private val scope = CoroutineScope(Dispatchers.IO) // ✅ Single reusable scope
     }
 
+    @SuppressLint("MissingPermission")
     override fun onReceive(context: Context?, intent: Intent?) {
         if (intent?.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         if (context == null) return

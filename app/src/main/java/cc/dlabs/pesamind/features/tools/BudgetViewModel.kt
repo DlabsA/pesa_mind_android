@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.tools
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient.api
@@ -40,9 +41,11 @@ data class DashboardUiState(
     // UX
     val error: String? = null,
     val isDarkMode: Boolean = false,
+    val isOffline: Boolean = false,
 
     // Computed from data
-    val isFromCache: Boolean = false
+    val isFromCache: Boolean = false,
+    val lastUpdated: Long? = null,
 ) {
     /** Net balance = income - expenditure for the current monthly budget */
     val monthlyBalance: Long
@@ -57,11 +60,36 @@ data class DashboardUiState(
     val hasNextMonthBudget: Boolean get() = nextMonthBudget != null
 
     val isLoading: Boolean get() = isLoadingYearly || isLoadingMonthly
+
+    // ── New computed properties ────────────────────────────────────────────
+
+    val greetingText: String
+        get() {
+            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            return when (hour) {
+                in 0..11  -> "Good morning"
+                in 12..16 -> "Good afternoon"
+                else      -> "Good evening"
+            }
+        }
+
+    val currentPeriodLabel: String
+        get() {
+            val monthNames = listOf(
+                "January","February","March","April","May","June",
+                "July","August","September","October","November","December"
+            )
+            return "${monthNames[displayMonth - 1]} $displayYear"
+        }
 }
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
 class BudgetViewModel : ViewModel() {
+
+    companion object {
+        private const val TAG = "BudgetViewModel"
+    }
 
     private val _state = MutableStateFlow(DashboardUiState())
     val state: StateFlow<DashboardUiState> = _state.asStateFlow()
@@ -168,24 +196,48 @@ class BudgetViewModel : ViewModel() {
     private suspend fun fetchYearlyBudget(year: Int) {
         try {
             val response = api.getYearlyBudgets()
-            if (response.isSuccessful) {
-                val match = response.body()?.find { it.year == year.toLong() }
-                BudgetManager.saveYearlyBudgets(response.body() ?: emptyList())
-                _state.update {
-                    it.copy(
-                        yearlyBudget = match,
-                        isLoadingYearly = false,
-                        isFromCache = false
-                    )
+            when {
+                response.isSuccessful -> {
+                    val match = response.body()?.find { it.year == year.toLong() }
+                    BudgetManager.saveYearlyBudgets(response.body() ?: emptyList())
+                    _state.update {
+                        it.copy(
+                            yearlyBudget = match,
+                            isLoadingYearly = false,
+                            isFromCache = false,
+                            isOffline = false
+                        )
+                    }
                 }
-            } else {
-                _state.update { it.copy(isLoadingYearly = false) }
+                response.code() == 404 -> {
+                    // Resource doesn't exist - not an error, just no data yet
+                    Log.d(TAG, "No yearly budget available for year $year (404)")
+                    _state.update {
+                        it.copy(
+                            yearlyBudget = null,
+                            isLoadingYearly = false,
+                            isOffline = false
+                            // Don't set error - this is normal
+                        )
+                    }
+                }
+                else -> {
+                    // Other HTTP errors (401 is handled by TokenRefreshInterceptor)
+                    _state.update {
+                        it.copy(
+                            isLoadingYearly = false,
+                            error = "Failed to load yearly budget (${response.code()})",
+                            isOffline = false
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             _state.update {
                 it.copy(
                     isLoadingYearly = false,
-                    error = "Could not load yearly budget"
+                    error = "Could not load yearly budget: ${e.message}",
+                    isOffline = true
                 )
             }
         }
@@ -198,35 +250,63 @@ class BudgetViewModel : ViewModel() {
     ) {
         try {
             val response = api.getMonthlyBudgetByMonthYear(month, year)
-            if (response.isSuccessful) {
-                val budget = response.body()
-                if (budget != null) {
-                    BudgetManager.saveCurrentMonthlyBudget(budget)
+            when {
+                response.isSuccessful -> {
+                    val budget = response.body()
+                    if (budget != null) {
+                        BudgetManager.saveCurrentMonthlyBudget(budget)
+                        _state.update {
+                            if (isNext) it.copy(nextMonthBudget = budget, isLoadingMonthly = false, isOffline = false)
+                            else it.copy(
+                                currentMonthlyBudget = budget,
+                                isLoadingMonthly = false,
+                                isFromCache = false,
+                                isOffline = false
+                            )
+                        }
+                    } else {
+                        _state.update { it.copy(isLoadingMonthly = false, isOffline = false) }
+                    }
+                }
+                response.code() == 404 -> {
+                    // Budget doesn't exist yet - not an error, normal state
+                    Log.d(TAG, "No budget available for $month/$year (404)")
                     _state.update {
-                        if (isNext) it.copy(nextMonthBudget = budget, isLoadingMonthly = false)
-                        else it.copy(
-                            currentMonthlyBudget = budget,
+                        if (isNext) {
+                            it.copy(nextMonthBudget = null, isLoadingMonthly = false, isOffline = false)
+                        } else {
+                            it.copy(
+                                currentMonthlyBudget = null,
+                                isLoadingMonthly = false,
+                                isOffline = false
+                                // Don't set error - this is normal
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    // Other HTTP errors (401 is handled by TokenRefreshInterceptor)
+                    _state.update {
+                        it.copy(
                             isLoadingMonthly = false,
-                            isFromCache = false
+                            error = if (!isNext) "Failed to load monthly budget (${response.code()})" else it.error,
+                            isOffline = false
                         )
                     }
-                } else {
-                    _state.update { it.copy(isLoadingMonthly = false) }
                 }
-            } else {
-                _state.update { it.copy(isLoadingMonthly = false) }
             }
         } catch (e: Exception) {
             _state.update {
                 it.copy(
                     isLoadingMonthly = false,
-                    error = if (!isNext) "Could not load monthly budget" else it.error
+                    error = if (!isNext) "Could not load monthly budget: ${e.message}" else it.error,
+                    isOffline = true
                 )
             }
         }
     }
 
-    // ── Error handling ────────────────────────────────────────────────────────
+     // ── Error handling ────────────────────────────────────────────────────────
 
-    fun clearError() = _state.update { it.copy(error = null) }
+     fun clearError() = _state.update { it.copy(error = null) }
 }

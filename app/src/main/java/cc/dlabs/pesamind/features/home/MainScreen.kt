@@ -8,13 +8,12 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import cc.dlabs.pesamind.core.navigation.Routes
-import cc.dlabs.pesamind.core.theme.PesaMindTeal
+import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.features.analytics.AnalyticsScreen
 import cc.dlabs.pesamind.features.tools.BudgetScreen
 import cc.dlabs.pesamind.features.dashboard.DashboardScreen
@@ -38,7 +37,10 @@ fun MainScreen(rootNav: NavHostController) {
 
     Scaffold(
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+//                tonalElevation = 8.dp
+            ) {
                 val currentEntry by navController.currentBackStackEntryAsState()
                 val current = currentEntry?.destination?.route
                 items.forEach { item ->
@@ -56,9 +58,11 @@ fun MainScreen(rootNav: NavHostController) {
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF1A9E8F),
-                            selectedTextColor = Color(0xFF1A9E8F),
-                            indicatorColor = Color(0xFF1A9E8F).copy(alpha = 0.1f)
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
                 }
@@ -67,12 +71,12 @@ fun MainScreen(rootNav: NavHostController) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { rootNav.navigate(Routes.AddTransaction.route) },
-                containerColor = PesaMindTeal,
+                containerColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size((Spacing.Space12 + 4).dp)
                     .offset(y = (-18).dp)
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add", tint = Color.White)
+                Icon(Icons.Filled.Add, contentDescription = "Add transaction", tint = MaterialTheme.colorScheme.onPrimary)
             }
         },
         floatingActionButtonPosition = FabPosition.Center

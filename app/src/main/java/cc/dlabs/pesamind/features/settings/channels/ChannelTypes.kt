@@ -13,7 +13,7 @@ object ChannelTypes {
 }
 
 object ChannelDescMobileMoney {
-    const val AIRTELMONEY = "AirtelMoney"
+    const val AIRTELMONEY = "Airtel Money"
     const val MTNMOBILEMONEY = "MTN Mobile Money"
 
     val valid = listOf(AIRTELMONEY, MTNMOBILEMONEY)
@@ -25,8 +25,8 @@ object ChannelDescMobileMoney {
 
 object ChannelDescBank {
     const val DFCU = "DFCU"
-    const val EQUITYBANK = "EquityBank"
-    const val STANBICBANK = "StanbicBank"
+    const val EQUITYBANK = "Equity Bank"
+    const val STANBICBANK = "Stanbic Bank"
 
     val valid = listOf(DFCU, EQUITYBANK, STANBICBANK)
 

@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.features.settings.notifications
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -46,6 +48,7 @@ class SMSMessageProcessor(
 
     // ── Public entry point ────────────────────────────────────────────────────
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     suspend fun processMessage(
         senderId: String,
         content: String,
@@ -102,7 +105,20 @@ class SMSMessageProcessor(
             NotificationStorage.savePendingMessage(Gson().toJson(smsMessage))
 
             // Pass the parsed values so the notification can show a rich summary
-            showLocalNotification(smsMessage, amount, txType)
+            // Check POST_NOTIFICATIONS permission before calling showLocalNotification
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    showLocalNotificationSafe(smsMessage, amount, txType)
+                } else {
+                    Log.w(TAG, "POST_NOTIFICATIONS permission not granted — skipping notification")
+                }
+            } else {
+                // On Android < 13, POST_NOTIFICATIONS is not required
+                showLocalNotificationSafe(smsMessage, amount, txType)
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing message: ${e.message}", e)
@@ -110,6 +126,17 @@ class SMSMessageProcessor(
     }
 
     // ── Notification implementation ───────────────────────────────────────────
+
+    /**
+     * Wrapper for showLocalNotification that suppresses the lint warning.
+     * This should only be called after verifying POST_NOTIFICATIONS permission.
+     */
+    @SuppressLint("MissingPermission")
+    private fun showLocalNotificationSafe(
+        message: SMSMessage,
+        amount: Double,
+        txType: String
+    ) = showLocalNotification(message, amount, txType)
 
     /**
      * Shows a rich Android notification for the processed transaction.
@@ -124,6 +151,7 @@ class SMSMessageProcessor(
      * - Tapping the notification deep-links to the main Activity; swap the
      *   Intent target for a dedicated TransactionDetailActivity if you add one.
      */
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private fun showLocalNotification(
         message: SMSMessage,
         amount: Double,
@@ -197,7 +225,6 @@ class SMSMessageProcessor(
      * an already-existing channel with the same ID.
      */
     private fun ensureNotificationChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
                 as NotificationManager
