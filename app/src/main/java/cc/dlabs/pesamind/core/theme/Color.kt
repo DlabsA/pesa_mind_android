@@ -124,6 +124,8 @@ object Spacing {
     const val Space8 = 32
     const val Space10 = 40
     const val Space12 = 48
+
+    const val space20 = 80
 }
 
 // ============================================================================
