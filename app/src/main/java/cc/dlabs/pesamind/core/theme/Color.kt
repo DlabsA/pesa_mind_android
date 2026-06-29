@@ -27,7 +27,7 @@ object BrandColors {
 object LightColors {
     // Surfaces
     val Background = Color(0xFFF8F9F0)
-    val Surface = Color(0xFFFFFFFF)
+    val Surface = Color(0xFFF8F9F0)
     val SurfaceRaised = Color(0xFFF0F4F2)
 
     // Borders
@@ -37,7 +37,7 @@ object LightColors {
     // Primary (Forest Green in light mode)
     val Primary = Color(0xFF003934)
     val PrimaryHover = Color(0xFF004D45)
-    val PrimaryForeground = Color(0xFFFFFFFF)
+    val PrimaryForeground = Color(0xFFF8F9F0)
 
     // Accent (Lime in light mode)
     val Accent = Color(0xFF9FE870)
