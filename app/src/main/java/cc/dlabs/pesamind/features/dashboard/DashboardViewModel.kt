@@ -179,25 +179,25 @@ class DashboardViewModel @Inject constructor(
     val streakCount: Int
         get() = _state.value.dashboard?.streak?.currentStreak ?: 0
 
-    val streakEmoji: String
+    val streakDrawable: Int?
         get() {
-            if (streakCount == 0) return ""
+            if (streakCount == 0) return null
             
             // Check if last active date is today
-            val streak = _state.value.dashboard?.streak ?: return ""
+            val streak = _state.value.dashboard?.streak ?: return null
             val isActiveToday = try {
                 val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val lastActiveDate = sdf.parse(streak.lastActiveDate)
+                val lastActiveDate = sdf.parse(streak.lastActiveDate) ?: return null
                 val today = Calendar.getInstance().time
                 val lastActiveCal = Calendar.getInstance().apply { time = lastActiveDate }
                 val todayCal = Calendar.getInstance().apply { time = today }
                 lastActiveCal.get(Calendar.YEAR) == todayCal.get(Calendar.YEAR) &&
                 lastActiveCal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
             
-            return if (isActiveToday) "🔥" else "🔲"
+            return if (isActiveToday) cc.dlabs.pesamind.R.drawable.active_streak else cc.dlabs.pesamind.R.drawable.inactive_streak
         }
 
     val streakLabel: String

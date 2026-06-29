@@ -23,6 +23,7 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.analytics.*
@@ -256,34 +257,10 @@ private fun DashboardHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Streak badge
-            if (viewModel.streakCount > 0) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = viewModel.streakEmoji,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        Text(
-                            text = viewModel.streakLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-
             // Status indicator (refresh, offline, or period)
             when {
                 state.isRefreshing -> CircularProgressIndicator(
-                    modifier    = Modifier.size(22.dp),
+                    modifier    = Modifier.size(24.dp),
                     color       = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp,
                 )
@@ -291,9 +268,34 @@ private fun DashboardHeader(
                     Icons.Default.WifiOff,
                     contentDescription = "Offline",
                     tint               = MaterialTheme.colorScheme.error,
-                    modifier           = Modifier.size(20.dp),
+                    modifier           = Modifier.size(24.dp),
                 )
+                else -> viewModel.streakDrawable?.let { drawableRes ->
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(id = drawableRes),
+                                contentDescription = "Streak",
+                                modifier = Modifier.size(24.dp),
+                                tint = Color.Unspecified,
+                            )
+                            Text(
+                                text = viewModel.streakLabel,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
             }
+
         }
     }
 }
