@@ -1,7 +1,9 @@
 package cc.dlabs.pesamind.features.analytics
 
-import androidx.lifecycle.ViewModel
+import android.util.Log
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.StateEvent
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.AnalyticResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,10 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Locale
 import javax.inject.Inject
 
 // ─── Phase ────────────────────────────────────────────────────────────────────
@@ -35,13 +34,52 @@ data class AnalyticsUiState(
     val lastUpdated:  Long?              = null,   // epoch millis
 )
 
-// ─── ViewModel ────────────────────────────────────────────────────────────────
+// ─── ViewModel ────────────────────────────────────────────────────────────
 
 @HiltViewModel
-class AnalyticsViewModel @Inject constructor() : ViewModel() {
+class AnalyticsViewModel @Inject constructor() : UnifiedViewModel() {
 
     private val _state = MutableStateFlow(AnalyticsUiState())
     val state: StateFlow<AnalyticsUiState> = _state.asStateFlow()
+
+    override fun onStateEvent(event: StateEvent) {
+        when (event) {
+            // Auto-refresh when transactions are created
+            is StateEvent.TransactionCreated -> {
+                viewModelScope.launch {
+                    try {
+                        refresh()
+                        publishEvent(StateEvent.AnalyticsRefreshed)
+                    } catch (e: Exception) {
+                        Log.e("AnalyticsViewModel", "❌ Analytics refresh failed", e)
+                    }
+                }
+            }
+            
+            // Auto-refresh when channels change
+            is StateEvent.ChannelCreated,
+            is StateEvent.ChannelUpdated,
+            is StateEvent.ChannelDeleted -> {
+                viewModelScope.launch {
+                    try {
+                        refresh()
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            
+            // Respond to logout
+            is StateEvent.UserLoggedOut -> {
+                _state.value = _state.value.copy(
+                    analytics = null,
+                    phase = AnalyticsPhase.Idle
+                )
+            }
+            
+            else -> {
+            }
+        }
+    }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -54,11 +92,17 @@ class AnalyticsViewModel @Inject constructor() : ViewModel() {
     }
 
     fun refresh() {
-        if (_state.value.isRefreshing) return
+        if (_state.value.isRefreshing) {
+            return
+        }
         viewModelScope.launch {
-            _state.value = _state.value.copy(isRefreshing = true)
-            fetchFromNetwork()
-            _state.value = _state.value.copy(isRefreshing = false)
+            try {
+                _state.value = _state.value.copy(isRefreshing = true)
+                fetchFromNetwork()
+            } catch (e: Exception) {
+            } finally {
+                _state.value = _state.value.copy(isRefreshing = false)
+            }
         }
     }
 

@@ -1,7 +1,9 @@
 package cc.dlabs.pesamind.core.utils
 
-import androidx.lifecycle.ViewModel
+import android.util.Log
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.StateEvent
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
@@ -20,12 +22,25 @@ data class TransactionState(
 )
 
 
-class TransactionViewModel : ViewModel() {
+class TransactionViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(TransactionState(isLoading = true))
     val state: StateFlow<TransactionState> = _state.asStateFlow()
 
     init {
         loadTransactions()
+    }
+
+    override fun onStateEvent(event: StateEvent) {
+        when (event) {
+            is StateEvent.UserLoggedOut -> {
+                _state.value = _state.value.copy(
+                    transactions = emptyList(),
+                    error = null,
+                    isLoading = false
+                )
+            }
+            else -> {}
+        }
     }
 
     /**
@@ -110,7 +125,15 @@ class TransactionViewModel : ViewModel() {
                         message = "Transaction created successfully",
                         transactions = if (created != null) _state.value.transactions + created else _state.value.transactions
                     )
+                    // 🔥 Publish event so Dashboard and Analytics refresh automatically
+                    Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
+                    publishEvent(StateEvent.TransactionCreated(
+                        transactionId = created?.id ?: "",
+                        amount = amount,
+                        channelId = channelID
+                    ))
                 } else {
+                    Log.e("TransactionViewModel", "❌ Failed to create transaction: ${response.code()}")
                     _state.value = _state.value.copy(
                         isSaving = false,
                         error = "Failed to create transaction (${response.code()})"
@@ -118,11 +141,19 @@ class TransactionViewModel : ViewModel() {
                 }
             }
             catch (e: Exception) {
+                Log.e("TransactionViewModel", "❌ Exception during transaction creation", e)
                 _state.value = _state.value.copy(
                     isSaving = false,
                     error = "Cannot reach server: ${e.message ?: "Unknown error"}"
                 )
             }
         }
+    }
+
+    /**
+     * Clear error and message states (called when user navigates away)
+     */
+    fun clearMessages() {
+        _state.value = _state.value.copy(error = null, message = null)
     }
 }

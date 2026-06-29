@@ -75,11 +75,17 @@ fun AddTransactionScreen(
     // ── React to ViewModel state changes ──────────────────────────────────────
     LaunchedEffect(state.message) {
         if (!state.message.isNullOrBlank()) {
+            // 🔥 Navigate back IMMEDIATELY - don't wait for snackbar
+            navController.popBackStack()
+            
+            // Show snackbar in background (non-blocking)
             snackbarHostState.showSnackbar(
                 message = state.message!!,
                 duration = SnackbarDuration.Short
             )
-            navController.popBackStack()
+            
+            // Clear message after showing (so it doesn't appear on next transaction)
+            viewModel.clearMessages()
         }
     }
 
@@ -90,6 +96,11 @@ fun AddTransactionScreen(
                 duration = SnackbarDuration.Short
             )
         }
+    }
+    
+    // Clear messages when screen is first opened (cleanup from previous use)
+    LaunchedEffect(Unit) {
+        viewModel.clearMessages()
     }
 
     // ── Accent colour follows selected type ──────────────────────────────────

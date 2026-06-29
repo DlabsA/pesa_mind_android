@@ -1,8 +1,9 @@
 package cc.dlabs.pesamind.features.dashboard
 
 import android.util.Log
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.StateEvent
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
@@ -44,7 +45,7 @@ data class DashboardUiState(
 class DashboardViewModel @Inject constructor(
     private val apiService:     ApiService,
     private val networkMonitor: NetworkMonitor,
-) : ViewModel() {
+) : UnifiedViewModel() {
 
     private val _state = MutableStateFlow(DashboardUiState())
     val state: StateFlow<DashboardUiState> = _state.asStateFlow()
@@ -57,6 +58,52 @@ class DashboardViewModel @Inject constructor(
                 if (connected && _state.value.dashboard == null) {
                     fetchFromNetwork()
                 }
+            }
+        }
+    }
+
+    override fun onStateEvent(event: StateEvent) {
+        when (event) {
+            // Auto-refresh when transactions are created
+            is StateEvent.TransactionCreated -> {
+                viewModelScope.launch {
+                    try {
+                        refresh()
+                        publishEvent(StateEvent.DashboardRefreshed)
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            
+            // Auto-refresh when channels change
+            is StateEvent.ChannelCreated,
+            is StateEvent.ChannelUpdated,
+            is StateEvent.ChannelDeleted -> {
+                viewModelScope.launch {
+                    try {
+                        refresh()
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            
+            // Respond to logout
+            is StateEvent.UserLoggedOut -> {
+                _state.update {
+                    it.copy(
+                        dashboard = null,
+                        phase = DashboardPhase.Idle
+                    )
+                }
+            }
+            
+            // Handle sync requests
+            is StateEvent.SyncRequested -> {
+                viewModelScope.launch { refresh() }
+            }
+            
+            else -> {
+                Log.d("DashboardViewModel", "Ignoring event: ${event::class.simpleName}")
             }
         }
     }
@@ -77,7 +124,9 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun refresh() {
-        if (_state.value.isRefreshing) return
+        if (_state.value.isRefreshing) {
+            return
+        }
         viewModelScope.launch {
             _state.update { it.copy(isRefreshing = true) }
             if (networkMonitor.isConnectedNow) {
@@ -94,8 +143,6 @@ class DashboardViewModel @Inject constructor(
     private suspend fun fetchFromNetwork() {
         try {
             val response = apiService.getDashboard()
-            Log.d("DashboardVM", "Response raw: ${response.raw()}")
-            Log.d("DashboardVM", "Response body: ${response.body()}")
 
             if (response.isSuccessful) {
                 val body = response.body()
