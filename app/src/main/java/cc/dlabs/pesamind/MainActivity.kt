@@ -6,6 +6,7 @@ import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -23,6 +24,7 @@ import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import android.provider.Settings
+import cc.dlabs.pesamind.features.settings.notifications.MessageMonitoringService
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
 
@@ -65,7 +67,25 @@ class MainActivity : ComponentActivity() {
                 PesaMindNavGraph(navController = navController)
             }
         }
+        
+        // Start the message monitoring service to ensure SMS monitoring runs in the background
+        startMessageMonitoringService()
+        
         requestRequiredPermissions()
+    }
+
+    /**
+     * Starts the MessageMonitoringService to ensure continuous background SMS monitoring
+     * even when the main app UI is closed.
+     */
+    private fun startMessageMonitoringService() {
+        try {
+            val serviceIntent = Intent(this, MessageMonitoringService::class.java)
+            startForegroundService(serviceIntent)
+            Log.d(TAG, "MessageMonitoringService started successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start MessageMonitoringService: ${e.message}", e)
+        }
     }
 
     private fun requestRequiredPermissions() {
@@ -116,7 +136,7 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.RECEIVE_SMS in denied -> {
                 // Core feature is broken – show a non-dismissible dialog
                 Log.e(TAG, "RECEIVE_SMS denied — app cannot monitor transactions")
-                showMandatorySettingsDialog(Manifest.permission.RECEIVE_SMS)
+                showMandatorySettingsDialog()
             }
             Manifest.permission.READ_PHONE_STATE in denied -> {
                 // SIM identification will fail – optional, just log and continue
@@ -129,7 +149,7 @@ class MainActivity : ComponentActivity() {
      * Non-dismissible dialog that forces the user to go to Settings
      * to grant the permission manually.
      */
-    private fun showMandatorySettingsDialog(permission: String) {
+    private fun showMandatorySettingsDialog() {
         AlertDialog.Builder(this)
             .setTitle("Permission Required")
             .setMessage(
