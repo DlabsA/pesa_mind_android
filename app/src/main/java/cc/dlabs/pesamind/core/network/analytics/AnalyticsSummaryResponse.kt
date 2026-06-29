@@ -79,3 +79,22 @@ data class Recommendation(
     val confidence: Double,
     val severity: String
 )
+data class StreakResponse(
+    val  id: String,
+    @SerializedName("created_at")
+    val createdAt: String,
+    @SerializedName("updated_at")
+    val updatedAt: String,
+    @SerializedName("user_id")
+    val userId: String,
+    @SerializedName("current_streak")
+    val currentStreak: Int,
+    @SerializedName("longest_streak")
+    val longestStreak: Int,
+    @SerializedName("last_active_date")
+    val lastActiveDate: String,
+    @SerializedName("streak_type")
+    val streakType: String,
+    @SerializedName("last_updated_at")
+    val lastUpdatedAt: String
+)

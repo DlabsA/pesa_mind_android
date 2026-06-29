@@ -210,7 +210,7 @@ fun BudgetScreen(
                         year = state.displayYear,
                         balance = state.monthlyBalance,
                         isDeficit = state.isMonthlyDeficit,
-                        onDetails = {navController.navigate(Routes.SetMonthlyBudget.createRoute(nextMonth, currentYear))}
+                        onDetails = {navController.navigate(Routes.SetMonthlyBudget.createRoute(currentMonth, currentYear))}
                     )
 
                     Spacer(Modifier.height(12.dp))

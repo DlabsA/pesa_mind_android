@@ -240,41 +240,58 @@ private fun DashboardHeader(
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text  = viewModel.greetingText,
+                text  = viewModel.currentPeriodLabel,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             )
             Text(
-                text          = "Dashboard",
+                text          = viewModel.greetingText,
                 style         = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                 color         = MaterialTheme.colorScheme.onBackground,
                 letterSpacing = (-0.5).sp,
             )
-            Text(
-                text  = viewModel.currentPeriodLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            )
         }
 
-        when {
-            state.isRefreshing -> CircularProgressIndicator(
-                modifier    = Modifier.size(22.dp),
-                color       = MaterialTheme.colorScheme.primary,
-                strokeWidth = 2.dp,
-            )
-            state.isOffline -> Icon(
-                Icons.Default.WifiOff,
-                contentDescription = "Offline",
-                tint               = MaterialTheme.colorScheme.error,
-                modifier           = Modifier.size(20.dp),
-            )
-            else -> Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)) {
-                Text(
-                    text     = viewModel.currentPeriodLabel,
-                    style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color    = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Streak badge
+            if (viewModel.streakCount > 0) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = viewModel.streakEmoji,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        Text(
+                            text = viewModel.streakLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            // Status indicator (refresh, offline, or period)
+            when {
+                state.isRefreshing -> CircularProgressIndicator(
+                    modifier    = Modifier.size(22.dp),
+                    color       = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp,
+                )
+                state.isOffline -> Icon(
+                    Icons.Default.WifiOff,
+                    contentDescription = "Offline",
+                    tint               = MaterialTheme.colorScheme.error,
+                    modifier           = Modifier.size(20.dp),
                 )
             }
         }
@@ -912,9 +929,9 @@ private fun DashboardSkeletonView() {
                 .background(
                     Brush.horizontalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha * 0.10f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha * 0.05f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha * 0.10f),
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surfaceVariant,
                         )
                     )
                 )

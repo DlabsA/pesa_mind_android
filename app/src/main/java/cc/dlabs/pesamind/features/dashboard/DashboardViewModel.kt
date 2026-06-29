@@ -175,4 +175,35 @@ class DashboardViewModel @Inject constructor(
 
     val hasAnomalies: Boolean
         get() = (_state.value.dashboard?.anomalies?.data?.anomaliesDetected ?: 0) > 0
+
+    val streakCount: Int
+        get() = _state.value.dashboard?.streak?.currentStreak ?: 0
+
+    val streakEmoji: String
+        get() {
+            if (streakCount == 0) return ""
+            
+            // Check if last active date is today
+            val streak = _state.value.dashboard?.streak ?: return ""
+            val isActiveToday = try {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val lastActiveDate = sdf.parse(streak.lastActiveDate)
+                val today = Calendar.getInstance().time
+                val lastActiveCal = Calendar.getInstance().apply { time = lastActiveDate }
+                val todayCal = Calendar.getInstance().apply { time = today }
+                lastActiveCal.get(Calendar.YEAR) == todayCal.get(Calendar.YEAR) &&
+                lastActiveCal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR)
+            } catch (e: Exception) {
+                false
+            }
+            
+            return if (isActiveToday) "🔥" else "🔲"
+        }
+
+    val streakLabel: String
+        get() = when (streakCount) {
+            0    -> "Start your streak"
+            1    -> "1 day streak"
+            else -> "$streakCount days"
+        }
 }

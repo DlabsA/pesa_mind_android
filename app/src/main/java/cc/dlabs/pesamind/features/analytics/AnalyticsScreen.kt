@@ -2717,9 +2717,9 @@ private fun AnalyticsSkeletonView() {
                 .background(
                     Brush.horizontalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.onSurface,
-                            MaterialTheme.colorScheme.onSurface,
-                            MaterialTheme.colorScheme.onSurface,
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surfaceVariant,
                         )
                     )
                 )
