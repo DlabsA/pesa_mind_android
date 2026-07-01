@@ -138,9 +138,10 @@ object ChannelManager {
         if (!isInitialized()) return null
 
         val channelTypeMatched = when (senderID) {
-            MessageSender.MTNMobMoney -> ChannelTypes.MOBILE_MONEY
-            MessageSender.airtelmoney -> ChannelTypes.MOBILE_MONEY
+            MessageSender.MTNMobMoney -> ChannelDescMobileMoney.MTNMOBILEMONEY
+            MessageSender.airtelmoney -> ChannelDescMobileMoney.AIRTELMONEY
             MessageSender.stanbicbank -> ChannelTypes.BANK
+            MessageSender.centenary -> ChannelTypes.BANK
             else -> null // Return null if no match
         }
 

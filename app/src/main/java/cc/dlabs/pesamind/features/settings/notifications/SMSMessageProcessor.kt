@@ -284,8 +284,10 @@ class SMSMessageProcessor(
 
     private fun parseAirtelMessage(content: String): Triple<Double, String, String>? {
         val expensePatterns = listOf(
+            Regex("SENT\\.TID.*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
             Regex("SENT UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
             Regex("WITHDRAWN\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+            Regex("has collected UGX\\s*([\\d,]+(?:\\.[\\d]+)?)\\s*from your account", RegexOption.IGNORE_CASE),
             Regex("You have been debited UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE)
         )
         for (pattern in expensePatterns) {

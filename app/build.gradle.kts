@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "cc.dlabs.pesamind"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 13
         versionName = "13"
