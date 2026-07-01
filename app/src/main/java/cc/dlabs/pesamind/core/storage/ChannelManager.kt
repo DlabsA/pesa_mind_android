@@ -212,6 +212,10 @@ object ChannelManager {
         }
     }
 
+    suspend fun isCacheStale(): Boolean {
+        return SyncPolicy.isStale(getLastSyncTime())
+    }
+
     /**
      * Clear all cached channels
      */

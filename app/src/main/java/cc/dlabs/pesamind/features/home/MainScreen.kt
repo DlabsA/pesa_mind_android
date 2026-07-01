@@ -15,7 +15,7 @@ import androidx.navigation.compose.*
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.features.analytics.AnalyticsScreen
-import cc.dlabs.pesamind.features.tools.BudgetScreen
+import cc.dlabs.pesamind.features.budgets.BudgetScreen
 import cc.dlabs.pesamind.features.dashboard.DashboardScreen
 import cc.dlabs.pesamind.features.settings.SettingsScreen
 

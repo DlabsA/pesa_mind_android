@@ -66,6 +66,7 @@ import cc.dlabs.pesamind.core.network.models.BvaHealth
 import cc.dlabs.pesamind.core.network.models.BvaHealthComponents
 import cc.dlabs.pesamind.core.network.models.ForecastData
 import cc.dlabs.pesamind.core.network.models.ForecastRecommendation
+import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -290,47 +291,15 @@ private fun AnalyticsHeader(
     viewModel: AnalyticsViewModel,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text  = viewModel.greetingText,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-            )
-            Text(
-                text          = "Analytics",
-                style         = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                color         = MaterialTheme.colorScheme.onBackground,
-                letterSpacing = (-0.5).sp,
-            )
-            Text(
-                text  = viewModel.currentPeriodLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            )
-        }
-        when {
-            state.isRefreshing -> CircularProgressIndicator(
-                modifier    = Modifier.size(22.dp),
-                color       = MaterialTheme.colorScheme.secondary,
-                strokeWidth = 2.dp,
-            )
-            state.isOffline -> Icon(
-                Icons.Default.WifiOff,
-                contentDescription = "Offline",
-                tint               = MaterialTheme.colorScheme.error,
-                modifier           = Modifier.size(20.dp),
-            )
-            else -> Surface(shape = RoundedCornerShape(70), color = MaterialTheme.colorScheme.surface) {
-                Text(
-                    text     = viewModel.currentPeriodLabel,
-                    style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-            }
-        }
-    }
+    DashboardStyleHeader(
+        currentPeriodLabel = viewModel.currentPeriodLabel,
+        greetingText = viewModel.greetingText,
+        isRefreshing = state.isRefreshing,
+        isOffline = state.isOffline,
+        streakDrawable = viewModel.streakDrawable,
+        streakLabel = viewModel.streakLabel,
+        modifier = modifier,
+    )
 }
 
 // ─── Offline Banner ───────────────────────────────────────────────────────────

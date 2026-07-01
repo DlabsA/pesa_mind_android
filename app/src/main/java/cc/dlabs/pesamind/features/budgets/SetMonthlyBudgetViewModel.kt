@@ -1,4 +1,4 @@
-package cc.dlabs.pesamind.features.tools
+package cc.dlabs.pesamind.features.budgets
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

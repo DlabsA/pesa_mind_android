@@ -53,6 +53,12 @@ class TransactionViewModel : UnifiedViewModel() {
                 val cachedTransactions = TransactionManager.getTransactions()
                 if (cachedTransactions.isNotEmpty()) {
                     _state.value = _state.value.copy(transactions = cachedTransactions)
+
+                    // Only sync automatically when cache is older than policy window.
+                    if (!TransactionManager.isCacheStale()) {
+                        _state.value = _state.value.copy(isLoading = false, error = null)
+                        return@launch
+                    }
                 }
                 val response = ApiClient.api.getTransactions()
                 if (response.isSuccessful) {

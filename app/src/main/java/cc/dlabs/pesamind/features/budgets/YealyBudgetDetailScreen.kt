@@ -1,4 +1,4 @@
-package cc.dlabs.pesamind.features.tools
+package cc.dlabs.pesamind.features.budgets
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -27,14 +27,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.TrendingDown
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Savings
-import androidx.compose.material.icons.outlined.TrendingDown
-import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,7 +54,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -78,11 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
-import cc.dlabs.pesamind.core.theme.ExpenseRed
-import cc.dlabs.pesamind.core.theme.IncomeGreen
-import cc.dlabs.pesamind.core.theme.PesaMindGreen
-import cc.dlabs.pesamind.core.theme.PesaMindTeal
-import cc.dlabs.pesamind.core.theme.TextSecondary
+import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
 import java.text.NumberFormat
 import java.util.Locale
 import cc.dlabs.pesamind.core.utils.TransactionTypes
@@ -93,24 +87,18 @@ private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
 private fun Long.toUgx() = ugxFmt.format(this)
 private fun Double.toUgx() = ugxFmt.format(this.toLong())
 
-private val months = listOf(
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December"
-)
-private fun Int.toMonthName() = months.getOrElse(this - 1) { "Month $this" }
-
-
+@Composable
 private fun typeColor(type: String): Color = when (type) {
-    TransactionTypes.INCOME  -> IncomeGreen
-    TransactionTypes.EXPENSE -> ExpenseRed
-    TransactionTypes.SAVINGS  -> PesaMindTeal
-    else -> Color.Gray
+    TransactionTypes.INCOME -> MaterialTheme.colorScheme.tertiary
+    TransactionTypes.EXPENSE -> MaterialTheme.colorScheme.error
+    TransactionTypes.SAVINGS -> MaterialTheme.colorScheme.primary
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private fun typeIcon(type: String): ImageVector = when (type) {
-    TransactionTypes.INCOME  -> Icons.Outlined.TrendingUp
-    TransactionTypes.EXPENSE -> Icons.Outlined.TrendingDown
-    TransactionTypes.SAVINGS  -> Icons.Outlined.Savings
+    TransactionTypes.INCOME -> Icons.AutoMirrored.Outlined.TrendingUp
+    TransactionTypes.EXPENSE -> Icons.AutoMirrored.Outlined.TrendingDown
+    TransactionTypes.SAVINGS -> Icons.Outlined.Savings
     else -> Icons.Outlined.Payments
 }
 
@@ -139,13 +127,11 @@ fun YearlyBudgetDetailScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("Yearly Budget") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            DetailScreenTopBar(
+                title = "Yearly Budget",
+                subtitle = "Manage your yearly plan",
+                badge = year.toString(),
+                onBack = { navController.popBackStack() },
             )
         }
     ) { padding ->
@@ -207,14 +193,14 @@ fun YearlyBudgetDetailScreen(
                     if (state.transactions.isNotEmpty()) {
                         Surface(
                             shape = CircleShape,
-                            color = PesaMindTeal.copy(alpha = 0.10f)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                         ) {
                             Text(
                                 text = "${state.transactions.size}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
-                                color = PesaMindTeal,
+                                color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                             )
                         }
@@ -246,14 +232,14 @@ fun YearlyBudgetDetailScreen(
             icon = {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = ExpenseRed.copy(alpha = 0.10f),
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.10f),
                     modifier = Modifier.size(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Outlined.Delete,
                             contentDescription = null,
-                            tint = ExpenseRed,
+                            tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -276,7 +262,7 @@ fun YearlyBudgetDetailScreen(
                 Button(
                     onClick = { vm.deleteTransaction() },
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ExpenseRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Remove") }
             },
             dismissButton = {
@@ -285,6 +271,7 @@ fun YearlyBudgetDetailScreen(
         )
     }
 }
+
 
 // ─── Budget Summary Card ──────────────────────────────────────────────────────
 
@@ -297,7 +284,7 @@ private fun BudgetSummaryCard(
     isDeficit: Boolean,
     isLoading: Boolean
 ) {
-    val balanceColor = if (isDeficit) ExpenseRed else IncomeGreen
+    val balanceColor = if (isDeficit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -351,21 +338,21 @@ private fun BudgetSummaryCard(
                         SummaryStatRow(
                             label = "Expenditure",
                             value = expenditure,
-                            color = ExpenseRed,
-                            icon = Icons.Outlined.TrendingDown
+                            color = MaterialTheme.colorScheme.error,
+                            icon = Icons.AutoMirrored.Outlined.TrendingDown
                         )
                         SummaryDivider()
                         SummaryStatRow(
                             label = "Income",
                             value = income,
-                            color = PesaMindGreen,
-                            icon = Icons.Outlined.TrendingUp
+                            color = MaterialTheme.colorScheme.tertiary,
+                            icon = Icons.AutoMirrored.Outlined.TrendingUp
                         )
                         SummaryDivider()
                         SummaryStatRow(
                             label = "Savings",
                             value = savings,
-                            color = PesaMindTeal,
+                            color = MaterialTheme.colorScheme.primary,
                             icon = Icons.Outlined.Savings
                         )
 
@@ -442,7 +429,7 @@ private fun SummaryStatRow(
             Text(
                 label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Text(
@@ -508,16 +495,16 @@ private fun AddTransactionCard(
                 value = name,
                 onValueChange = onNameChange,
                 label = { Text("Name") },
-                placeholder = { Text("e.g. Monthly Salary", color = TextSecondary) },
+                placeholder = { Text("e.g. Monthly Salary", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 singleLine = true,
                 isError = nameError != null,
                 supportingText = nameError?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PesaMindTeal,
-                    focusedLabelColor = PesaMindTeal,
-                    cursorColor = PesaMindTeal
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary
                 )
             )
 
@@ -526,7 +513,7 @@ private fun AddTransactionCard(
                 value = amount,
                 onValueChange = onAmountChange,
                 label = { Text("Amount (UGX)") },
-                placeholder = { Text("0", color = TextSecondary) },
+                placeholder = { Text("0", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 singleLine = true,
                 isError = amountError != null,
                 supportingText = amountError?.let { { Text(it) } },
@@ -537,13 +524,13 @@ private fun AddTransactionCard(
                     Text(
                         "UGX  ",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PesaMindTeal,
-                    focusedLabelColor = PesaMindTeal,
-                    cursorColor = PesaMindTeal
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary
                 )
             )
 
@@ -554,7 +541,7 @@ private fun AddTransactionCard(
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TransactionTypes.valid.forEach { t ->
@@ -580,9 +567,9 @@ private fun AddTransactionCard(
                             },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = color,
-                                selectedLabelColor = Color.White,
-                                selectedLeadingIconColor = Color.White,
-                                labelColor = TextSecondary
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                         )
                     }
@@ -595,13 +582,13 @@ private fun AddTransactionCard(
                 enabled = !isSaving,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PesaMindTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 contentPadding = PaddingValues(vertical = 13.dp)
             ) {
                 if (isSaving) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(Modifier.width(8.dp))
@@ -714,13 +701,13 @@ private fun TransactionRow(
                 if (isDeleting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
-                        color = ExpenseRed,
+                        color = MaterialTheme.colorScheme.error,
                         strokeWidth = 2.dp
                     )
                 } else {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = ExpenseRed.copy(alpha = 0.08f),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
                         modifier = Modifier.size(32.dp)
                     ) {
                         IconButton(
@@ -730,7 +717,7 @@ private fun TransactionRow(
                             Icon(
                                 Icons.Outlined.Delete,
                                 contentDescription = "Delete",
-                                tint = ExpenseRed,
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -754,14 +741,14 @@ private fun TransactionsEmptyState() {
     ) {
         Surface(
             shape = RoundedCornerShape(18.dp),
-            color = PesaMindTeal.copy(alpha = 0.08f),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
             modifier = Modifier.size(64.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Outlined.Receipt,
                     contentDescription = null,
-                    tint = PesaMindTeal,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -774,7 +761,7 @@ private fun TransactionsEmptyState() {
         Text(
             "Add income, expenditure and savings\nitems using the form above.",
             style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
     }
@@ -790,7 +777,7 @@ private fun TransactionsSkeleton() {
         ), label = "alpha"
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        repeat(3) { i ->
+        repeat(3) {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

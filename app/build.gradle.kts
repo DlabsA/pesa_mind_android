@@ -13,8 +13,9 @@ android {
     defaultConfig {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 24
-        versionCode = 1
-        versionName = "1"
+        targetSdk = 35
+        versionCode = 13
+        versionName = "13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

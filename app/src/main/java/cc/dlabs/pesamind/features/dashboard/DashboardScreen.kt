@@ -31,6 +31,7 @@ import cc.dlabs.pesamind.core.network.models.AnomalyData
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.theme.DarkColors
+import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.features.analytics.AnomaliesCard
 import java.text.NumberFormat
 import java.util.Locale
@@ -238,66 +239,15 @@ private fun DashboardHeader(
     viewModel: DashboardViewModel,
     modifier:  Modifier = Modifier,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text  = viewModel.currentPeriodLabel,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-            )
-            Text(
-                text          = viewModel.greetingText,
-                style         = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                color         = MaterialTheme.colorScheme.onBackground,
-                letterSpacing = (-0.5).sp,
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Status indicator (refresh, offline, or period)
-            when {
-                state.isRefreshing -> CircularProgressIndicator(
-                    modifier    = Modifier.size(24.dp),
-                    color       = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 2.dp,
-                )
-                state.isOffline -> Icon(
-                    Icons.Default.WifiOff,
-                    contentDescription = "Offline",
-                    tint               = MaterialTheme.colorScheme.error,
-                    modifier           = Modifier.size(24.dp),
-                )
-                else -> viewModel.streakDrawable?.let { drawableRes ->
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                painter = painterResource(id = drawableRes),
-                                contentDescription = "Streak",
-                                modifier = Modifier.size(24.dp),
-                                tint = Color.Unspecified,
-                            )
-                            Text(
-                                text = viewModel.streakLabel,
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                }
-            }
-
-        }
-    }
+    DashboardStyleHeader(
+        currentPeriodLabel = viewModel.currentPeriodLabel,
+        greetingText = viewModel.greetingText,
+        isRefreshing = state.isRefreshing,
+        isOffline = state.isOffline,
+        streakDrawable = viewModel.streakDrawable,
+        streakLabel = viewModel.streakLabel,
+        modifier = modifier,
+    )
 }
 
 // ─── Offline Banner ───────────────────────────────────────────────────────────

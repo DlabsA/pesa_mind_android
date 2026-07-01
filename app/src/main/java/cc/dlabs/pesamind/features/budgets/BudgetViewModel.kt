@@ -1,13 +1,17 @@
-package cc.dlabs.pesamind.features.tools
+package cc.dlabs.pesamind.features.budgets
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.ApiClient.api
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.BudgetManager
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.storage.StreakSessionCache
+import cc.dlabs.pesamind.core.utils.StreakUiHelper
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import javax.inject.Inject
 
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
@@ -46,6 +51,8 @@ data class DashboardUiState(
     // Computed from data
     val isFromCache: Boolean = false,
     val lastUpdated: Long? = null,
+    val streakCount: Int = 0,
+    val streakLastActiveDate: String? = null,
 ) {
     /** Net balance = income - expenditure for the current monthly budget */
     val monthlyBalance: Long
@@ -85,7 +92,10 @@ data class DashboardUiState(
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
-class BudgetViewModel : ViewModel() {
+@HiltViewModel
+class BudgetViewModel @Inject constructor(
+    private val networkMonitor: NetworkMonitor,
+) : ViewModel() {
 
     companion object {
         private const val TAG = "BudgetViewModel"
@@ -93,10 +103,28 @@ class BudgetViewModel : ViewModel() {
 
     private val _state = MutableStateFlow(DashboardUiState())
     val state: StateFlow<DashboardUiState> = _state.asStateFlow()
+    private var pendingSync = false
 
     init {
         loadUserProfile()
-        loadDashboard()
+        observeConnectivity()
+        loadDashboard(forceRefresh = false)
+    }
+
+    private fun observeConnectivity() {
+        viewModelScope.launch {
+            networkMonitor.isConnected.collect { connected ->
+                if (!connected) {
+                    _state.update { it.copy(isOffline = true) }
+                    return@collect
+                }
+
+                _state.update { it.copy(isOffline = false) }
+                if (pendingSync) {
+                    loadDashboard(forceRefresh = true)
+                }
+            }
+        }
     }
 
     // ── User ──────────────────────────────────────────────────────────────────
@@ -138,8 +166,38 @@ class BudgetViewModel : ViewModel() {
             val year = now.get(Calendar.YEAR).toLong()
 
             // Show cached data immediately while fetching fresh
-            if (!forceRefresh) {
+            val hasCache = if (!forceRefresh) {
                 loadFromCache(month, year.toInt())
+            } else {
+                false
+            }
+
+            val cacheIsFresh = if (!forceRefresh && hasCache) {
+                val monthlyFresh = !BudgetManager.isMonthlyBudgetsCacheStale()
+                val yearlyFresh = !BudgetManager.isYearlyBudgetsCacheStale()
+                monthlyFresh && yearlyFresh
+            } else {
+                false
+            }
+
+            if (!forceRefresh && cacheIsFresh) {
+                pendingSync = false
+                _state.update { it.copy(isOffline = !networkMonitor.isConnectedNow) }
+                return@launch
+            }
+
+            val canFetchNetwork = networkMonitor.isConnectedNow
+            if (!canFetchNetwork) {
+                pendingSync = hasCache
+                _state.update {
+                    it.copy(
+                        isLoadingYearly = false,
+                        isLoadingMonthly = false,
+                        isRefreshing = false,
+                        isOffline = true,
+                    )
+                }
+                return@launch
             }
 
             _state.update {
@@ -158,11 +216,14 @@ class BudgetViewModel : ViewModel() {
                 val nextY = if (month == 12) year + 1 else year
                 fetchMonthlyBudget(nextM, nextY, isNext = true)
             }
+            val streakDeferred = async { fetchStreak() }
 
             yearlyDeferred.await()
             monthlyDeferred.await()
             nextMonthDeferred.await()
+            streakDeferred.await()
 
+            pendingSync = false
             _state.update { it.copy(isRefreshing = false) }
         }
     }
@@ -171,7 +232,7 @@ class BudgetViewModel : ViewModel() {
 
     // ── Cache load ────────────────────────────────────────────────────────────
 
-    private suspend fun loadFromCache(month: Int, year: Int) {
+    private suspend fun loadFromCache(month: Int, year: Int): Boolean {
         val cachedYearly = BudgetManager.getYearlyBudgets()
             .find { it.year == year.toLong() }
         val cachedMonthly = BudgetManager.getMonthlyBudgetByMonthYear(month, year.toLong())
@@ -185,10 +246,14 @@ class BudgetViewModel : ViewModel() {
                     yearlyBudget = cachedYearly ?: it.yearlyBudget,
                     currentMonthlyBudget = cachedMonthly ?: it.currentMonthlyBudget,
                     nextMonthBudget = cachedNext,
-                    isFromCache = true
+                    isFromCache = true,
+                    isOffline = !networkMonitor.isConnectedNow,
                 )
             }
+            return true
         }
+
+        return false
     }
 
     // ── Network fetches ───────────────────────────────────────────────────────
@@ -233,6 +298,7 @@ class BudgetViewModel : ViewModel() {
                 }
             }
         } catch (e: Exception) {
+            pendingSync = true
             _state.update {
                 it.copy(
                     isLoadingYearly = false,
@@ -296,6 +362,7 @@ class BudgetViewModel : ViewModel() {
                 }
             }
         } catch (e: Exception) {
+            if (!isNext) pendingSync = true
             _state.update {
                 it.copy(
                     isLoadingMonthly = false,
@@ -305,6 +372,46 @@ class BudgetViewModel : ViewModel() {
             }
         }
     }
+
+    private suspend fun fetchStreak() {
+        val cachedStreak = StreakSessionCache.get()
+        if (cachedStreak != null) {
+            _state.update {
+                it.copy(
+                    streakCount = cachedStreak.count,
+                    streakLastActiveDate = cachedStreak.lastActiveDate,
+                )
+            }
+            return
+        }
+
+        try {
+            val response = api.getDashboard()
+            if (response.isSuccessful) {
+                val streak = response.body()?.streak
+                if (streak != null) {
+                    StreakSessionCache.set(
+                        count = streak.currentStreak,
+                        lastActiveDate = streak.lastActiveDate,
+                    )
+                }
+                _state.update {
+                    it.copy(
+                        streakCount = streak?.currentStreak ?: it.streakCount,
+                        streakLastActiveDate = streak?.lastActiveDate ?: it.streakLastActiveDate,
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            // Keep existing streak values when request fails.
+        }
+    }
+
+    val streakDrawable: Int?
+        get() = StreakUiHelper.drawable(_state.value.streakCount, _state.value.streakLastActiveDate)
+
+    val streakLabel: String
+        get() = StreakUiHelper.label(_state.value.streakCount)
 
      // ── Error handling ────────────────────────────────────────────────────────
 

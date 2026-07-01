@@ -41,6 +41,12 @@ class ChannelViewModel : ViewModel() {
                 val cachedChannels = ChannelManager.getChannels()
                 if (cachedChannels.isNotEmpty()) {
                     _state.value = _state.value.copy(channels = cachedChannels)
+
+                    // Keep first open offline-first: only auto-refresh when cache is stale.
+                    if (!ChannelManager.isCacheStale()) {
+                        _state.value = _state.value.copy(isLoading = false, error = null)
+                        return@launch
+                    }
                 }
 
                 // Step 2: Sync with backend

@@ -7,6 +7,8 @@ import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
+import cc.dlabs.pesamind.core.storage.StreakSessionCache
+import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -89,6 +91,7 @@ class DashboardViewModel @Inject constructor(
             
             // Respond to logout
             is StateEvent.UserLoggedOut -> {
+                StreakSessionCache.clear()
                 _state.update {
                     it.copy(
                         dashboard = null,
@@ -147,6 +150,10 @@ class DashboardViewModel @Inject constructor(
             if (response.isSuccessful) {
                 val body = response.body()
                     ?: throw IllegalStateException("Empty response body from /analytics/dashboard")
+                StreakSessionCache.set(
+                    count = body.streak.currentStreak,
+                    lastActiveDate = body.streak.lastActiveDate,
+                )
 
                 val isEmpty = body.summary.data.transactionCount == 0
                 _state.update {
@@ -228,29 +235,10 @@ class DashboardViewModel @Inject constructor(
 
     val streakDrawable: Int?
         get() {
-            if (streakCount == 0) return null
-            
-            // Check if last active date is today
             val streak = _state.value.dashboard?.streak ?: return null
-            val isActiveToday = try {
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val lastActiveDate = sdf.parse(streak.lastActiveDate) ?: return null
-                val today = Calendar.getInstance().time
-                val lastActiveCal = Calendar.getInstance().apply { time = lastActiveDate }
-                val todayCal = Calendar.getInstance().apply { time = today }
-                lastActiveCal.get(Calendar.YEAR) == todayCal.get(Calendar.YEAR) &&
-                lastActiveCal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR)
-            } catch (_: Exception) {
-                false
-            }
-            
-            return if (isActiveToday) cc.dlabs.pesamind.R.drawable.active_streak else cc.dlabs.pesamind.R.drawable.inactive_streak
+            return StreakUiHelper.drawable(streakCount, streak.lastActiveDate)
         }
 
     val streakLabel: String
-        get() = when (streakCount) {
-            0    -> "Start your streak"
-            1    -> "1 day streak"
-            else -> "$streakCount days"
-        }
+        get() = StreakUiHelper.label(streakCount)
 }

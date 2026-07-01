@@ -10,9 +10,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import cc.dlabs.pesamind.core.navigation.Routes
-import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.features.analytics.AnalyticsScreen
-import cc.dlabs.pesamind.features.tools.BudgetScreen
+import cc.dlabs.pesamind.features.budgets.BudgetScreen
 import cc.dlabs.pesamind.features.settings.SettingsScreen
 
 data class BottomNavItem(

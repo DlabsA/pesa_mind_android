@@ -220,8 +220,7 @@ object BudgetManager {
      */
     suspend fun isMonthlyBudgetsCacheStale(): Boolean {
         val lastSync = getMonthlyBudgetsLastSync()
-        val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000)
-        return lastSync < fiveMinutesAgo
+        return SyncPolicy.isStale(lastSync)
     }
 
     /**
@@ -229,8 +228,7 @@ object BudgetManager {
      */
     suspend fun isYearlyBudgetsCacheStale(): Boolean {
         val lastSync = getYearlyBudgetsLastSync()
-        val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000)
-        return lastSync < fiveMinutesAgo
+        return SyncPolicy.isStale(lastSync)
     }
 
     /**

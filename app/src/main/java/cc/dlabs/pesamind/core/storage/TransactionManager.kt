@@ -58,5 +58,27 @@ object TransactionManager {
         }
     }
 
+    suspend fun getLastSyncTime(): Long {
+        if (!isInitialized()) return 0L
+        return try {
+            val data = appContext.transactionDataStore.data.first()
+            data[LAST_SYNC]?.toLongOrNull() ?: 0L
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    suspend fun isCacheStale(): Boolean {
+        return SyncPolicy.isStale(getLastSyncTime())
+    }
+
+    suspend fun clearTransactions() {
+        if (!isInitialized()) return
+        appContext.transactionDataStore.edit { prefs ->
+            prefs.remove(TRANSACTIONS_KEY)
+            prefs.remove(LAST_SYNC)
+        }
+    }
+
 
 }

@@ -6,6 +6,8 @@ import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.AnalyticResponse
+import cc.dlabs.pesamind.core.storage.StreakSessionCache
+import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,8 @@ data class AnalyticsUiState(
     val isRefreshing: Boolean            = false,
     val isOffline:    Boolean            = false,
     val lastUpdated:  Long?              = null,   // epoch millis
+    val streakCount: Int                 = 0,
+    val streakLastActiveDate: String?    = null,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────
@@ -70,9 +74,12 @@ class AnalyticsViewModel @Inject constructor() : UnifiedViewModel() {
             
             // Respond to logout
             is StateEvent.UserLoggedOut -> {
+                StreakSessionCache.clear()
                 _state.value = _state.value.copy(
                     analytics = null,
-                    phase = AnalyticsPhase.Idle
+                    phase = AnalyticsPhase.Idle,
+                    streakCount = 0,
+                    streakLastActiveDate = null,
                 )
             }
             
@@ -113,12 +120,33 @@ class AnalyticsViewModel @Inject constructor() : UnifiedViewModel() {
             val response = ApiClient.api.getAnalytics()
             if (response.isSuccessful) {
                 val body = response.body()!!
+                val cachedStreak = StreakSessionCache.get()
+                val streak = if (cachedStreak != null) {
+                    cachedStreak
+                } else {
+                    try {
+                        val dashboardStreak = ApiClient.api.getDashboard().body()?.streak
+                        if (dashboardStreak != null) {
+                            StreakSessionCache.set(
+                                count = dashboardStreak.currentStreak,
+                                lastActiveDate = dashboardStreak.lastActiveDate,
+                            )
+                            StreakSessionCache.get()
+                        } else {
+                            null
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
                 val isEmpty = body.summary?.data?.transactionCount == 0
                 _state.value = _state.value.copy(
                     analytics   = body,
                     phase       = if (isEmpty) AnalyticsPhase.Empty else AnalyticsPhase.Loaded,
                     lastUpdated = System.currentTimeMillis(),
                     isOffline   = false,
+                    streakCount = streak?.count ?: _state.value.streakCount,
+                    streakLastActiveDate = streak?.lastActiveDate ?: _state.value.streakLastActiveDate,
                 )
             } else {
                 if (_state.value.analytics == null) {
@@ -172,6 +200,12 @@ class AnalyticsViewModel @Inject constructor() : UnifiedViewModel() {
                 else      -> "Good evening"
             }
         }
+
+    val streakDrawable: Int?
+        get() = StreakUiHelper.drawable(_state.value.streakCount, _state.value.streakLastActiveDate)
+
+    val streakLabel: String
+        get() = StreakUiHelper.label(_state.value.streakCount)
 
     val formattedLastUpdated: String get() {
         val ts = _state.value.lastUpdated ?: return "Never synced"

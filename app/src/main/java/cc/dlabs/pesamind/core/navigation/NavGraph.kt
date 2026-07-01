@@ -29,9 +29,8 @@ import cc.dlabs.pesamind.features.settings.notifications.TransactionListScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
-import cc.dlabs.pesamind.features.tools.SetMonthlyBudgetScreen
-import cc.dlabs.pesamind.features.tools.YearlyBudgetDetailScreen
-import kotlinx.coroutines.delay
+import cc.dlabs.pesamind.features.budgets.SetMonthlyBudgetScreen
+import cc.dlabs.pesamind.features.budgets.YearlyBudgetDetailScreen
 import java.util.Calendar
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
