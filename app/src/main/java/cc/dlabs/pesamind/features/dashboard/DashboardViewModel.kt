@@ -150,10 +150,17 @@ class DashboardViewModel @Inject constructor(
             if (response.isSuccessful) {
                 val body = response.body()
                     ?: throw IllegalStateException("Empty response body from /analytics/dashboard")
-                StreakSessionCache.set(
-                    count = body.streak.currentStreak,
-                    lastActiveDate = body.streak.lastActiveDate,
-                )
+                
+                // Guard against null streak response
+                body.streak?.let {
+                    StreakSessionCache.set(
+                        count = it.currentStreak,
+                        lastActiveDate = it.lastActiveDate,
+                    )
+                } ?: run {
+                    // If streak is null, clear the cache or use defaults
+                    StreakSessionCache.clear()
+                }
 
                 val isEmpty = body.summary.data.transactionCount == 0
                 _state.update {

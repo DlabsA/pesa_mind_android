@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Button
@@ -198,6 +199,7 @@ fun BudgetScreen(
                     item {
                         StaggeredCard(index = 2, visible = cardsVisible) {
                         CurrentMonthCard(
+                            yearly = state.yearlyBudget,
                             monthly = state.currentMonthlyBudget,
                             isLoading = state.isLoadingMonthly,
                             month = state.displayMonth,
@@ -206,12 +208,16 @@ fun BudgetScreen(
                             isDeficit = state.isMonthlyDeficit,
                             modifier = Modifier.padding(horizontal = 16.dp),
                             onDetails = {
-                                navController.navigate(
-                                    Routes.SetMonthlyBudget.createRoute(
-                                        state.displayMonth,
-                                        state.displayYear,
+                                if (state.yearlyBudget == null) {
+                                    navController.navigate(Routes.SetYearlyBudget.route)
+                                } else {
+                                    navController.navigate(
+                                        Routes.SetMonthlyBudget.createRoute(
+                                            state.displayMonth,
+                                            state.displayYear,
+                                        )
                                     )
-                                )
+                                }
                             },
                         )
                         }
@@ -627,6 +633,7 @@ private fun NextMonthBudgetCard(
 
 @Composable
 private fun CurrentMonthCard(
+    yearly: YearlyBudgetResponse?,
     monthly: MonthlyBudgetResponse?,
     isLoading: Boolean,
     month: Int,
@@ -636,6 +643,7 @@ private fun CurrentMonthCard(
     modifier: Modifier = Modifier,
     onDetails: () -> Unit
 ) {
+    val isYearlyMissing = yearly == null
     val statusBg = if (isDeficit) {
         MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
     } else {
@@ -676,7 +684,55 @@ private fun CurrentMonthCard(
 
                 Spacer(Modifier.height(10.dp))
 
-                if (isLoading && monthly == null) {
+                if (isYearlyMissing) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        modifier = Modifier.size(64.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Locked until yearly budget is created",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(30.dp),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Text(
+                        text = "Monthly budget is locked",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        text = "Create a yearly budget first to unlock ${month.toMonthName()} planning.",
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Button(
+                        onClick = onDetails,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(vertical = 13.dp),
+                    ) {
+                        Text(
+                            text = "Create Yearly Budget",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        )
+                    }
+                } else if (isLoading && monthly == null) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp),
