@@ -33,6 +33,8 @@ data class AuthProfile(
     @SerializedName("user_id")
     val userId: String? = null,
     val username: String? = null,
+    @SerializedName(value = "avatar_url", alternate = ["avatarUrl", "AvatarURL"])
+    val avatarUrl: String? = null,
     val type: String? = null,
     val balance: Double? = null
 )
@@ -180,6 +182,7 @@ data class Account(
     val id: String = "",
     val username: String = "",
     val email: String = "",
+    val avatarUrl: String = "",
     val type: String = "",
     val balance: Double = 0.0
 )
@@ -231,6 +234,8 @@ data class UserResponse(
     @SerializedName("name")
     val username: String,
     val email: String,
+    @SerializedName(value = "avatar_url", alternate = ["avatarUrl", "AvatarURL"])
+    val avatarUrl: String = "",
     val balance: Double,
     val type: String
 )

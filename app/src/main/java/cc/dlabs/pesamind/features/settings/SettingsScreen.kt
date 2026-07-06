@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -31,6 +32,7 @@ import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
+import coil3.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import kotlinx.coroutines.launch
@@ -64,7 +66,6 @@ fun SettingsScreen(rootNav: NavHostController) {
 
     val displayName = account?.username.orEmpty()
     val displayEmail = account?.email.orEmpty()
-    val initial = displayName.firstOrNull()?.uppercase() ?: "U"
 
     // Logout confirmation dialog
     if (showLogoutDialog) {
@@ -139,11 +140,24 @@ fun SettingsScreen(rootNav: NavHostController) {
                             .background(Color.White.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Image(
-                            painter = painterResource(R.mipmap.ic_launcher_foreground),
-                            contentDescription = "App Logo",
-                            modifier = Modifier.size(100.dp)
-                        )
+                        if (account?.avatarUrl?.isNotBlank() == true) {
+                            AsyncImage(
+                                model = account?.avatarUrl,
+                                contentDescription = "Profile Avatar",
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                                placeholder = painterResource(R.mipmap.ic_launcher_foreground),
+                                error = painterResource(R.mipmap.ic_launcher_foreground)
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(R.mipmap.ic_launcher_foreground),
+                                contentDescription = "App Logo",
+                                modifier = Modifier.size(100.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

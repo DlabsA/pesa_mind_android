@@ -30,6 +30,8 @@ class ChannelViewModel : ViewModel() {
         loadChannels()
     }
 
+    fun refresh() = loadChannels()
+
     /**
      * Load channels: first from local cache, then sync with backend
      */

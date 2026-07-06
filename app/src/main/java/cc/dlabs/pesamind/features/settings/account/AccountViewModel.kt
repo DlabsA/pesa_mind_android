@@ -15,6 +15,7 @@ import kotlin.toString
 data class AccountState(
     val username: String = "",
     val email: String = "",
+    val avatarUrl: String = "",
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val error: String? = null,
@@ -48,6 +49,7 @@ class AccountViewModel : ViewModel() {
                     _state.value = AccountState(
                         username = cachedAccount.username,
                         email = cachedAccount.email,
+                        avatarUrl = cachedAccount.avatarUrl,
                         balance = cachedAccount.balance,
                         type = cachedAccount.type,
                         isLoading = false
@@ -64,6 +66,7 @@ class AccountViewModel : ViewModel() {
                             id = user.id,
                             email = user.email,
                             username = user.username,
+                            avatarUrl = user.avatarUrl,
                             balance = user.balance.toString(),
                             type = user.type
                         )
@@ -71,6 +74,7 @@ class AccountViewModel : ViewModel() {
                         _state.value = AccountState(
                             username = user.username,
                             email = user.email,
+                            avatarUrl = user.avatarUrl,
                             balance = user.balance,
                             type = user.type,
                             isLoading = false

@@ -135,6 +135,7 @@ class AuthViewModel : ViewModel() {
                                 id       = profile.id ?: "",
                                 email    = form.email.trim(),
                                 username = profile.username ?: "",
+                                avatarUrl = profile.avatarUrl ?: "",
                                 balance  = profile.balance?.toString() ?: "",
                                 type     = profile.type ?: "",
                             )
@@ -271,6 +272,7 @@ class AuthViewModel : ViewModel() {
                                 id       = profile.id ?: "",
                                 email    = email,
                                 username = profile.username ?: "",
+                                avatarUrl = profile.avatarUrl ?: "",
                                 balance  = profile.balance?.toString() ?: "",
                                 type     = profile.type ?: "",
                             )
@@ -348,6 +350,7 @@ class AuthViewModel : ViewModel() {
                                 id       = profile.id ?: "",
                                 email    = email,
                                 username = profile.username ?: username,
+                                avatarUrl = profile.avatarUrl ?: "",
                                 balance  = profile.balance?.toString() ?: "",
                                 type     = profile.type ?: "",
                             )

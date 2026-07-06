@@ -44,7 +44,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -152,17 +151,6 @@ fun ChannelScreen(
                     }
                 },
                 actions = {
-                    // Subtle inline loading indicator when refreshing a non-empty list
-                    if (state.isLoading && state.channels.isNotEmpty()) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(18.dp)
-                                .padding(end = 2.dp),
-                            strokeWidth = 2.dp,
-                            color = getPrimaryColor()
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
                     IconButton(onClick = { vm.loadChannels() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                     }
@@ -226,16 +214,13 @@ fun ChannelScreen(
 
             // ── Content area
             when {
-                state.isLoading && state.channels.isEmpty() -> ChannelListSkeleton()
+                state.isLoading -> ChannelListSkeleton()
                 state.channels.isEmpty() -> ChannelEmptyState(onAddClick = { showCreateDialog = true })
                 else -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 8.dp,
-                            bottom = 96.dp // FAB clearance
-                        ),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 16.dp, top = 8.dp, end = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(state.channels, key = { it.id }) { channel ->
@@ -246,6 +231,7 @@ fun ChannelScreen(
                                 onToggleSms = { vm.toggleSmsNotification(channel.id) }
                             )
                         }
+                        item { Spacer(Modifier.height(96.dp)) }
                     }
                 }
             }

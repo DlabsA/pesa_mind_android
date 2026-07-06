@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 data class TransactionState(
     val transactions: List<TransactionDetails> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefresh: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null,
     val message: String? = null
@@ -29,6 +30,8 @@ class TransactionViewModel : UnifiedViewModel() {
     init {
         loadTransactions()
     }
+
+    fun refresh() = loadTransactions()
 
     override fun onStateEvent(event: StateEvent) {
         when (event) {
