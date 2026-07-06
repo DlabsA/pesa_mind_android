@@ -35,8 +35,8 @@ android {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "15"
+        versionCode = 21
+        versionName = "21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
