@@ -43,6 +43,139 @@ data class AuthRegisterResponse(
     val error: String? = null,
 )
 
+// ── Google OAuth Models ────────────────────────────────────────────────────────
+
+/**
+ * Request to verify a Google ID token and check if user exists
+ */
+data class VerifyGoogleTokenRequest(
+    @SerializedName("id_token")
+    val idToken: String
+)
+
+/**
+ * Response from /api/v1/auth/google/verify-token
+ * - If is_new_user=true, user must complete signup
+ * - If is_new_user=false, user is already registered, tokens are returned
+ */
+data class VerifyGoogleTokenResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null
+)
+
+/**
+ * Request to complete signup after user selects username
+ */
+data class CompleteGoogleSignupRequest(
+    val email: String,
+    @SerializedName("google_id")
+    val googleId: String,
+    val username: String,
+    @SerializedName("google_display_name")
+    val googleDisplayName: String? = null,
+    @SerializedName("google_profile_photo")
+    val googleProfilePhoto: String? = null
+)
+
+/**
+ * Response from /api/v1/auth/google/complete-signup
+ */
+data class CompleteGoogleSignupResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null
+)
+
+/**
+ * Request to check if username is available
+ */
+data class CheckUsernameRequest(
+    val username: String
+)
+
+/**
+ * Response from /api/v1/auth/google/check-username
+ */
+data class CheckUsernameResponse(
+    val available: Boolean,
+    val message: String? = null,
+    val error: String? = null
+)
+
+/**
+ * Request for Android-client-only Google sign-in.
+ * This flow sends account identity fields instead of Google ID tokens.
+ */
+data class GoogleMobileSignInRequest(
+    val email: String,
+    @SerializedName("google_id")
+    val googleId: String,
+    @SerializedName("google_display_name")
+    val googleDisplayName: String? = null,
+    @SerializedName("google_profile_photo")
+    val googleProfilePhoto: String? = null
+)
+
+/**
+ * Response from /api/v1/auth/google/mobile-signin
+ */
+data class GoogleMobileSignInResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null
+)
+
+/**
+ * Request for platform-specific Google sign-in.
+ * The platform field indicates which OAuth client should be used:
+ * - android: GOOGLE_OAUTH_ANDROID_CLIENT_ID
+ * - web: GOOGLE_CLIENT_ID
+ * - ios: GOOGLE_OAUTH_IOS_CLIENT_ID
+ */
+data class GooglePlatformSigninRequest(
+    val platform: String, // "android", "web", or "ios"
+    val email: String,
+    @SerializedName("google_id")
+    val googleId: String,
+    @SerializedName("google_display_name")
+    val googleDisplayName: String? = null,
+    @SerializedName("google_profile_photo")
+    val googleProfilePhoto: String? = null
+)
+
+/**
+ * Response from /api/v1/auth/google/platform-signin
+ * Same structure as mobile-signin but now with platform-aware validation
+ */
+data class GooglePlatformSigninResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null
+)
+
+// ── Account Models ────────────────────────────────────────────────────────────
+
 data class Account(
     val id: String = "",
     val username: String = "",
@@ -634,3 +767,4 @@ data class AnomalySection(
     val metadata: AnomalyMetadata,
     val recommendations: List<AnomalyRecommendation> = emptyList(),
 )
+

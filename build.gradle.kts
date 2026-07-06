@@ -7,28 +7,5 @@ plugins {
     alias(libs.plugins.compose.compiler) apply false
     id("com.google.dagger.hilt.android") version "2.51.1" apply false
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
-}
-
-val installGitHooks by tasks.registering(Exec::class) {
-    group = "build setup"
-    description = "Installs repository Git hooks from .githooks/."
-    workingDir = rootDir
-    commandLine("bash", ".githooks/install-hooks.sh")
-
-    onlyIf {
-        val installer = rootDir.resolve(".githooks/install-hooks.sh")
-        val isCi = (System.getenv("CI") ?: "false").equals("true", ignoreCase = true)
-        installer.exists() && rootDir.resolve(".git").exists() && !isCi
-    }
-}
-
-tasks.matching { it.name == "dependencies" }.configureEach {
-    dependsOn(installGitHooks)
-}
-
-subprojects {
-    tasks.matching { it.name == "dependencies" || it.name == "androidDependencies" || it.name == "preBuild" }
-        .configureEach {
-            dependsOn(rootProject.tasks.named("installGitHooks"))
-        }
+    id("com.google.gms.google-services") version "4.4.1" apply false
 }

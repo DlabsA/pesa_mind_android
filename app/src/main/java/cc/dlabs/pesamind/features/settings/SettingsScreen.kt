@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,12 +31,15 @@ import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import kotlinx.coroutines.launch
 import cc.dlabs.pesamind.R
 @Composable
 fun SettingsScreen(rootNav: NavHostController) {
     val teal = Color(0xFF1A9E8F)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isDarkMode by remember { mutableStateOf(ThemeManager.isDarkModeEnabled()) }
 
@@ -71,12 +75,22 @@ fun SettingsScreen(rootNav: NavHostController) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        scope.launch {
-                            TokenManager.clearTokens()
-                            TokenManager.clearLock()
-                            AccountManager.clearAccount()
-                            rootNav.navigate(Routes.Login.route) {
-                                popUpTo(0) { inclusive = true }
+                        val googleClient = GoogleSignIn.getClient(
+                            context,
+                            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                .requestEmail()
+                                .build()
+                        )
+
+                        googleClient.signOut().addOnCompleteListener {
+                            scope.launch {
+                                TokenManager.clearTokens()
+                                TokenManager.clearLock()
+                                AccountManager.clearAccount()
+                                showLogoutDialog = false
+                                rootNav.navigate(Routes.Login.route) {
+                                    popUpTo(0) { inclusive = true }
+                                }
                             }
                         }
                     }

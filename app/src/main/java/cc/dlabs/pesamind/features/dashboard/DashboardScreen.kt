@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.analytics.*
 import cc.dlabs.pesamind.core.network.models.AnomalyData
 import cc.dlabs.pesamind.core.theme.*
@@ -47,6 +49,74 @@ private fun Double.ugxShort() = when {
     this >= 1_000         -> "UGX ${String.format("%.0fK", this / 1_000)}"
     else                  -> "UGX ${ugxFmt.format(this.toLong())}"
 }
+
+// ─── Unavailable Feature Overlay ───────────────────────────────────────────────
+
+/**
+ * Shows a card with an overlay indicating that a feature is not yet set up.
+ * User can tap to navigate to the setup page.
+ */
+@Composable
+private fun UnavailableFeatureOverlay(
+    onNavigate: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit = {},
+) {
+    Box(
+        modifier = modifier.clickable(
+            indication = ripple(),
+            interactionSource = remember { MutableInteractionSource() }
+        ) { onNavigate() }
+    ) {
+        // Show faded content behind
+        Box(modifier = Modifier
+            .matchParentSize()
+            .alpha(0.3f)
+        ) {
+            content()
+        }
+        
+        // Overlay with message
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Budgets not yet set",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Tap to set up budgets",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
 
 // ─── Root Screen ─────────────────────────────────────────────────────────────
 
@@ -82,6 +152,7 @@ fun DashboardScreen(
                         state     = state,
                         viewModel = viewModel,
                         onRefresh = { viewModel.refresh() },
+                        navController = navController,
                     )
             }
         }
@@ -96,6 +167,7 @@ private fun DashboardScrollBody(
     state:     DashboardUiState,
     viewModel: DashboardViewModel,
     onRefresh: () -> Unit,
+    navController: NavController? = null,
 ) {
     var cardsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { cardsVisible = true }
@@ -164,20 +236,46 @@ private fun DashboardScrollBody(
                 // ── Financial Health
                 item {
                     StaggeredCard(index = 2, visible = cardsVisible) {
-                        FinancialHealthCard(
-                            health   = d.financialHealth.data,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                        val financialHealth = state.dashboard?.financialHealth
+                        if (financialHealth != null) {
+                            FinancialHealthCard(
+                                health   = financialHealth.data,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        } else {
+                            UnavailableFeatureOverlay(
+                                onNavigate = { 
+                                    navController?.navigate(Routes.SetYearlyBudget.route)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
                 // ── Spending Velocity
                 item {
                     StaggeredCard(index = 3, visible = cardsVisible) {
-                        DashboardVelocityCard(
-                            data     = d.spendingVelocity.data,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                        val spendingVelocity = state.dashboard?.spendingVelocity
+                        if (spendingVelocity != null) {
+                            DashboardVelocityCard(
+                                data     = spendingVelocity.data,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        } else {
+                            UnavailableFeatureOverlay(
+                                onNavigate = { 
+                                    navController?.navigate(Routes.SetYearlyBudget.route)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 

@@ -2,6 +2,10 @@ package cc.dlabs.pesamind.features.auth
 
 // Features/Auth/Views/RegisterScreen.kt
 
+import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -40,7 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
-
+import com.google.android.gms.auth.api.signin.GoogleSignIn
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -51,19 +56,80 @@ fun RegisterScreen(
     val form      by vm.registerForm.collectAsStateWithLifecycle()
     val authState by vm.authState.collectAsStateWithLifecycle()
 
+    // ── Google Sign-In (Signup Flow) ───────────────────────────────────────────
+    // Each screen has its own GoogleSignInManager instance to avoid state conflicts
     val focusManager  = LocalFocusManager.current
     val emailFocus    = remember { FocusRequester() }
     val passwordFocus = remember { FocusRequester() }
+    val context = LocalContext.current
+
+    val googleSignInManager = remember {
+        Log.d("RegisterScreen", "Creating GoogleSignInManager for SIGNUP flow")
+        GoogleSignInManager(context)
+    }
+    val isGoogleSignInConfigured = remember(googleSignInManager) {
+        googleSignInManager.isConfigured
+    }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        Log.d("RegisterScreen", "Google Sign-In result code: ${result.resultCode}, data: ${result.data}")
+        
+        val data = result.data
+        if (data == null) {
+            Log.e("RegisterScreen", "Google Sign-In returned null data")
+            vm.handleGoogleSignInError("Google Sign-In was canceled")
+            return@rememberLauncherForActivityResult
+        }
+        
+        // Note: Google returns RESULT_CANCELED (0) with valid data when using ActivityResultContracts
+        // So we ignore the result code and try to extract the account from the intent
+        val signInResult = googleSignInManager.handleSignInResult(result.resultCode, data)
+        
+        when (signInResult) {
+            is GoogleSignInResult.Success -> {
+                Log.d("RegisterScreen", "Google Sign-In successful: ${signInResult.email}")
+                // Continue with backend mobile-signin strategy
+                vm.handleGoogleSignIn(
+                    email = signInResult.email,
+                    googleId = signInResult.googleId,
+                    displayName = signInResult.displayName,
+                    profilePhotoUrl = signInResult.profilePhotoUrl
+                )
+            }
+            is GoogleSignInResult.Error -> {
+                Log.e("RegisterScreen", "Google Sign-In failed: ${signInResult.message}")
+                vm.handleGoogleSignInError(signInResult.message)
+            }
+        }
+    }
 
     val isLoading    = authState is AuthUiState.Loading
     val errorMessage = (authState as? AuthUiState.Error)?.message
 
-    // Navigate to login on success
+    // Navigate on success
     LaunchedEffect(authState) {
-        if (authState is AuthUiState.RegisterSuccess) {
-            navController.navigate(Routes.Login.route) {
-                popUpTo(Routes.Register.route) { inclusive = true }
+        when (authState) {
+            is AuthUiState.RegisterSuccess -> {
+                navController.navigate(Routes.Login.route) {
+                    popUpTo(Routes.Register.route) { inclusive = true }
+                }
             }
+            is AuthUiState.GoogleSignupSuccess -> {
+                navController.navigate(Routes.Dashboard.route) {
+                    popUpTo(Routes.Register.route) { inclusive = true }
+                }
+            }
+            is AuthUiState.LoginSuccess -> {
+                // User signed in via Google and is an existing user
+                // Navigate to the appropriate destination (lock setup, pin unlock, etc)
+                Log.d("RegisterScreen", "Existing user signed in via Google, navigating to ${(authState as AuthUiState.LoginSuccess).destination}")
+                navController.navigate((authState as AuthUiState.LoginSuccess).destination) {
+                    popUpTo(Routes.Register.route) { inclusive = true }
+                }
+            }
+            else -> {}
         }
     }
 
@@ -185,6 +251,65 @@ fun RegisterScreen(
                     )
                 } else {
                     Text("Sign Up", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // Divider - only show if Google Sign-In is available
+            if (isGoogleSignInConfigured) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("or", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // Google Sign-Up Button - only show if configured
+            if (isGoogleSignInConfigured) {
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        googleSignInManager.getSignInIntentAfterSignOut { intent ->
+                            if (intent != null) {
+                                googleSignInLauncher.launch(intent)
+                            } else {
+                                Log.e("RegisterScreen", "Google Sign-In intent is null")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFFFFF),
+                        contentColor = Color(0xFF1F2937)
+                    ),
+                    enabled = !isLoading,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        content = {
+                            // Google logo placeholder
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color.White)
+                            )
+                            Text(
+                                "Sign up with Google",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    )
                 }
             }
 

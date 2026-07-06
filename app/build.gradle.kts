@@ -4,7 +4,28 @@ plugins {
     alias(libs.plugins.compose.compiler)
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
+    id("com.google.gms.google-services")
 }
+
+fun readDotEnvValue(key: String): String? {
+    val envFile = rootProject.file(".env")
+    if (!envFile.exists()) return null
+
+    val prefix = "$key="
+    return envFile.readLines()
+        .asSequence()
+        .map { it.trim() }
+        .firstOrNull { line -> line.isNotBlank() && !line.startsWith("#") && line.startsWith(prefix) }
+        ?.substringAfter("=")
+        ?.trim()
+        ?.removeSurrounding("\"")
+        ?.removeSurrounding("'")
+}
+
+val googleAndroidClientId = (findProperty("GOOGLE_ANDROID_CLIENT_ID") as String?)
+    ?: System.getenv("GOOGLE_ANDROID_CLIENT_ID")
+    ?: readDotEnvValue("GOOGLE_ANDROID_CLIENT_ID")
+    ?: "884168293120-cngr633jrrkuq5hcuv0cqv19latmfb9j.apps.googleusercontent.com"
 
 android {
     namespace = "cc.dlabs.pesamind"
@@ -14,10 +35,19 @@ android {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "13"
+        versionCode = 15
+        versionName = "15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getProperty("user.home") + "/.android/my-release-key.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "K@sh404730"
+            keyAlias = "pesa_mind"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "K@sh404730"
+        }
     }
 
     buildTypes {
@@ -27,6 +57,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
         }
     }
     compileOptions {
@@ -39,6 +75,7 @@ android {
     buildFeatures {
         viewBinding = true
         compose = true
+        buildConfig = true
     }
     sourceSets {
         getByName("main") {
@@ -85,6 +122,12 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // Google Sign-In
+    implementation(libs.google.signin)
+    
+    // Android Security (EncryptedSharedPreferences)
+    implementation(libs.androidx.security.crypto)
+
     implementation("androidx.compose.material3:material3:1.2.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -94,6 +137,11 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51.1")
     kapt("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    
+    // Testing
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.kotlin)
+    testImplementation(libs.coroutines.test)
 }
 
 kapt {

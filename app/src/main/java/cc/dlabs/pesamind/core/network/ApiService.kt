@@ -8,8 +8,8 @@ import cc.dlabs.pesamind.core.network.analytics.FinancialHealthResponse
 import cc.dlabs.pesamind.core.network.analytics.Health
 import cc.dlabs.pesamind.core.network.analytics.MonthlyTrendsResponse
 import cc.dlabs.pesamind.core.network.analytics.SpendingVelocityResponse
-import cc.dlabs.pesamind.core.network.models.AnalyticResponse
 import cc.dlabs.pesamind.core.network.models.AnomalySection
+import cc.dlabs.pesamind.core.network.models.AnalyticResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
@@ -18,6 +18,14 @@ import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.network.models.UserResponse
+import cc.dlabs.pesamind.core.network.models.GoogleMobileSignInRequest
+import cc.dlabs.pesamind.core.network.models.GoogleMobileSignInResponse
+import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninRequest
+import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninResponse
+import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupRequest
+import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupResponse
+import cc.dlabs.pesamind.core.network.models.CheckUsernameRequest
+import cc.dlabs.pesamind.core.network.models.CheckUsernameResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -50,6 +58,20 @@ interface ApiService {
 
     @POST("auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): Response<AuthResponse>
+    
+    // ── Google OAuth Endpoints ────────────────────────────────────────────────
+    
+    @POST("auth/google/platform-signin")
+    suspend fun platformGoogleSignIn(@Body body: GooglePlatformSigninRequest): Response<GooglePlatformSigninResponse>
+    
+    @POST("auth/google/mobile-signin")
+    suspend fun mobileGoogleSignIn(@Body body: GoogleMobileSignInRequest): Response<GoogleMobileSignInResponse>
+    
+    @POST("auth/google/complete-signup")
+    suspend fun completeGoogleSignup(@Body body: CompleteGoogleSignupRequest): Response<CompleteGoogleSignupResponse>
+    
+    @POST("auth/google/check-username")
+    suspend fun checkUsername(@Body body: CheckUsernameRequest): Response<CheckUsernameResponse>
 
     // Account endpoint
     @GET("users/me")

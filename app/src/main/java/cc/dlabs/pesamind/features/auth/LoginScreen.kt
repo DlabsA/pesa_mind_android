@@ -1,7 +1,10 @@
 package cc.dlabs.pesamind.features.auth
 
 // Features/Auth/Views/LoginScreen.kt
-import cc.dlabs.pesamind.R
+import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +31,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,7 +44,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
+import com.google.android.gms.auth.api.signin.GoogleSignIn
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -52,19 +58,72 @@ fun LoginScreen(
     val form      by vm.loginForm.collectAsStateWithLifecycle()
     val authState by vm.authState.collectAsStateWithLifecycle()
 
+    // ── Google Sign-In (Login Flow) ────────────────────────────────────────────
+    // Each screen has its own GoogleSignInManager instance to avoid state conflicts
+    val context = LocalContext.current
+
+    val googleSignInManager = remember {
+        Log.d("LoginScreen", "Creating GoogleSignInManager for LOGIN flow")
+        GoogleSignInManager(context)
+    }
+    val isGoogleSignInConfigured = remember(googleSignInManager) {
+        googleSignInManager.isConfigured
+    }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        Log.d("LoginScreen", "Google Sign-In result code: ${result.resultCode}, data: ${result.data}")
+        
+        val data = result.data
+        if (data == null) {
+            Log.e("LoginScreen", "Google Sign-In returned null data")
+            vm.handleGoogleSignInError("Google Sign-In was canceled")
+            return@rememberLauncherForActivityResult
+        }
+        
+        // Note: Google returns RESULT_CANCELED (0) with valid data when using ActivityResultContracts
+        // So we ignore the result code and try to extract the account from the intent
+        val signInResult = googleSignInManager.handleSignInResult(result.resultCode, data)
+        
+        when (signInResult) {
+            is GoogleSignInResult.Success -> {
+                Log.d("LoginScreen", "Google Sign-In successful: ${signInResult.email}")
+                // Continue with backend mobile-signin strategy
+                vm.handleGoogleSignIn(
+                    email = signInResult.email,
+                    googleId = signInResult.googleId,
+                    displayName = signInResult.displayName,
+                    profilePhotoUrl = signInResult.profilePhotoUrl
+                )
+            }
+            is GoogleSignInResult.Error -> {
+                Log.e("LoginScreen", "Google Sign-In failed: ${signInResult.message}")
+                vm.handleGoogleSignInError(signInResult.message)
+            }
+        }
+    }
+
     val focusManager    = LocalFocusManager.current
     val passwordFocus   = remember { FocusRequester() }
-
     val isLoading    = authState is AuthUiState.Loading
     val errorMessage = (authState as? AuthUiState.Error)?.message
 
     // Navigate on success
     LaunchedEffect(authState) {
-        if (authState is AuthUiState.LoginSuccess) {
-            val destination = (authState as AuthUiState.LoginSuccess).destination
-            navController.navigate(destination) {
-                popUpTo(Routes.Login.route) { inclusive = true }
+        when (authState) {
+            is AuthUiState.LoginSuccess -> {
+                val destination = (authState as AuthUiState.LoginSuccess).destination
+                navController.navigate(destination) {
+                    popUpTo(Routes.Login.route) { inclusive = true }
+                }
             }
+            is AuthUiState.GoogleSignupSuccess -> {
+                navController.navigate(Routes.Dashboard.route) {
+                    popUpTo(Routes.Login.route) { inclusive = true }
+                }
+            }
+            else -> {}
         }
     }
 
@@ -182,14 +241,63 @@ fun LoginScreen(
                 }
             }
 
-            // Divider
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("or", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Divider - only show if Google Sign-In is available
+            if (isGoogleSignInConfigured) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("or", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // Google Sign-In Button - only show if configured
+            if (isGoogleSignInConfigured) {
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        googleSignInManager.getSignInIntentAfterSignOut { intent ->
+                            if (intent != null) {
+                                googleSignInLauncher.launch(intent)
+                            } else {
+                                Log.e("LoginScreen", "Google Sign-In intent is null")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFFFFF),
+                        contentColor = Color(0xFF1F2937)
+                    ),
+                    enabled = !isLoading,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        content = {
+                            // Google logo placeholder
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color.White)
+                            )
+                            Text(
+                                "Continue with Google",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    )
+                }
             }
 
             // Create account

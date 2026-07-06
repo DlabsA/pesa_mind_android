@@ -1,0 +1,61 @@
+{
+  "project_info": {
+    "project_id": "pesa-mind-884168293120",
+    "project_number": "884168293120",
+    "firebase_url": "https://pesa-mind-884168293120.firebaseio.com",
+    "project_name": "pesa-mind",
+    "storage_bucket": "pesa-mind-884168293120.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884168293120:android:b3aaba5ebab97a8231",
+        "client_id": "android:cc.dlabs.pesamind",
+        "client_type": 1,
+        "android_client_info": {
+          "package_name": "cc.dlabs.pesamind",
+          "certificate_hash": [
+            "b3aaba5ebab97a8231283838d783f6a093e046fc03"
+          ]
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "884168293120-ntru34a3u3cg6b9o7du4mi6jada02f80.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_cert_fingerprint": [
+            {
+              "sha1": "b3aaba5ebab97a8231283838d783f6a093e046fc03"
+            }
+          ]
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1234567890placeholder1234567890aaa"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "analytics_reporting_service": {
+            "status": 1
+          }
+        },
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "884168293120-placeholder.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+
