@@ -149,7 +149,7 @@ object ChannelManager {
         // Get existing channels (cached)
         val channels = getChannels()
         val matchingChannel = channels.find {
-            it.channelType == channelTypeMatched
+            it.channelDesc == channelTypeMatched
         }
 
         // If found, return it
