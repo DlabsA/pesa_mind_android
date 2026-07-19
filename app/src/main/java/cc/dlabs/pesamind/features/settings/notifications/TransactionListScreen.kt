@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notes
@@ -393,18 +395,39 @@ private fun SummaryBanner(
                     .fillMaxWidth()
                     .padding(20.dp)
             ) {
-                Text(
-                    text  = "$count transactions",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text  = "$count transactions",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text  = "UGX",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                        )
+                    }
+                }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(14.dp))
 
-                // Income / Expense row
+                // Income / Expense / Saving row
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     SummaryPill(
                         label    = "Income",
@@ -442,29 +465,36 @@ private fun SummaryPill(
         shape    = RoundedCornerShape(12.dp),
         color    = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.10f)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(color, CircleShape)
+                )
+                Text(
+                    text  = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(5.dp))
             Text(
-                text  = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f)
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                text = buildAnnotatedString {
-                    withStyle(
-                        SpanStyle(
-                            fontSize   = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color      = color
-                        )
-                    ) { append(amount.toUgx()) }
-                    withStyle(
-                        SpanStyle(
-                            fontSize = 10.sp,
-                            color    = color.copy(alpha = 0.65f)
-                        )
-                    ) { append(" UGX") }
-                }
+                text     = amount.toUgx(),
+                style    = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize   = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = color,
+                    letterSpacing = (-0.2).sp
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
         }
     }
@@ -502,12 +532,12 @@ private fun TransactionCard(tx: TransactionDetails, onClick: () -> Unit) {
                 color  = accentBg,
                 modifier = Modifier.size(46.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text     = if (isIncome) "↑" else "↓",
-                        fontSize = 20.sp,
-                        color    = accentColor,
-                        fontWeight = FontWeight.Bold
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -615,12 +645,12 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(shape = CircleShape, color = accentBg, modifier = Modifier.size(56.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = if (isIncome) "↑" else "↓",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accentColor
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -643,10 +673,14 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
                     withStyle(SpanStyle(fontSize = 14.sp, color = accentColor.copy(alpha = 0.6f))) {
                         append(" UGX")
                     }
-                }
+                },
+                textAlign = TextAlign.Center,
+                maxLines  = 2,
+                overflow  = TextOverflow.Ellipsis,
+                modifier  = Modifier.fillMaxWidth()
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
             Surface(shape = RoundedCornerShape(999.dp), color = accentBg) {
                 Text(

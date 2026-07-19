@@ -10,10 +10,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,10 +46,16 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material.icons.outlined.ToggleOff
+import androidx.compose.material.icons.outlined.ToggleOn
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,9 +64,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +78,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -84,6 +102,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -93,6 +112,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
@@ -865,30 +886,75 @@ fun ChannelCard(
                     }
                 }
 
-                Spacer(Modifier.height(14.dp))
-
-                // SMS Notification Toggle (only for non-CASH channels)
-                if (item.channelType != "CASH") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "SMS Notifications",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
-                        )
-                        Switch(
-                            checked = item.smsNotificationEnabled,
-                            onCheckedChange = { onToggleSms() },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = getPrimaryColor(),
-                                uncheckedThumbColor = Color.LightGray
-                            )
-                        )
-                    }
+                // SMS Notification Toggle (only for non-cash channels)
+                if (item.channelType != ChannelTypes.CASH) {
+                    Spacer(Modifier.height(12.dp))
+                    SmsToggleRow(
+                        enabled = item.smsNotificationEnabled,
+                        onToggle = onToggleSms
+                    )
                 }
             }
+        }
+    }
+}
+
+// ─── SMS Toggle Row ───────────────────────────────────────────────────────────
+
+@Composable
+private fun SmsToggleRow(
+    enabled: Boolean,
+    onToggle: () -> Unit
+) {
+    val tint = if (enabled) getPrimaryColor() else MaterialTheme.colorScheme.onSurfaceVariant
+    val containerColor = if (enabled) getPrimaryColor().copy(alpha = 0.08f)
+    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (enabled) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsOff,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "SMS Notifications",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = if (enabled) "Auto-detecting transactions" else "Manual entry only",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = { onToggle() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = getPrimaryColor(),
+                    checkedBorderColor = Color.Transparent,
+                    uncheckedThumbColor = Color.White,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                    uncheckedBorderColor = Color.Transparent
+                )
+            )
         }
     }
 }
@@ -951,8 +1017,21 @@ private fun DeleteConfirmDialog(
     )
 }
 
-// ─── Channel Form Dialog ──────────────────────────────────────────────────────
+// New imports for this version:
+//   androidx.compose.ui.window.Dialog
+//   androidx.compose.ui.window.DialogProperties
+//   androidx.compose.foundation.layout.FlowRow
+//   androidx.compose.foundation.layout.ExperimentalLayoutApi
+//   androidx.compose.foundation.layout.heightIn
+//   androidx.compose.foundation.layout.size
+//   androidx.compose.material3.FilterChip
+//   androidx.compose.material3.FilterChipDefaults
+//   androidx.compose.material3.HorizontalDivider
+//   androidx.compose.material3.IconButton
+//   androidx.compose.material.icons.rounded.Check
+//   androidx.compose.material.icons.rounded.Close
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChannelFormDialog(
     title: String,
@@ -965,243 +1044,431 @@ private fun ChannelFormDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, String, String, String, Boolean) -> Unit,
     isTypeEditable: Boolean = true,
-    showStatusField: Boolean = true
+    showStatusField: Boolean = true,
+    subtitle: String? = null
 ) {
+    val normalizedInitialType = remember(initialType) {
+        ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH
+    }
+
+    // Rehydrate country + number from the stored description when editing mobile money.
+    val (initialCountry, initialNumber) = remember(title, initialDescription, normalizedInitialType) {
+        if (normalizedInitialType == ChannelTypes.MOBILE_MONEY && initialDescription.isNotBlank()) {
+            val match = COUNTRY_CODES.firstOrNull { initialDescription.startsWith(it.code) }
+            if (match != null) match to initialDescription.removePrefix(match.code).filter { it.isDigit() }
+            else COUNTRY_CODES[0] to initialDescription.filter { it.isDigit() }
+        } else {
+            COUNTRY_CODES[0] to ""
+        }
+    }
+
     var name by remember(title, initialName) { mutableStateOf(initialName) }
     var description by remember(title, initialDescription) { mutableStateOf(initialDescription) }
-    var channelDescription by remember(title) { mutableStateOf("") }
-    var type by remember(title, initialType) {
-        mutableStateOf(ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH)
-    }
+    var channelDescription by remember(title, initialDescription) { mutableStateOf("") }
+    var type by remember(title, normalizedInitialType) { mutableStateOf(normalizedInitialType) }
     var status by remember(title, initialStatus) { mutableStateOf(initialStatus) }
-    var typeMenuExpanded by remember(title) { mutableStateOf(false) }
-    var descMenuExpanded by remember(title) { mutableStateOf(false) }
-    var mobileNumber by remember { mutableStateOf("") }
-    var selectedCountry by remember { mutableStateOf(COUNTRY_CODES[0]) }
+    var mobileNumber by remember(title, initialDescription) { mutableStateOf(initialNumber) }
+    var selectedCountry by remember(title, initialDescription) { mutableStateOf(initialCountry) }
+    var attemptedSave by remember(title) { mutableStateOf(false) }
 
-    val isFormValid = name.isNotBlank()
+    // ---- Validation ------------------------------------------------------
+    val trimmedName = name.trim()
+    val providerShown = type != ChannelTypes.CASH && type.isNotBlank()
+    val digits = mobileNumber.filter { it.isDigit() }
+    val nameMissing = trimmedName.isBlank()
+    val providerMissing = providerShown && channelDescription.isBlank()
+    val mobileMissing = type == ChannelTypes.MOBILE_MONEY && digits.isBlank()
+    val isFormValid = !nameMissing && !providerMissing && !mobileMissing
 
-    AlertDialog(
+    // ---- Derived values (computed, never written to state in composition) -
+    val effectiveDescription = when (type) {
+        ChannelTypes.MOBILE_MONEY -> "${selectedCountry.code}$digits"
+        else -> description
+    }
+    val effectiveProvider = if (type == ChannelTypes.CASH) "" else channelDescription
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .heightIn(max = 640.dp)
+        ) {
+            Column {
 
-                // Name
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Channel name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
+                // ---- Header (sticky) ----------------------------------------
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 12.dp, top = 20.dp, bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        if (!subtitle.isNullOrBlank()) {
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
+                // ---- Body (scrollable) --------------------------------------
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // Name
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Channel name") },
+                        singleLine = true,
+                        isError = attemptedSave && nameMissing,
+                        supportingText = if (attemptedSave && nameMissing) {
+                            { Text("Name is required") }
+                        } else null,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
 
-                // Channel type
-                FormSectionLabel("Channel Type")
-                if (isTypeEditable) {
-                    Box {
-                        OutlinedButton(
-                            onClick = { typeMenuExpanded = true },
+                    // Channel type
+                    FieldSection(label = "Channel type") {
+                        if (isTypeEditable) {
+                            ChoiceChipGroup(
+                                options = ChannelTypes.valid,
+                                selected = type,
+                                optionLabel = { displayChannelType(it) },
+                                onSelect = {
+                                    if (it != type) {
+                                        type = it
+                                        channelDescription = ""
+                                    }
+                                }
+                            )
+                        } else {
+                            ReadOnlyPill(text = displayChannelType(type))
+                        }
+                    }
+
+                    // Provider (non-cash only)
+                    if (providerShown) {
+                        FieldSection(
+                            label = "Provider",
+                            errorText = if (attemptedSave && providerMissing) "Select a provider" else null
+                        ) {
+                            if (isTypeEditable) {
+                                ProviderDropdown(
+                                    options = getDescriptionOptionsForType(type),
+                                    selected = channelDescription,
+                                    onSelect = { channelDescription = it },
+                                    isError = attemptedSave && providerMissing
+                                )
+                            } else {
+                                ReadOnlyPill(
+                                    text = displayChannelTypeDescription(type, channelDescription)
+                                )
+                            }
+                        }
+                    }
+
+                    // Number / free-text description
+                    if (type == ChannelTypes.MOBILE_MONEY) {
+                        FieldSection(
+                            label = "Mobile money number",
+                            errorText = if (attemptedSave && mobileMissing) {
+                                "Enter a valid number"
+                            } else null
+                        ) {
+                            MobileMoneyNumberField(
+                                phoneNumber = mobileNumber,
+                                onPhoneNumberChange = { mobileNumber = it },
+                                selectedCountry = selectedCountry,
+                                onCountryChange = { selectedCountry = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("Description") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
+                            minLines = 2,
+                            maxLines = 3,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                    }
+
+                    // Status
+                    if (showStatusField) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (status) getPrimaryColor().copy(alpha = 0.06f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                             border = BorderStroke(
                                 1.dp,
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                if (status) getPrimaryColor().copy(alpha = 0.30f)
+                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
                             ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                displayChannelType(type),
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Icon(
-                                Icons.Filled.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = typeMenuExpanded,
-                            onDismissRequest = { typeMenuExpanded = false }
-                        ) {
-                            ChannelTypes.valid.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(displayChannelType(option)) },
-                                    onClick = {
-                                        type = option
-                                        channelDescription = ""
-                                        typeMenuExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = displayChannelType(type),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
-                        )
-                    }
-                }
-                // Channel sub-description (only for non-cash with editable type)
-                if (type != ChannelTypes.CASH && type.isNotBlank()) {
-                    FormSectionLabel("Provider")
-                    if (isTypeEditable) {
-                        Box {
-                            OutlinedButton(
-                                onClick = { descMenuExpanded = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                ),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = displayChannelTypeDescription(type, channelDescription)
-                                        .ifBlank { "Select provider" },
-                                    modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (channelDescription.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
-                                    else MaterialTheme.colorScheme.onSurface
-                                )
-                                Icon(
-                                    Icons.Filled.ArrowDropDown,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = descMenuExpanded,
-                                onDismissRequest = { descMenuExpanded = false }
-                            ) {
-                                getDescriptionOptionsForType(type).forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            channelDescription = option
-                                            descMenuExpanded = false
-                                        }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Status",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    )
+                                    Text(
+                                        text = if (status) "Channel is active" else "Channel is inactive",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (status) getTertiaryColor()
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                                Switch(
+                                    checked = status,
+                                    onCheckedChange = { status = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = getPrimaryColor(),
+                                        uncheckedThumbColor = Color.White,
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                )
                             }
                         }
                     }
                 }
-                    else{
-                    channelDescription = ""
-                }
-                // Description
-                if (type == ChannelTypes.MOBILE_MONEY){
-                    MobileMoneyNumberField(
-                        phoneNumber = mobileNumber,
-                        onPhoneNumberChange = { mobileNumber = it },
-                        selectedCountry = selectedCountry,
-                        onCountryChange = { selectedCountry = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    description = "${selectedCountry.code}${mobileNumber.filter { it.isDigit() }}"
-                }
-                else {
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Description") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        maxLines = 3,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
 
-                // Status toggle (Switch instead of dropdown)
-                if (showStatusField) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "Status",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Medium
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                // ---- Footer (sticky) ----------------------------------------
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Button(
+                        onClick = {
+                            attemptedSave = true
+                            if (isFormValid) {
+                                onConfirm(
+                                    trimmedName,
+                                    effectiveDescription.trim(),
+                                    type.trim(),
+                                    effectiveProvider.trim(),
+                                    status
                                 )
-                            )
-                            Text(
-                                text = if (status) "Channel is active" else "Channel is inactive",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (status) getTertiaryColor() else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = status,
-                            onCheckedChange = { status = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = getPrimaryColor(),
-                                uncheckedThumbColor = Color.White,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        )
+                            }
+                        },
+                        enabled = !isSaving,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor())
+                    ) {
+                        Text(if (isSaving) "Saving…" else confirmLabel)
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onConfirm(
-                        name.trim(),
-                        description.trim(),
-                        type.trim(),
-                        channelDescription.trim(),
-                        status
-                    )
-                },
-                enabled = isFormValid && !isSaving,
+        }
+    }
+}
+
+/** Small labelled section wrapper: muted label above, optional error line below. */
+@Composable
+private fun FieldSection(
+    label: String,
+    errorText: String? = null,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        content()
+        if (!errorText.isNullOrBlank()) {
+            Text(
+                errorText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+/** Wrapping row of selectable chips, used for both channel type and provider. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChoiceChipGroup(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    optionLabel: (String) -> String = { it },
+    isError: Boolean = false
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { option ->
+            val isSelected = option == selected
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(option) },
+                label = { Text(optionLabel(option)) },
+                leadingIcon = if (isSelected) {
+                    { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                } else null,
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor())
-            ) {
-                Text(if (isSaving) "Saving…" else confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = getPrimaryColor().copy(alpha = 0.14f),
+                    selectedLabelColor = getPrimaryColor(),
+                    selectedLeadingIconColor = getPrimaryColor()
+                ),
+                // Material3 < 1.2: filterChipBorder takes different params — drop enabled/selected.
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = isSelected,
+                    borderColor = if (isError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    selectedBorderColor = getPrimaryColor().copy(alpha = 0.5f)
+                )
+            )
+        }
+    }
+}
+
+/** Dropdown menu for selecting a provider (bank or mobile money). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProviderDropdown(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    isError: Boolean = false
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = selected,
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.rotate(if (expanded) 180f else 0f)
+                )
+            },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+                .clickable { expanded = !expanded },
+            placeholder = { Text("Select a provider") },
+            isError = isError,
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (isError) MaterialTheme.colorScheme.error 
+                    else getPrimaryColor(),
+                unfocusedBorderColor = if (isError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                errorBorderColor = MaterialTheme.colorScheme.error
+            )
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .fillMaxWidth(0.93f)
+                .heightIn(max = 300.dp)
+        ) {
+            if (options.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("No options available", style = MaterialTheme.typography.bodySmall) },
+                    onClick = {},
+                    enabled = false
+                )
+            } else {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
+                        onClick = {
+                            onSelect(option)
+                            expanded = false
+                        },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (option == selected)
+                                    getPrimaryColor().copy(alpha = 0.08f)
+                                else
+                                    Color.Transparent
+                            )
+                    )
+                }
             }
         }
-    )
+    }
+}
+
+/** Static tinted pill for non-editable type/provider values. */
+@Composable
+private fun ReadOnlyPill(text: String) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = getPrimaryColor().copy(alpha = 0.12f)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = getPrimaryColor(),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+        )
+    }
 }
 
 // ─── Type Filter Dialog ───────────────────────────────────────────────────────

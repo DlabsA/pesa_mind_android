@@ -27,6 +27,9 @@ androidxFoundation = "1.11.1"
 uiGraphics = "1.11.2"
 googleSignIn = "21.0.0"
 androidxSecurityCrypto = "1.1.0-alpha06"
+ui = "1.11.4"
+material3 = "1.4.0"
+foundationLayoutVersion = "1.11.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -65,6 +68,9 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 mockito-core = { group = "org.mockito", name = "mockito-core", version = "5.7.0" }
 mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version = "5.1.0" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.7.3" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
+androidx-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayoutVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

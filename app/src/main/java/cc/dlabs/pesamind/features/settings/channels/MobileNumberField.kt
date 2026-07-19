@@ -109,7 +109,14 @@ fun MobileMoneyNumberField(
                         .width(130.dp)
                         .menuAnchor(),
                     shape = RoundedCornerShape(10.dp),
-                    singleLine = true
+                    singleLine = true,
+                    supportingText = {
+                        // Invisible placeholder to match phone number field height
+                        Text(
+                            text = " ",
+                            fontSize = 12.sp
+                        )
+                    }
                 )
 
                 ExposedDropdownMenu(
@@ -151,19 +158,21 @@ fun MobileMoneyNumberField(
                 singleLine = true,
                 isError = showError,
                 supportingText = {
-                    when {
-                        showError -> Text(
-                            "Enter a valid ${selectedCountry.digitCount}-digit number",
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 12.sp
-                        )
-                        isValid -> Text(
-                            "✓  ${selectedCountry.code} ${phoneNumber.take(3)} " +
-                                    "${phoneNumber.substring(3, 6)} ${phoneNumber.drop(6)}",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 12.sp
-                        )
-                    }
+                    // Always reserve space for supporting text to prevent layout shift
+                    Text(
+                        text = when {
+                            showError -> "Enter a valid ${selectedCountry.digitCount}-digit number"
+                            isValid -> "✓  ${selectedCountry.code} ${phoneNumber.take(3)} " +
+                                    "${phoneNumber.substring(3, 6)} ${phoneNumber.drop(6)}"
+                            else -> " "  // Empty space to maintain height
+                        },
+                        color = when {
+                            showError -> MaterialTheme.colorScheme.error
+                            isValid -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0f)  // Invisible placeholder
+                        },
+                        fontSize = 12.sp
+                    )
                 },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(10.dp)
