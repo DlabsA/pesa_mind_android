@@ -76,8 +76,8 @@ class SMSMessageProcessor(
             }
 
             val (amount, txType, parsedNote) = when (normalizedSender) {
-                MessageSender.MTNMobMoney -> parseMTNMessage(content)
-                MessageSender.airtelmoney -> parseAirtelMessage(content)
+                MessageSender.MTN_MOB_MONEY -> parseMTNMessage(content)
+                MessageSender.AIRTEL_MONEY -> parseAirtelMessage(content)
                 else -> null
             } ?: run {
                 Log.w(TAG, "Could not parse message content: $content")

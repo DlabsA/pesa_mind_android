@@ -138,10 +138,10 @@ object ChannelManager {
         if (!isInitialized()) return null
 
         val channelTypeMatched = when (senderID) {
-            MessageSender.MTNMobMoney -> ChannelDescMobileMoney.MTNMOBILEMONEY
-            MessageSender.airtelmoney -> ChannelDescMobileMoney.AIRTELMONEY
-            MessageSender.stanbicbank -> ChannelTypes.BANK
-            MessageSender.centenary -> ChannelTypes.BANK
+            MessageSender.MTN_MOB_MONEY -> ChannelDescMobileMoney.MTNMOBILEMONEY
+            MessageSender.AIRTEL_MONEY -> ChannelDescMobileMoney.AIRTELMONEY
+            MessageSender.STANBIC_BANK -> ChannelTypes.BANK
+            MessageSender.CENTENARY_BANK -> ChannelTypes.BANK
             else -> null // Return null if no match
         }
 
@@ -193,10 +193,10 @@ object ChannelManager {
     private fun determineChannelTypeAndDesc(senderID: String): Pair<String?, String?> {
         val normalized = MessageSender.normalizeOrNull(senderID) ?: return Pair(null, null)
         return when (normalized) {
-            MessageSender.MTNMobMoney -> Pair(ChannelTypes.MOBILE_MONEY, MessageSender.MTNMobMoney)
-            MessageSender.airtelmoney -> Pair(ChannelTypes.MOBILE_MONEY, MessageSender.airtelmoney)
-            MessageSender.stanbicbank -> Pair(ChannelTypes.BANK, MessageSender.stanbicbank)
-            MessageSender.centenary -> Pair(ChannelTypes.BANK, MessageSender.centenary)
+            MessageSender.MTN_MOB_MONEY -> Pair(ChannelTypes.MOBILE_MONEY, MessageSender.MTN_MOB_MONEY)
+            MessageSender.AIRTEL_MONEY -> Pair(ChannelTypes.MOBILE_MONEY, MessageSender.AIRTEL_MONEY)
+            MessageSender.STANBIC_BANK -> Pair(ChannelTypes.BANK, MessageSender.STANBIC_BANK)
+            MessageSender.CENTENARY_BANK -> Pair(ChannelTypes.BANK, MessageSender.CENTENARY_BANK)
             else -> Pair(null, null)
         }
     }

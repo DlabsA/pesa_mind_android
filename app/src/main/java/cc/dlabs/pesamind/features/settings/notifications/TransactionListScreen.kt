@@ -5,19 +5,25 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notes
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -28,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -40,10 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
-import cc.dlabs.pesamind.core.theme.AmountSmall
-import cc.dlabs.pesamind.core.theme.DarkColors
-import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -51,6 +56,29 @@ import java.util.Locale
 
 private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
 private fun Double.toUgx() = ugxFmt.format(this)
+
+// ─── Filter state ───────────────────────────────────────────────────────────────
+
+private enum class TxFilter(val label: String) {
+    ALL("All"),
+    INCOME("Income"),
+    EXPENSE("Expense"),
+    SAVING("Saving")
+}
+
+private fun TransactionDetails.matchesFilter(filter: TxFilter): Boolean = when (filter) {
+    TxFilter.ALL     -> true
+    TxFilter.INCOME  -> type.equals("income", ignoreCase = true)
+    TxFilter.EXPENSE -> type.equals("expense", ignoreCase = true)
+    TxFilter.SAVING  -> type.equals("saving", ignoreCase = true) || type.equals("savings", ignoreCase = true)
+}
+
+private fun TransactionDetails.matchesQuery(query: String): Boolean {
+    if (query.isBlank()) return true
+    return channelDetailsName.contains(query, ignoreCase = true) ||
+        username.contains(query, ignoreCase = true) ||
+        note.contains(query, ignoreCase = true)
+}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -65,7 +93,13 @@ fun TransactionListScreen(
     val isLoading   = state.isLoading
     val error       = state.error
 
-    // Summary totals — computed once from the list
+    var searchQuery by remember { mutableStateOf("") }
+    var typeFilter  by remember { mutableStateOf(TxFilter.ALL) }
+    var selectedTx  by remember { mutableStateOf<TransactionDetails?>(null) }
+
+    val hasActiveFilter = searchQuery.isNotBlank() || typeFilter != TxFilter.ALL
+
+    // Summary totals — always computed from the full unfiltered list
     val totalIncome  = remember(transactions) {
         transactions.filter { it.type.equals("income",  ignoreCase = true) }
             .sumOf { it.amount }
@@ -79,6 +113,10 @@ fun TransactionListScreen(
             it.type.equals("saving", ignoreCase = true) ||
                 it.type.equals("savings", ignoreCase = true)
         }.sumOf { it.amount }
+    }
+
+    val filteredTransactions = remember(transactions, searchQuery, typeFilter) {
+        transactions.filter { it.matchesQuery(searchQuery) && it.matchesFilter(typeFilter) }
     }
 
     Scaffold(
@@ -175,24 +213,138 @@ fun TransactionListScreen(
 
                         item(key = "spacer") { Spacer(Modifier.height(4.dp)) }
 
-                        // Transaction rows with staggered entrance
-                        itemsIndexed(
-                            items = transactions,
-                            key   = { _, tx -> tx.id }
-                        ) { idx, tx ->
-                            AnimatedVisibility(
-                                visible = true,
-                                enter   = fadeIn(tween(220, delayMillis = idx.coerceAtMost(8) * 40))
-                                        + slideInVertically(
-                                    tween(220, delayMillis = idx.coerceAtMost(8) * 40)
-                                ) { it / 6 }
-                            ) {
-                                TransactionCard(tx = tx)
+                        // Search field
+                        item(key = "search") {
+                            TransactionSearchField(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it }
+                            )
+                        }
+
+                        // Type filter chips
+                        item(key = "filters") {
+                            TransactionFilterRow(
+                                selected = typeFilter,
+                                onSelect = { typeFilter = it }
+                            )
+                        }
+
+                        if (hasActiveFilter) {
+                            item(key = "result_count") {
+                                Text(
+                                    text  = "${filteredTransactions.size} of ${transactions.size} transactions",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                                )
+                            }
+                        }
+
+                        if (filteredTransactions.isEmpty()) {
+                            item(key = "no_results") {
+                                NoMatchesState(
+                                    onClear = {
+                                        searchQuery = ""
+                                        typeFilter = TxFilter.ALL
+                                    }
+                                )
+                            }
+                        } else {
+                            // Transaction rows with staggered entrance
+                            itemsIndexed(
+                                items = filteredTransactions,
+                                key   = { _, tx -> tx.id }
+                            ) { idx, tx ->
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter   = fadeIn(tween(220, delayMillis = idx.coerceAtMost(8) * 40))
+                                            + slideInVertically(
+                                        tween(220, delayMillis = idx.coerceAtMost(8) * 40)
+                                    ) { it / 6 }
+                                ) {
+                                    TransactionCard(tx = tx, onClick = { selectedTx = tx })
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    // ── Details bottom sheet ────────────────────────────────────────────────
+    selectedTx?.let { tx ->
+        val sheetState = rememberModalBottomSheetState()
+        val scope = rememberCoroutineScope()
+        ModalBottomSheet(
+            onDismissRequest = { selectedTx = null },
+            sheetState = sheetState
+        ) {
+            TransactionDetailSheet(
+                tx = tx,
+                onClose = {
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        if (!sheetState.isVisible) selectedTx = null
+                    }
+                }
+            )
+        }
+    }
+}
+
+// ─── Search & Filters ───────────────────────────────────────────────────────────
+
+@Composable
+private fun TransactionSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = {
+            Text("Search by channel, sender or note", style = MaterialTheme.typography.bodyMedium)
+        },
+        leadingIcon = {
+            Icon(Icons.Outlined.Search, contentDescription = null)
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                }
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        )
+    )
+}
+
+@Composable
+private fun TransactionFilterRow(
+    selected: TxFilter,
+    onSelect: (TxFilter) -> Unit
+) {
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = MaterialTheme.colorScheme.primary,
+        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TxFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selected == filter,
+                onClick  = { onSelect(filter) },
+                label    = { Text(filter.label) },
+                colors   = chipColors
+            )
         }
     }
 }
@@ -206,9 +358,6 @@ private fun SummaryBanner(
     totalSaving:  Double,
     count:        Int
 ) {
-    val net      = totalIncome - totalExpense
-    val isDeficit = net < 0
-
     Card(
         modifier  = Modifier.fillMaxWidth(),
         shape     = RoundedCornerShape(20.dp),
@@ -324,7 +473,7 @@ private fun SummaryPill(
 // ─── Transaction Card ─────────────────────────────────────────────────────────
 
 @Composable
-private fun TransactionCard(tx: TransactionDetails) {
+private fun TransactionCard(tx: TransactionDetails, onClick: () -> Unit) {
     val isIncome    = tx.type.equals("income", ignoreCase = true)
     val accentColor = if (isIncome) MaterialTheme.colorScheme.tertiary
     else          MaterialTheme.colorScheme.error
@@ -332,6 +481,7 @@ private fun TransactionCard(tx: TransactionDetails) {
     else          MaterialTheme.colorScheme.errorContainer
 
     Card(
+        onClick   = onClick,
         modifier  = Modifier.fillMaxWidth(),
         shape     = RoundedCornerShape(16.dp),
         colors    = CardDefaults.cardColors(
@@ -443,6 +593,137 @@ private fun TransactionCard(tx: TransactionDetails) {
     }
 }
 
+// ─── Transaction Detail Sheet ─────────────────────────────────────────────────
+
+@Composable
+private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) {
+    val isIncome    = tx.type.equals("income", ignoreCase = true)
+    val accentColor = if (isIncome) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
+    val accentBg    = if (isIncome) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer
+    val typeLabel   = tx.type.replaceFirstChar { it.uppercase() }.ifBlank { "Transaction" }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(shape = CircleShape, color = accentBg, modifier = Modifier.size(56.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (isIncome) "↑" else "↓",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor,
+                            letterSpacing = (-0.3).sp
+                        )
+                    ) {
+                        append(if (isIncome) "+" else "−")
+                        append(tx.amount.toUgx())
+                    }
+                    withStyle(SpanStyle(fontSize = 14.sp, color = accentColor.copy(alpha = 0.6f))) {
+                        append(" UGX")
+                    }
+                }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Surface(shape = RoundedCornerShape(999.dp), color = accentBg) {
+                Text(
+                    text = typeLabel,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = accentColor,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+        Spacer(Modifier.height(8.dp))
+
+        DetailRow(
+            icon  = Icons.Outlined.AccountBalanceWallet,
+            label = "Channel",
+            value = tx.channelDetailsName.ifBlank { "—" }
+        )
+        DetailRow(
+            icon  = Icons.Outlined.Person,
+            label = "From / Sender",
+            value = tx.username.ifBlank { "—" }
+        )
+        if (tx.note.isNotBlank()) {
+            DetailRow(
+                icon  = Icons.Outlined.Notes,
+                label = "Note",
+                value = tx.note
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        Button(
+            onClick  = onClose,
+            modifier = Modifier.fillMaxWidth(),
+            shape    = RoundedCornerShape(12.dp),
+            colors   = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+            Text("Close")
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(icon: ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 @Composable
@@ -483,6 +764,41 @@ private fun EmptyState(modifier: Modifier = Modifier) {
             color     = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+// ─── No Matches (search/filter) State ────────────────────────────────────────
+
+@Composable
+private fun NoMatchesState(onClear: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(32.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "No matching transactions",
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Try a different search term or filter",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onClear) {
+            Text("Clear search & filters")
+        }
     }
 }
 

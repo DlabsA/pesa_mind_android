@@ -34,11 +34,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,14 +53,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -65,6 +72,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -114,6 +122,19 @@ fun ChannelScreen(
     var currentTypeFilter by remember { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<ChannelDetails?>(null) }
     var editingChannel by remember { mutableStateOf<ChannelDetails?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val visibleChannels = remember(state.channels, searchQuery) {
+        if (searchQuery.isBlank()) {
+            state.channels
+        } else {
+            state.channels.filter { channel ->
+                channel.name.contains(searchQuery, ignoreCase = true) ||
+                    channel.description.contains(searchQuery, ignoreCase = true) ||
+                    displayChannelType(channel.channelType).contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
 
     LaunchedEffect(state.message, state.error) {
         state.message?.let { snackbarHostState.showSnackbar(it); vm.clearMessage() }
@@ -161,20 +182,25 @@ fun ChannelScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = { showCreateDialog = true },
                 containerColor = getPrimaryColor(),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp),
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = {
+                    Text(
+                        "Add Channel",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                },
                 modifier = Modifier.shadow(
                     elevation = 8.dp,
                     shape = RoundedCornerShape(16.dp),
                     ambientColor = getPrimaryColor().copy(alpha = 0.25f),
                     spotColor = getPrimaryColor().copy(alpha = 0.35f)
                 )
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add Channel")
-            }
+            )
         }
     ) { padding ->
         Column(
@@ -189,6 +215,16 @@ fun ChannelScreen(
                     .height(1.dp)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
             )
+
+            // ── Search field
+            if (!state.isLoading && state.channels.isNotEmpty()) {
+                ChannelSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+            }
 
             // ── Filter chips row
             ChannelFilterRow(
@@ -216,6 +252,7 @@ fun ChannelScreen(
             when {
                 state.isLoading -> ChannelListSkeleton()
                 state.channels.isEmpty() -> ChannelEmptyState(onAddClick = { showCreateDialog = true })
+                visibleChannels.isEmpty() -> ChannelNoMatchesState(onClear = { searchQuery = "" })
                 else -> {
                     LazyColumn(
                         modifier = Modifier
@@ -223,7 +260,7 @@ fun ChannelScreen(
                             .padding(start = 16.dp, top = 8.dp, end = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(state.channels, key = { it.id }) { channel ->
+                        items(visibleChannels, key = { it.id }) { channel ->
                             ChannelCard(
                                 item = channel,
                                 onEdit = { editingChannel = channel },
@@ -363,6 +400,89 @@ private fun ChannelFilterRow(
             colors = chipColors
         )
     }
+}
+
+// ─── Search Field ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun ChannelSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier.fillMaxWidth(),
+        placeholder = {
+            Text("Search channels", style = MaterialTheme.typography.bodyMedium)
+        },
+        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                }
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = getPrimaryColor(),
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        )
+    )
+}
+
+// ─── No Matches State ─────────────────────────────────────────────────────────
+
+@Composable
+private fun ChannelNoMatchesState(onClear: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.SearchOff,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp)
+        )
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = "No matching channels",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Try a different search term",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(16.dp))
+        TextButton(onClick = onClear) {
+            Text("Clear search")
+        }
+    }
+}
+
+// ─── Channel type → icon / color ──────────────────────────────────────────────
+
+@Composable
+private fun channelTypeColor(type: String): Color = when (type) {
+    ChannelTypes.MOBILE_MONEY -> getTertiaryColor()
+    ChannelTypes.BANK -> MaterialTheme.colorScheme.secondary
+    else -> getPrimaryColor()
+}
+
+private fun channelTypeIcon(type: String): ImageVector = when (type) {
+    ChannelTypes.MOBILE_MONEY -> Icons.Outlined.PhoneAndroid
+    ChannelTypes.BANK -> Icons.Outlined.AccountBalance
+    else -> Icons.Outlined.Payments
 }
 
 // ─── Skeleton / Loading ───────────────────────────────────────────────────────
@@ -576,6 +696,8 @@ fun ChannelCard(
     val statusDotColor = if (item.status) getTertiaryColor() else getErrorColor()
     val statusChipBg = if (item.status) getTertiaryColor().copy(alpha = 0.10f)
     else getErrorColor().copy(alpha = 0.09f)
+    val typeColor = channelTypeColor(item.channelType)
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -595,37 +717,66 @@ fun ChannelCard(
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
         ) {
-            // Teal gradient accent strip
+            // Type-colored accent strip
             Box(
                 modifier = Modifier
                     .width(4.dp)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp))
+                    .background(typeColor)
             )
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp, end = 16.dp, top = 14.dp, bottom = 12.dp)
+                    .padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 12.dp)
             ) {
-                // Name + status chip
+                // Type icon + name + status chip + overflow menu
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.2).sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(11.dp),
+                        color = typeColor.copy(alpha = 0.12f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = channelTypeIcon(item.channelType),
+                                contentDescription = null,
+                                tint = typeColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
                     Spacer(Modifier.width(10.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.2).sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = displayChannelType(item.channelType),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 0.25.sp
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
                     Surface(shape = CircleShape, color = statusChipBg) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -648,28 +799,49 @@ fun ChannelCard(
                             )
                         }
                     }
-                }
 
-                Spacer(Modifier.height(7.dp))
-
-                // Channel type metadata
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Tune,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = displayChannelType(item.channelType),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 0.25.sp
-                        )
-                    )
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = "More options",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Edit") },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Edit, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onEdit()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = getErrorColor()) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Outlined.Delete,
+                                        contentDescription = null,
+                                        tint = getErrorColor()
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                }
+                            )
+                        }
+                    }
                 }
 
                 // Description inset block
@@ -712,51 +884,6 @@ fun ChannelCard(
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = getPrimaryColor(),
                                 uncheckedThumbColor = Color.LightGray
-                            )
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                // Action buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = onEdit,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, getPrimaryColor().copy(alpha = 0.55f)),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = getPrimaryColor())
-                    ) {
-                        Icon(Icons.Outlined.Edit, "Edit", Modifier.size(15.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            "Edit",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = onDelete,
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = getErrorColor().copy(alpha = 0.10f),
-                            contentColor = getErrorColor()
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp)
-                    ) {
-                        Icon(Icons.Outlined.Delete, "Delete", Modifier.size(15.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            "Delete",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
                             )
                         )
                     }
