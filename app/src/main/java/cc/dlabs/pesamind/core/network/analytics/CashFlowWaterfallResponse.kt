@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName
 data class CashFlowWaterfallResponse(
     val data: WaterfallData,
     val metadata: Metadata,
-    val recommendations: List<Recommendation> = emptyList()
+    val recommendations: List<Recommendation> = emptyList(),
 )
 
 data class WaterfallData(
@@ -16,12 +16,12 @@ data class WaterfallData(
     @SerializedName("savings_transfers")
     val savingsTransfers: Long,
     @SerializedName("closing_balance")
-    val closingBalance: Long
+    val closingBalance: Long,
 )
 
 data class IncomeBreakdown(
     val total: Long,
-    val sources: List<IncomeSource> = emptyList()
+    val sources: List<IncomeSource> = emptyList(),
 )
 
 data class IncomeSource(
@@ -29,12 +29,12 @@ data class IncomeSource(
     val amount: Long,
     val percent: Double,
     @SerializedName("transaction_count")
-    val transactionCount: Int
+    val transactionCount: Int,
 )
 
 data class ExpenseBreakdown(
     val total: Long,
-    val categories: List<ExpenseCategory> = emptyList()
+    val categories: List<ExpenseCategory> = emptyList(),
 )
 
 data class ExpenseCategory(
@@ -42,5 +42,5 @@ data class ExpenseCategory(
     val amount: Long,
     val percent: Double,
     @SerializedName("transaction_count")
-    val transactionCount: Int
+    val transactionCount: Int,
 )

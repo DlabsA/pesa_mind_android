@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,8 +33,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
@@ -57,6 +55,7 @@ import java.util.Locale
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
+
 private fun Double.toUgx() = ugxFmt.format(this)
 
 // ─── Filter state ───────────────────────────────────────────────────────────────
@@ -65,15 +64,16 @@ private enum class TxFilter(val label: String) {
     ALL("All"),
     INCOME("Income"),
     EXPENSE("Expense"),
-    SAVING("Saving")
+    SAVING("Saving"),
 }
 
-private fun TransactionDetails.matchesFilter(filter: TxFilter): Boolean = when (filter) {
-    TxFilter.ALL     -> true
-    TxFilter.INCOME  -> type.equals("income", ignoreCase = true)
-    TxFilter.EXPENSE -> type.equals("expense", ignoreCase = true)
-    TxFilter.SAVING  -> type.equals("saving", ignoreCase = true) || type.equals("savings", ignoreCase = true)
-}
+private fun TransactionDetails.matchesFilter(filter: TxFilter): Boolean =
+    when (filter) {
+        TxFilter.ALL -> true
+        TxFilter.INCOME -> type.equals("income", ignoreCase = true)
+        TxFilter.EXPENSE -> type.equals("expense", ignoreCase = true)
+        TxFilter.SAVING -> type.equals("saving", ignoreCase = true) || type.equals("savings", ignoreCase = true)
+    }
 
 private fun TransactionDetails.matchesQuery(query: String): Boolean {
     if (query.isBlank()) return true
@@ -88,38 +88,42 @@ private fun TransactionDetails.matchesQuery(query: String): Boolean {
 @Composable
 fun TransactionListScreen(
     navController: NavHostController,
-    viewModel: TransactionViewModel = viewModel()
+    viewModel: TransactionViewModel = viewModel(),
 ) {
-    val state       by viewModel.state.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val transactions = state.transactions
-    val isLoading   = state.isLoading
-    val error       = state.error
+    val isLoading = state.isLoading
+    val error = state.error
 
     var searchQuery by remember { mutableStateOf("") }
-    var typeFilter  by remember { mutableStateOf(TxFilter.ALL) }
-    var selectedTx  by remember { mutableStateOf<TransactionDetails?>(null) }
+    var typeFilter by remember { mutableStateOf(TxFilter.ALL) }
+    var selectedTx by remember { mutableStateOf<TransactionDetails?>(null) }
 
     val hasActiveFilter = searchQuery.isNotBlank() || typeFilter != TxFilter.ALL
 
     // Summary totals — always computed from the full unfiltered list
-    val totalIncome  = remember(transactions) {
-        transactions.filter { it.type.equals("income",  ignoreCase = true) }
-            .sumOf { it.amount }
-    }
-    val totalExpense = remember(transactions) {
-        transactions.filter { it.type.equals("expense", ignoreCase = true) }
-            .sumOf { it.amount }
-    }
-    val totalSaving = remember(transactions) {
-        transactions.filter {
-            it.type.equals("saving", ignoreCase = true) ||
-                it.type.equals("savings", ignoreCase = true)
-        }.sumOf { it.amount }
-    }
+    val totalIncome =
+        remember(transactions) {
+            transactions.filter { it.type.equals("income", ignoreCase = true) }
+                .sumOf { it.amount }
+        }
+    val totalExpense =
+        remember(transactions) {
+            transactions.filter { it.type.equals("expense", ignoreCase = true) }
+                .sumOf { it.amount }
+        }
+    val totalSaving =
+        remember(transactions) {
+            transactions.filter {
+                it.type.equals("saving", ignoreCase = true) ||
+                    it.type.equals("savings", ignoreCase = true)
+            }.sumOf { it.amount }
+        }
 
-    val filteredTransactions = remember(transactions, searchQuery, typeFilter) {
-        transactions.filter { it.matchesQuery(searchQuery) && it.matchesFilter(typeFilter) }
-    }
+    val filteredTransactions =
+        remember(transactions, searchQuery, typeFilter) {
+            transactions.filter { it.matchesQuery(searchQuery) && it.matchesFilter(typeFilter) }
+        }
 
     Scaffold(
         topBar = {
@@ -127,40 +131,43 @@ fun TransactionListScreen(
                 title = {
                     Text(
                         "Transactions",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.3).sp
-                        )
+                        style =
+                            MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.3).sp,
+                            ),
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = "Back",
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ),
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isLoading,
-            onRefresh    = { viewModel.refresh() },
-            modifier     = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            onRefresh = { viewModel.refresh() },
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             when {
                 // ── Loading skeleton ───────────────────────────────────────
                 isLoading && transactions.isEmpty() -> {
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         item { SummaryCardSkeleton() }
                         items(5) { TransactionCardSkeleton() }
@@ -172,43 +179,46 @@ fun TransactionListScreen(
                     ErrorState(
                         message = error,
                         onRetry = { viewModel.refresh() },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
                     )
                 }
 
                 // ── Empty ──────────────────────────────────────────────────
                 transactions.isEmpty() -> {
                     EmptyState(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
                     )
                 }
 
                 // ── Content ────────────────────────────────────────────────
                 else -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(
-                            start  = 16.dp,
-                            top    = 12.dp,
-                            end    = 16.dp,
-                            bottom = 32.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding =
+                            PaddingValues(
+                                start = 16.dp,
+                                top = 12.dp,
+                                end = 16.dp,
+                                bottom = 32.dp,
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         // Summary banner
                         item(key = "summary") {
                             AnimatedVisibility(
                                 visible = true,
-                                enter   = fadeIn() + slideInVertically { -it / 4 }
+                                enter = fadeIn() + slideInVertically { -it / 4 },
                             ) {
                                 SummaryBanner(
-                                    totalIncome  = totalIncome,
+                                    totalIncome = totalIncome,
                                     totalExpense = totalExpense,
-                                    totalSaving  = totalSaving,
-                                    count        = transactions.size
+                                    totalSaving = totalSaving,
+                                    count = transactions.size,
                                 )
                             }
                         }
@@ -219,7 +229,7 @@ fun TransactionListScreen(
                         item(key = "search") {
                             TransactionSearchField(
                                 query = searchQuery,
-                                onQueryChange = { searchQuery = it }
+                                onQueryChange = { searchQuery = it },
                             )
                         }
 
@@ -227,17 +237,17 @@ fun TransactionListScreen(
                         item(key = "filters") {
                             TransactionFilterRow(
                                 selected = typeFilter,
-                                onSelect = { typeFilter = it }
+                                onSelect = { typeFilter = it },
                             )
                         }
 
                         if (hasActiveFilter) {
                             item(key = "result_count") {
                                 Text(
-                                    text  = "${filteredTransactions.size} of ${transactions.size} transactions",
+                                    text = "${filteredTransactions.size} of ${transactions.size} transactions",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
                                 )
                             }
                         }
@@ -248,21 +258,22 @@ fun TransactionListScreen(
                                     onClear = {
                                         searchQuery = ""
                                         typeFilter = TxFilter.ALL
-                                    }
+                                    },
                                 )
                             }
                         } else {
                             // Transaction rows with staggered entrance
                             itemsIndexed(
                                 items = filteredTransactions,
-                                key   = { _, tx -> tx.id }
+                                key = { _, tx -> tx.id },
                             ) { idx, tx ->
                                 AnimatedVisibility(
                                     visible = true,
-                                    enter   = fadeIn(tween(220, delayMillis = idx.coerceAtMost(8) * 40))
-                                            + slideInVertically(
-                                        tween(220, delayMillis = idx.coerceAtMost(8) * 40)
-                                    ) { it / 6 }
+                                    enter =
+                                        fadeIn(tween(220, delayMillis = idx.coerceAtMost(8) * 40)) +
+                                            slideInVertically(
+                                                tween(220, delayMillis = idx.coerceAtMost(8) * 40),
+                                            ) { it / 6 },
                                 ) {
                                     TransactionCard(tx = tx, onClick = { selectedTx = tx })
                                 }
@@ -280,7 +291,7 @@ fun TransactionListScreen(
         val scope = rememberCoroutineScope()
         ModalBottomSheet(
             onDismissRequest = { selectedTx = null },
-            sheetState = sheetState
+            sheetState = sheetState,
         ) {
             TransactionDetailSheet(
                 tx = tx,
@@ -288,7 +299,7 @@ fun TransactionListScreen(
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
                         if (!sheetState.isVisible) selectedTx = null
                     }
-                }
+                },
             )
         }
     }
@@ -299,7 +310,7 @@ fun TransactionListScreen(
 @Composable
 private fun TransactionSearchField(
     query: String,
-    onQueryChange: (String) -> Unit
+    onQueryChange: (String) -> Unit,
 ) {
     OutlinedTextField(
         value = query,
@@ -320,32 +331,34 @@ private fun TransactionSearchField(
         },
         singleLine = true,
         shape = RoundedCornerShape(14.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-        )
+        colors =
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            ),
     )
 }
 
 @Composable
 private fun TransactionFilterRow(
     selected: TxFilter,
-    onSelect: (TxFilter) -> Unit
+    onSelect: (TxFilter) -> Unit,
 ) {
-    val chipColors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = MaterialTheme.colorScheme.primary,
-        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-    )
+    val chipColors =
+        FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        )
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         TxFilter.entries.forEach { filter ->
             FilterChip(
                 selected = selected == filter,
-                onClick  = { onSelect(filter) },
-                label    = { Text(filter.label) },
-                colors   = chipColors
+                onClick = { onSelect(filter) },
+                label = { Text(filter.label) },
+                colors = chipColors,
             )
         }
     }
@@ -355,69 +368,73 @@ private fun TransactionFilterRow(
 
 @Composable
 private fun SummaryBanner(
-    totalIncome:  Double,
+    totalIncome: Double,
     totalExpense: Double,
-    totalSaving:  Double,
-    count:        Int
+    totalSaving: Double,
+    count: Int,
 ) {
     Card(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(20.dp),
-        colors    = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primary
-        ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+            ),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             // Subtle decorative circles
             Box(
-                modifier = Modifier
-                    .size(130.dp)
-                    .offset(x = (-30).dp, y = (-30).dp)
-                    .background(
-                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.06f),
-                        CircleShape
-                    )
+                modifier =
+                    Modifier
+                        .size(130.dp)
+                        .offset(x = (-30).dp, y = (-30).dp)
+                        .background(
+                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.06f),
+                            CircleShape,
+                        ),
             )
             Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .align(Alignment.TopEnd)
-                    .offset(x = 20.dp, y = 10.dp)
-                    .background(
-                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.05f),
-                        CircleShape
-                    )
+                modifier =
+                    Modifier
+                        .size(80.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 20.dp, y = 10.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.05f),
+                            CircleShape,
+                        ),
             )
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text  = "$count transactions",
+                        text = "$count transactions",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     Spacer(Modifier.width(8.dp))
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f)
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f),
                     ) {
                         Text(
-                            text  = "UGX",
+                            text = "UGX",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
                         )
                     }
                 }
@@ -426,26 +443,26 @@ private fun SummaryBanner(
 
                 // Income / Expense / Saving row
                 Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     SummaryPill(
-                        label    = "Income",
-                        amount   = totalIncome,
-                        color    = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.weight(1f)
+                        label = "Income",
+                        amount = totalIncome,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.weight(1f),
                     )
                     SummaryPill(
-                        label    = "Expense",
-                        amount   = totalExpense,
-                        color    = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.weight(1f)
+                        label = "Expense",
+                        amount = totalExpense,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
                     )
                     SummaryPill(
-                        label    = "Saving",
-                        amount   = totalSaving,
-                        color    = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.weight(1f)
+                        label = "Saving",
+                        amount = totalSaving,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -455,46 +472,48 @@ private fun SummaryBanner(
 
 @Composable
 private fun SummaryPill(
-    label:    String,
-    amount:   Double,
-    color:    Color,
-    modifier: Modifier = Modifier
+    label: String,
+    amount: Double,
+    color: Color,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
-        shape    = RoundedCornerShape(12.dp),
-        color    = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.10f)
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.10f),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(color, CircleShape)
+                    modifier =
+                        Modifier
+                            .size(6.dp)
+                            .background(color, CircleShape),
                 )
                 Text(
-                    text  = label,
+                    text = label,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Spacer(Modifier.height(5.dp))
             Text(
-                text     = amount.toUgx(),
-                style    = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize   = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = color,
-                    letterSpacing = (-0.2).sp
-                ),
+                text = amount.toUgx(),
+                style =
+                    MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = color,
+                        letterSpacing = (-0.2).sp,
+                    ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                softWrap = false
+                softWrap = false,
             )
         }
     }
@@ -503,41 +522,54 @@ private fun SummaryPill(
 // ─── Transaction Card ─────────────────────────────────────────────────────────
 
 @Composable
-private fun TransactionCard(tx: TransactionDetails, onClick: () -> Unit) {
-    val isIncome    = tx.type.equals("income", ignoreCase = true)
-    val accentColor = if (isIncome) MaterialTheme.colorScheme.tertiary
-    else          MaterialTheme.colorScheme.error
-    val accentBg    = if (isIncome) MaterialTheme.colorScheme.tertiaryContainer
-    else          MaterialTheme.colorScheme.errorContainer
+private fun TransactionCard(
+    tx: TransactionDetails,
+    onClick: () -> Unit,
+) {
+    val isIncome = tx.type.equals("income", ignoreCase = true)
+    val accentColor =
+        if (isIncome) {
+            MaterialTheme.colorScheme.tertiary
+        } else {
+            MaterialTheme.colorScheme.error
+        }
+    val accentBg =
+        if (isIncome) {
+            MaterialTheme.colorScheme.tertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.errorContainer
+        }
 
     Card(
-        onClick   = onClick,
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(16.dp),
-        colors    = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Row(
-            modifier          = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // ── Type badge ─────────────────────────────────────────────────
             Surface(
-                shape  = RoundedCornerShape(12.dp),
-                color  = accentBg,
-                modifier = Modifier.size(46.dp)
+                shape = RoundedCornerShape(12.dp),
+                color = accentBg,
+                modifier = Modifier.size(46.dp),
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
@@ -546,51 +578,53 @@ private fun TransactionCard(tx: TransactionDetails, onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 // Channel name
                 Text(
-                    text     = tx.channelDetailsName.ifBlank { "Transaction" },
-                    style    = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color    = MaterialTheme.colorScheme.onSurface,
+                    text = tx.channelDetailsName.ifBlank { "Transaction" },
+                    style =
+                        MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 Spacer(Modifier.height(2.dp))
 
                 // Username
                 Text(
-                    text  = tx.username,
+                    text = tx.username,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 // Note chip (if present)
                 if (tx.note.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Row(
-                        modifier          = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        modifier =
+                            Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                    RoundedCornerShape(8.dp),
+                                )
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(
-                            imageVector  = Icons.Outlined.Notes,
+                            imageVector = Icons.Outlined.Notes,
                             contentDescription = null,
-                            modifier     = Modifier.size(12.dp),
-                            tint         = MaterialTheme.colorScheme.onSurfaceVariant
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text     = tx.note,
-                            style    = MaterialTheme.typography.labelSmall,
-                            color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = tx.note,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -599,24 +633,25 @@ private fun TransactionCard(tx: TransactionDetails, onClick: () -> Unit) {
             // ── Amount ─────────────────────────────────────────────────────
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = buildAnnotatedString {
-                        withStyle(
-                            SpanStyle(
-                                fontSize   = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color      = accentColor,
-                                letterSpacing = (-0.2).sp
-                            )
-                        ) {
-                            append(if (isIncome) "+" else "−")
-                            append(tx.amount.toUgx())
-                        }
-                    }
+                    text =
+                        buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = accentColor,
+                                    letterSpacing = (-0.2).sp,
+                                ),
+                            ) {
+                                append(if (isIncome) "+" else "−")
+                                append(tx.amount.toUgx())
+                            }
+                        },
                 )
                 Text(
-                    text  = "UGX",
+                    text = "UGX",
                     style = MaterialTheme.typography.labelSmall,
-                    color = accentColor.copy(alpha = 0.55f)
+                    color = accentColor.copy(alpha = 0.55f),
                 )
             }
         }
@@ -626,23 +661,28 @@ private fun TransactionCard(tx: TransactionDetails, onClick: () -> Unit) {
 // ─── Transaction Detail Sheet ─────────────────────────────────────────────────
 
 @Composable
-private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) {
-    val isIncome    = tx.type.equals("income", ignoreCase = true)
+private fun TransactionDetailSheet(
+    tx: TransactionDetails,
+    onClose: () -> Unit,
+) {
+    val isIncome = tx.type.equals("income", ignoreCase = true)
     val accentColor = if (isIncome) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
-    val accentBg    = if (isIncome) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer
-    val typeLabel   = tx.type.replaceFirstChar { it.uppercase() }.ifBlank { "Transaction" }
+    val accentBg = if (isIncome) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer
+    val typeLabel = tx.type.replaceFirstChar { it.uppercase() }.ifBlank { "Transaction" }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 28.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Surface(shape = CircleShape, color = accentBg, modifier = Modifier.size(56.dp)) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -650,7 +690,7 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
                         imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }
@@ -658,26 +698,27 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
             Spacer(Modifier.height(14.dp))
 
             Text(
-                text = buildAnnotatedString {
-                    withStyle(
-                        SpanStyle(
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor,
-                            letterSpacing = (-0.3).sp
-                        )
-                    ) {
-                        append(if (isIncome) "+" else "−")
-                        append(tx.amount.toUgx())
-                    }
-                    withStyle(SpanStyle(fontSize = 14.sp, color = accentColor.copy(alpha = 0.6f))) {
-                        append(" UGX")
-                    }
-                },
+                text =
+                    buildAnnotatedString {
+                        withStyle(
+                            SpanStyle(
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = accentColor,
+                                letterSpacing = (-0.3).sp,
+                            ),
+                        ) {
+                            append(if (isIncome) "+" else "−")
+                            append(tx.amount.toUgx())
+                        }
+                        withStyle(SpanStyle(fontSize = 14.sp, color = accentColor.copy(alpha = 0.6f))) {
+                            append(" UGX")
+                        }
+                    },
                 textAlign = TextAlign.Center,
-                maxLines  = 2,
-                overflow  = TextOverflow.Ellipsis,
-                modifier  = Modifier.fillMaxWidth()
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(Modifier.height(10.dp))
@@ -687,7 +728,7 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
                     text = typeLabel,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = accentColor,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }
         }
@@ -697,30 +738,30 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
         Spacer(Modifier.height(8.dp))
 
         DetailRow(
-            icon  = Icons.Outlined.AccountBalanceWallet,
+            icon = Icons.Outlined.AccountBalanceWallet,
             label = "Channel",
-            value = tx.channelDetailsName.ifBlank { "—" }
+            value = tx.channelDetailsName.ifBlank { "—" },
         )
         DetailRow(
-            icon  = Icons.Outlined.Person,
+            icon = Icons.Outlined.Person,
             label = "From / Sender",
-            value = tx.username.ifBlank { "—" }
+            value = tx.username.ifBlank { "—" },
         )
         if (tx.note.isNotBlank()) {
             DetailRow(
-                icon  = Icons.Outlined.Notes,
+                icon = Icons.Outlined.Notes,
                 label = "Note",
-                value = tx.note
+                value = tx.note,
             )
         }
 
         Spacer(Modifier.height(20.dp))
 
         Button(
-            onClick  = onClose,
+            onClick = onClose,
             modifier = Modifier.fillMaxWidth(),
-            shape    = RoundedCornerShape(12.dp),
-            colors   = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
         ) {
             Text("Close")
         }
@@ -728,31 +769,36 @@ private fun TransactionDetailSheet(tx: TransactionDetails, onClose: () -> Unit) 
 }
 
 @Composable
-private fun DetailRow(icon: ImageVector, label: String, value: String) {
+private fun DetailRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Column {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -763,21 +809,21 @@ private fun DetailRow(icon: ImageVector, label: String, value: String) {
 @Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
     Column(
-        modifier              = modifier,
-        horizontalAlignment   = Alignment.CenterHorizontally,
-        verticalArrangement   = Arrangement.Center
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Surface(
-            shape  = CircleShape,
-            color  = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(80.dp)
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.size(80.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector        = Icons.Outlined.SwapVert,
+                    imageVector = Icons.Outlined.SwapVert,
                     contentDescription = null,
-                    modifier           = Modifier.size(36.dp),
-                    tint               = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -785,18 +831,18 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(20.dp))
 
         Text(
-            text      = "No transactions yet",
-            style     = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color     = MaterialTheme.colorScheme.onSurface
+            text = "No transactions yet",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
         )
 
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text      = "Your recorded transactions will appear here",
-            style     = MaterialTheme.typography.bodyMedium,
-            color     = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            text = "Your recorded transactions will appear here",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -806,28 +852,29 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 @Composable
 private fun NoMatchesState(onClear: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = Icons.Outlined.Search,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(32.dp),
         )
         Spacer(Modifier.height(12.dp))
         Text(
             text = "No matching transactions",
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(4.dp))
         Text(
             text = "Try a different search term or filter",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onClear) {
@@ -840,38 +887,39 @@ private fun NoMatchesState(onClear: () -> Unit) {
 
 @Composable
 private fun ErrorState(
-    message:  String,
-    onRetry:  () -> Unit,
-    modifier: Modifier = Modifier
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier            = modifier,
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text      = "Something went wrong",
-            style     = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color     = MaterialTheme.colorScheme.onSurface
+            text = "Something went wrong",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
         )
 
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text      = message,
-            style     = MaterialTheme.typography.bodyMedium,
-            color     = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
 
         Spacer(Modifier.height(20.dp))
 
         Button(
             onClick = onRetry,
-            shape   = RoundedCornerShape(12.dp),
-            colors  = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
+            shape = RoundedCornerShape(12.dp),
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                ),
         ) {
             Text("Try Again")
         }
@@ -882,37 +930,40 @@ private fun ErrorState(
 
 @Composable
 private fun ShimmerBox(
-    modifier:     Modifier,
-    cornerRadius: Int = 8
+    modifier: Modifier,
+    cornerRadius: Int = 8,
 ) {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val alpha by transition.animateFloat(
-        initialValue  = 0.25f,
-        targetValue   = 0.65f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shimmer_alpha"
+        initialValue = 0.25f,
+        targetValue = 0.65f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "shimmer_alpha",
     )
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius.dp))
-            .background(
-                MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.10f)
-            )
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(cornerRadius.dp))
+                .background(
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.10f),
+                ),
     )
 }
 
 @Composable
 private fun SummaryCardSkeleton() {
     Card(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(20.dp),
-        colors    = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             ShimmerBox(Modifier.width(100.dp).height(12.dp))
@@ -930,19 +981,21 @@ private fun SummaryCardSkeleton() {
 @Composable
 private fun TransactionCardSkeleton() {
     Card(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(16.dp),
-        colors    = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Row(
-            modifier              = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment     = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             ShimmerBox(Modifier.size(46.dp), cornerRadius = 12)
             Column(modifier = Modifier.weight(1f)) {

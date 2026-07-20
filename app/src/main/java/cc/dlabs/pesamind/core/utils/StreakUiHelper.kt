@@ -8,13 +8,17 @@ import java.util.Locale
 object StreakUiHelper {
     private const val STREAK_DATE_PATTERN = "yyyy-MM-dd"
 
-    fun label(streakCount: Int): String = when (streakCount) {
-        0 -> "Start your streak"
-        1 -> "1 day streak"
-        else -> "$streakCount days"
-    }
+    fun label(streakCount: Int): String =
+        when (streakCount) {
+            0 -> "Start your streak"
+            1 -> "1 day streak"
+            else -> "$streakCount days"
+        }
 
-    fun drawable(streakCount: Int, lastActiveDate: String?): Int? {
+    fun drawable(
+        streakCount: Int,
+        lastActiveDate: String?,
+    ): Int? {
         if (streakCount == 0) return null
         return if (isActiveToday(lastActiveDate)) {
             R.drawable.active_streak
@@ -37,4 +41,3 @@ object StreakUiHelper {
         }
     }
 }
-

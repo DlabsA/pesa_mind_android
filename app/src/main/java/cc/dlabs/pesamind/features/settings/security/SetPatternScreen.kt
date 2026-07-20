@@ -14,12 +14,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.features.common.PatternGrid
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetPatternScreen(
     navController: NavHostController,
-    vm: SetPatternViewModel = viewModel()
+    vm: SetPatternViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
     val teal = MaterialTheme.colorScheme.primary
@@ -31,19 +30,19 @@ fun SetPatternScreen(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-
         Spacer(Modifier.weight(1f))
 
         // ── Hint text ────────────────────────────────────────
         Text(
             text = state.hint,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 14.sp
+            fontSize = 14.sp,
         )
 
         Spacer(Modifier.height(8.dp))
@@ -53,7 +52,7 @@ fun SetPatternScreen(
             Text(
                 text = state.error!!,
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 13.sp
+                fontSize = 13.sp,
             )
         }
 
@@ -78,7 +77,7 @@ fun SetPatternScreen(
             lineColor = teal,
             dotColorUnselected = teal.copy(alpha = 0.9f),
             dotColorSelected = teal,
-            isLoading = false
+            isLoading = false,
         )
 
         Spacer(Modifier.height(24.dp))
@@ -86,22 +85,23 @@ fun SetPatternScreen(
         // ── Step indicator ───────────────────────────────────
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             repeat(2) { index ->
-                val isActive = when (state.step) {
-                    PatternStep.DRAW -> index == 0
-                    PatternStep.CONFIRM -> index == 1
-                }
+                val isActive =
+                    when (state.step) {
+                        PatternStep.DRAW -> index == 0
+                        PatternStep.CONFIRM -> index == 1
+                    }
                 Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(
-                            if (isActive) teal else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                            CircleShape
-                        )
+                    modifier =
+                        Modifier
+                            .size(8.dp)
+                            .background(
+                                if (isActive) teal else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                CircleShape,
+                            ),
                 )
             }
         }
 
         Spacer(Modifier.weight(1f))
-
     }
 }

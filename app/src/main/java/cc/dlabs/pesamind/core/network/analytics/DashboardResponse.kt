@@ -14,5 +14,5 @@ data class DashboardResponse(
     val budgetUtilization: BudgetUtilizationResponse,
     @SerializedName("financial_health")
     val financialHealth: FinancialHealthResponse,
-    val streak: StreakResponse? = null
+    val streak: StreakResponse? = null,
 )

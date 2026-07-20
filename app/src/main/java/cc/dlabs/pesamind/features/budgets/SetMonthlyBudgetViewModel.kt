@@ -25,12 +25,13 @@ object TransactionType {
 
     val all = listOf(INCOME, EXPENSE, SAVING)
 
-    fun displayName(type: String) = when (type) {
-        INCOME  -> "Income"
-        EXPENSE -> "Expenditure"
-        SAVING  -> "Savings"
-        else    -> type.replaceFirstChar { it.uppercase() }
-    }
+    fun displayName(type: String) =
+        when (type) {
+            INCOME -> "Income"
+            EXPENSE -> "Expenditure"
+            SAVING -> "Savings"
+            else -> type.replaceFirstChar { it.uppercase() }
+        }
 }
 
 // ─── UI State ─────────────────────────────────────────────────────────────────
@@ -39,30 +40,25 @@ data class SetMonthlyBudgetUiState(
     // Period
     val month: Int = 0,
     val year: Int = 0,
-
     // Budget data
     val budget: MonthlyBudgetResponse? = null,
     val yearlyBudgetId: String = "",
-
     // Loading / saving
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val isAddingTransaction: Boolean = false,
     val isDeletingTransactionId: String? = null,
-
     // Add-transaction form
     val formName: String = "",
     val formAmount: String = "",
     val formType: String = TransactionType.INCOME,
     val formNameError: String? = null,
     val formAmountError: String? = null,
-
     // UI feedback
     val message: String? = null,
     val error: String? = null,
-
     // Confirmation delete
-    val pendingDeleteTx: BudgetTransactionResponse? = null
+    val pendingDeleteTx: BudgetTransactionResponse? = null,
 ) {
     val transactions: List<BudgetTransactionResponse>
         get() = budget?.transactions ?: emptyList()
@@ -80,7 +76,8 @@ data class SetMonthlyBudgetUiState(
     val isDeficit: Boolean get() = balance < 0L
 
     val isFormValid: Boolean
-        get() = formName.isNotBlank() &&
+        get() =
+            formName.isNotBlank() &&
                 formAmount.isNotBlank() &&
                 formAmount.toDoubleOrNull() != null &&
                 (formAmount.toDoubleOrNull() ?: 0.0) > 0.0 &&
@@ -90,20 +87,25 @@ data class SetMonthlyBudgetUiState(
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
 class SetMonthlyBudgetViewModel() : ViewModel() {
-
     private val _state = MutableStateFlow(SetMonthlyBudgetUiState())
     val state: StateFlow<SetMonthlyBudgetUiState> = _state.asStateFlow()
 
     // ── Init ──────────────────────────────────────────────────────────────────
 
-    fun init(month: Int, year: Int) {
+    fun init(
+        month: Int,
+        year: Int,
+    ) {
         _state.update { it.copy(month = month, year = year) }
         loadBudget(month, year)
     }
 
     // ── Load existing budget (or prepare for creation) ────────────────────────
 
-    private fun loadBudget(month: Int, year: Int) {
+    private fun loadBudget(
+        month: Int,
+        year: Int,
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
@@ -124,7 +126,7 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                             it.copy(
                                 budget = budget,
                                 yearlyBudgetId = budget.yearlyBudgetId,
-                                isLoading = false
+                                isLoading = false,
                             )
                         }
                     } else {
@@ -140,7 +142,7 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        error = if (cached == null) "Couldn't load budget data" else null
+                        error = if (cached == null) "Couldn't load budget data" else null,
                     )
                 }
             }
@@ -164,13 +166,15 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                     _state.update { it.copy(yearlyBudgetId = match.id) }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
     // ── Form field updates ────────────────────────────────────────────────────
 
-    fun onNameChange(v: String) = _state.update {
-        it.copy(formName = v, formNameError = null)
-    }
+    fun onNameChange(v: String) =
+        _state.update {
+            it.copy(formName = v, formNameError = null)
+        }
 
     fun onAmountChange(v: String) {
         // Only allow digits and a single decimal point
@@ -202,11 +206,12 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
 
         viewModelScope.launch {
             _state.update { it.copy(isAddingTransaction = true) }
-            val tx = BudgetTransactionRequest(
-                name = s.formName.trim(),
-                amount = amount!!,
-                type = s.formType
-            )
+            val tx =
+                BudgetTransactionRequest(
+                    name = s.formName.trim(),
+                    amount = amount!!,
+                    type = s.formType,
+                )
 
             try {
                 if (s.budget == null) {
@@ -220,7 +225,7 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
-                        error = "Failed to add transaction"
+                        error = "Failed to add transaction",
                     )
                 }
             }
@@ -233,18 +238,19 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
             _state.update {
                 it.copy(
                     isAddingTransaction = false,
-                    error = "No yearly budget found for ${s.year}. Create one first."
+                    error = "No yearly budget found for ${s.year}. Create one first.",
                 )
             }
             return
         }
 
-        val body = CreateMonthlyBudgetRequest(
-            yearlyBudgetId = s.yearlyBudgetId,
-            month = s.month,
-            year = s.year.toLong(),
-            transactions = listOf(tx)
-        )
+        val body =
+            CreateMonthlyBudgetRequest(
+                yearlyBudgetId = s.yearlyBudgetId,
+                month = s.month,
+                year = s.year.toLong(),
+                transactions = listOf(tx),
+            )
         val response = api.createMonthlyBudget(body)
         if (response.isSuccessful) {
             val created = response.body()!!
@@ -257,7 +263,7 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                     message = "Transaction added",
                     formName = "",
                     formAmount = "",
-                    formType = TransactionType.INCOME
+                    formType = TransactionType.INCOME,
                 )
             }
         } else {
@@ -267,20 +273,25 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
         }
     }
 
-    private suspend fun patchBudgetAddTransaction(budgetId: String, tx: BudgetTransactionRequest) {
+    private suspend fun patchBudgetAddTransaction(
+        budgetId: String,
+        tx: BudgetTransactionRequest,
+    ) {
         val s = _state.value
 
-        val body = UpdateMonthlyBudgetRequest(
-            yearlyBudgetId = s.yearlyBudgetId,
-            transactionOps = listOf(
-                BudgetTransactionOperation(
-                    name = tx.name,
-                    amount = tx.amount,
-                    type = tx.type,
-                    action = "add"
-                )
+        val body =
+            UpdateMonthlyBudgetRequest(
+                yearlyBudgetId = s.yearlyBudgetId,
+                transactionOps =
+                    listOf(
+                        BudgetTransactionOperation(
+                            name = tx.name,
+                            amount = tx.amount,
+                            type = tx.type,
+                            action = "add",
+                        ),
+                    ),
             )
-        )
         val response = api.updateMonthlyBudget(budgetId, body)
         if (response.isSuccessful) {
             val updated = response.body()!!
@@ -292,7 +303,7 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                     message = "Transaction added",
                     formName = "",
                     formAmount = "",
-                    formType = TransactionType.INCOME
+                    formType = TransactionType.INCOME,
                 )
             }
         } else {
@@ -304,11 +315,9 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
 
     // ── Delete transaction ────────────────────────────────────────────────────
 
-    fun confirmDeleteTransaction(tx: BudgetTransactionResponse) =
-        _state.update { it.copy(pendingDeleteTx = tx) }
+    fun confirmDeleteTransaction(tx: BudgetTransactionResponse) = _state.update { it.copy(pendingDeleteTx = tx) }
 
-    fun cancelDeleteTransaction() =
-        _state.update { it.copy(pendingDeleteTx = null) }
+    fun cancelDeleteTransaction() = _state.update { it.copy(pendingDeleteTx = null) }
 
     fun deleteTransaction() {
         val tx = _state.value.pendingDeleteTx ?: return
@@ -318,11 +327,13 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val body = UpdateMonthlyBudgetRequest(
-                    transactionOps = listOf(
-                        BudgetTransactionOperation(id = tx.id, action = "delete")
+                val body =
+                    UpdateMonthlyBudgetRequest(
+                        transactionOps =
+                            listOf(
+                                BudgetTransactionOperation(id = tx.id, action = "delete"),
+                            ),
                     )
-                )
                 val response = api.updateMonthlyBudget(budgetId, body)
                 if (response.isSuccessful) {
                     val updated = response.body()!!
@@ -331,7 +342,7 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
                         it.copy(
                             budget = updated,
                             isDeletingTransactionId = null,
-                            message = "${tx.name} removed"
+                            message = "${tx.name} removed",
                         )
                     }
                 } else {
@@ -350,5 +361,6 @@ class SetMonthlyBudgetViewModel() : ViewModel() {
     // ── Feedback reset ────────────────────────────────────────────────────────
 
     fun clearMessage() = _state.update { it.copy(message = null) }
-    fun clearError()   = _state.update { it.copy(error = null) }
+
+    fun clearError() = _state.update { it.copy(error = null) }
 }

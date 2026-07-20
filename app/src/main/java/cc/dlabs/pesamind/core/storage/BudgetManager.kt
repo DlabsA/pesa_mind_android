@@ -30,7 +30,7 @@ object BudgetManager {
     }
 
     // ── Monthly Budgets ──────────────────────────────────────────
-    
+
     /**
      * Save monthly budgets locally for offline access
      */
@@ -51,10 +51,10 @@ object BudgetManager {
         return try {
             val data = appContext.budgetDataStore.data.first()
             val budgetsJson = data[MONTHLY_BUDGETS_KEY] ?: return emptyList()
-            
+
             Gson().fromJson<List<MonthlyBudgetResponse>>(
                 budgetsJson,
-                object : TypeToken<List<MonthlyBudgetResponse>>() {}.type
+                object : TypeToken<List<MonthlyBudgetResponse>>() {}.type,
             )
         } catch (e: Exception) {
             emptyList()
@@ -80,7 +80,7 @@ object BudgetManager {
         return try {
             val data = appContext.budgetDataStore.data.first()
             val budgetJson = data[CURRENT_MONTHLY_BUDGET_KEY] ?: return null
-            
+
             Gson().fromJson(budgetJson, MonthlyBudgetResponse::class.java)
         } catch (e: Exception) {
             null
@@ -97,7 +97,10 @@ object BudgetManager {
     /**
      * Get monthly budget by month and year from cache
      */
-    suspend fun getMonthlyBudgetByMonthYear(month: Int, year: Long): MonthlyBudgetResponse? {
+    suspend fun getMonthlyBudgetByMonthYear(
+        month: Int,
+        year: Long,
+    ): MonthlyBudgetResponse? {
         return getMonthlyBudgets().find { it.month == month && it.year == year }
     }
 
@@ -114,7 +117,7 @@ object BudgetManager {
     }
 
     // ── Yearly Budgets ──────────────────────────────────────────
-    
+
     /**
      * Save yearly budgets locally for offline access
      */
@@ -135,10 +138,10 @@ object BudgetManager {
         return try {
             val data = appContext.budgetDataStore.data.first()
             val budgetsJson = data[YEARLY_BUDGETS_KEY] ?: return emptyList()
-            
+
             Gson().fromJson<List<YearlyBudgetResponse>>(
                 budgetsJson,
-                object : TypeToken<List<YearlyBudgetResponse>>() {}.type
+                object : TypeToken<List<YearlyBudgetResponse>>() {}.type,
             )
         } catch (e: Exception) {
             emptyList()
@@ -164,7 +167,7 @@ object BudgetManager {
         return try {
             val data = appContext.budgetDataStore.data.first()
             val budgetJson = data[CURRENT_YEARLY_BUDGET_KEY] ?: return null
-            
+
             Gson().fromJson(budgetJson, YearlyBudgetResponse::class.java)
         } catch (e: Exception) {
             null
@@ -241,5 +244,3 @@ object BudgetManager {
         }
     }
 }
-
-

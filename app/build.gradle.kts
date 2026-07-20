@@ -5,6 +5,7 @@ plugins {
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
     id("com.google.gms.google-services")
+    alias(libs.plugins.ktlint)
 }
 
 fun readDotEnvValue(key: String): String? {
@@ -22,10 +23,11 @@ fun readDotEnvValue(key: String): String? {
         ?.removeSurrounding("'")
 }
 
-val googleAndroidClientId = (findProperty("GOOGLE_ANDROID_CLIENT_ID") as String?)
-    ?: System.getenv("GOOGLE_ANDROID_CLIENT_ID")
-    ?: readDotEnvValue("GOOGLE_ANDROID_CLIENT_ID")
-    ?: "884168293120-cngr633jrrkuq5hcuv0cqv19latmfb9j.apps.googleusercontent.com"
+val googleAndroidClientId =
+    (findProperty("GOOGLE_ANDROID_CLIENT_ID") as String?)
+        ?: System.getenv("GOOGLE_ANDROID_CLIENT_ID")
+        ?: readDotEnvValue("GOOGLE_ANDROID_CLIENT_ID")
+        ?: "884168293120-cngr633jrrkuq5hcuv0cqv19latmfb9j.apps.googleusercontent.com"
 
 android {
     namespace = "cc.dlabs.pesamind"
@@ -55,7 +57,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("release")
             buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
@@ -102,7 +104,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.datastore.preferences)
-    
+
     // Networking
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
@@ -127,7 +129,7 @@ dependencies {
 
     // Google Sign-In
     implementation(libs.google.signin)
-    
+
     // Android Security (EncryptedSharedPreferences)
     implementation(libs.androidx.security.crypto)
 
@@ -140,7 +142,7 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51.1")
     kapt("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-    
+
     // Testing
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)

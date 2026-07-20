@@ -60,41 +60,44 @@ fun UnifiedScreenHeader(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when {
-                isRefreshing -> CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 2.dp,
-                )
+                isRefreshing ->
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp,
+                    )
 
-                isOffline -> Icon(
-                    Icons.Default.WifiOff,
-                    contentDescription = "Offline",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(24.dp),
-                )
+                isOffline ->
+                    Icon(
+                        Icons.Default.WifiOff,
+                        contentDescription = "Offline",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp),
+                    )
 
-                streakDrawable != null -> Surface(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                streakDrawable != null ->
+                    Surface(
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                     ) {
-                        Icon(
-                            painter = painterResource(id = streakDrawable),
-                            contentDescription = "Streak",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.Unspecified,
-                        )
-                        Text(
-                            text = streakLabel,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(id = streakDrawable),
+                                contentDescription = "Streak",
+                                modifier = Modifier.size(24.dp),
+                                tint = Color.Unspecified,
+                            )
+                            Text(
+                                text = streakLabel,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
-                }
             }
         }
     }
@@ -120,5 +123,3 @@ fun DashboardStyleHeader(
         modifier = modifier,
     )
 }
-
-

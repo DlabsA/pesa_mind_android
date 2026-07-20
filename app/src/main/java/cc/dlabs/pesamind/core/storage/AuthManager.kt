@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object AuthManager {
     private const val TAG = "AuthManager"
-    
+
     private val _logoutEvent = MutableStateFlow(false)
     val logoutEvent: StateFlow<Boolean> = _logoutEvent.asStateFlow()
-    
+
     /**
      * Called when the user should be logged out (e.g., token refresh failed).
      * Clears tokens and emits a logout event that UI can subscribe to.
@@ -24,12 +24,11 @@ object AuthManager {
         // Clear all stored authentication data
         TokenManager.clearTokens()
         TokenManager.clearLock()
-        
+
         // Emit logout event so UI can react (navigate to login, show notification, etc.)
         _logoutEvent.emit(true)
-        
+
         // Reset the event after emission so it can be triggered again
         _logoutEvent.emit(false)
     }
 }
-

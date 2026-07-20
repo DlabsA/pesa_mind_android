@@ -1,24 +1,24 @@
 package cc.dlabs.pesamind.features.auth
 
-import cc.dlabs.pesamind.core.network.models.VerifyGoogleTokenResponse
-import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupResponse
-import cc.dlabs.pesamind.core.network.models.CheckUsernameResponse
 import cc.dlabs.pesamind.core.network.models.AuthProfile
-import org.junit.Test
+import cc.dlabs.pesamind.core.network.models.CheckUsernameResponse
+import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupResponse
+import cc.dlabs.pesamind.core.network.models.VerifyGoogleTokenResponse
 import org.junit.Assert.*
+import org.junit.Test
 
 /**
  * Unit tests for username validation
  */
 class UsernameValidationTest {
-
-    private fun validateUsername(username: String): String? = when {
-        username.isBlank() -> "Username is required"
-        username.length < 3 -> "Username must be at least 3 characters"
-        username.length > 50 -> "Username must be at most 50 characters"
-        !username.matches(Regex("^[a-zA-Z0-9_]+$")) -> "Username can only contain letters, numbers, and underscores"
-        else -> null
-    }
+    private fun validateUsername(username: String): String? =
+        when {
+            username.isBlank() -> "Username is required"
+            username.length < 3 -> "Username must be at least 3 characters"
+            username.length > 50 -> "Username must be at most 50 characters"
+            !username.matches(Regex("^[a-zA-Z0-9_]+$")) -> "Username can only contain letters, numbers, and underscores"
+            else -> null
+        }
 
     @Test
     fun testEmptyUsername() {
@@ -75,16 +75,16 @@ class UsernameValidationTest {
  * Unit tests for Google OAuth response models
  */
 class GoogleOAuthResponseTest {
-
     @Test
     fun testVerifyGoogleTokenResponseNewUser() {
-        val response = VerifyGoogleTokenResponse(
-            accessToken = null,
-            refreshToken = null,
-            isNewUser = true,
-            profile = null,
-            error = null
-        )
+        val response =
+            VerifyGoogleTokenResponse(
+                accessToken = null,
+                refreshToken = null,
+                isNewUser = true,
+                profile = null,
+                error = null,
+            )
 
         assertTrue(response.isNewUser)
         assertNull(response.accessToken)
@@ -93,18 +93,20 @@ class GoogleOAuthResponseTest {
 
     @Test
     fun testVerifyGoogleTokenResponseExistingUser() {
-        val profile = AuthProfile(
-            id = "user123",
-            username = "john_doe",
-            balance = 1000.0
-        )
-        val response = VerifyGoogleTokenResponse(
-            accessToken = "token123",
-            refreshToken = "refresh123",
-            isNewUser = false,
-            profile = profile,
-            error = null
-        )
+        val profile =
+            AuthProfile(
+                id = "user123",
+                username = "john_doe",
+                balance = 1000.0,
+            )
+        val response =
+            VerifyGoogleTokenResponse(
+                accessToken = "token123",
+                refreshToken = "refresh123",
+                isNewUser = false,
+                profile = profile,
+                error = null,
+            )
 
         assertFalse(response.isNewUser)
         assertEquals("token123", response.accessToken)
@@ -114,18 +116,20 @@ class GoogleOAuthResponseTest {
 
     @Test
     fun testCompleteGoogleSignupResponse() {
-        val profile = AuthProfile(
-            id = "newuser123",
-            username = "jane_doe",
-            balance = 0.0
-        )
-        val response = CompleteGoogleSignupResponse(
-            accessToken = "newtoken",
-            refreshToken = "newrefresh",
-            isNewUser = true,
-            profile = profile,
-            error = null
-        )
+        val profile =
+            AuthProfile(
+                id = "newuser123",
+                username = "jane_doe",
+                balance = 0.0,
+            )
+        val response =
+            CompleteGoogleSignupResponse(
+                accessToken = "newtoken",
+                refreshToken = "newrefresh",
+                isNewUser = true,
+                profile = profile,
+                error = null,
+            )
 
         assertTrue(response.isNewUser)
         assertEquals("newtoken", response.accessToken)
@@ -134,11 +138,12 @@ class GoogleOAuthResponseTest {
 
     @Test
     fun testCheckUsernameResponseAvailable() {
-        val response = CheckUsernameResponse(
-            available = true,
-            message = "Username is available",
-            error = null
-        )
+        val response =
+            CheckUsernameResponse(
+                available = true,
+                message = "Username is available",
+                error = null,
+            )
 
         assertTrue(response.available)
         assertEquals("Username is available", response.message)
@@ -146,11 +151,12 @@ class GoogleOAuthResponseTest {
 
     @Test
     fun testCheckUsernameResponseTaken() {
-        val response = CheckUsernameResponse(
-            available = false,
-            message = "Username already taken",
-            error = null
-        )
+        val response =
+            CheckUsernameResponse(
+                available = false,
+                message = "Username already taken",
+                error = null,
+            )
 
         assertFalse(response.available)
         assertEquals("Username already taken", response.message)
@@ -161,15 +167,15 @@ class GoogleOAuthResponseTest {
  * Unit tests for GoogleSignInResult sealed class
  */
 class GoogleSignInResultTest {
-
     @Test
     fun testSuccessResult() {
-        val result = GoogleSignInResult.Success(
-            email = "user@example.com",
-            displayName = "John Doe",
-            profilePhotoUrl = "https://example.com/photo.jpg",
-            googleId = "110169214549386730370"
-        )
+        val result =
+            GoogleSignInResult.Success(
+                email = "user@example.com",
+                displayName = "John Doe",
+                profilePhotoUrl = "https://example.com/photo.jpg",
+                googleId = "110169214549386730370",
+            )
 
         assertTrue(result is GoogleSignInResult.Success)
         assertEquals("user@example.com", result.email)
@@ -183,4 +189,3 @@ class GoogleSignInResultTest {
         assertEquals("Sign-in was canceled", (result as GoogleSignInResult.Error).message)
     }
 }
-

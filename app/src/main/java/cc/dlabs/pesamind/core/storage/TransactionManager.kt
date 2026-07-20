@@ -9,8 +9,6 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.first
 
-
-
 private val Context.transactionDataStore by preferencesDataStore("pesamind_transactions")
 
 object TransactionManager {
@@ -24,6 +22,7 @@ object TransactionManager {
     fun init(context: Context) {
         appContext = context.applicationContext
     }
+
     /**
      * Save Transaction locally
      */
@@ -48,10 +47,11 @@ object TransactionManager {
             val data = appContext.transactionDataStore.data.first()
             val transactionsJson = data[TRANSACTIONS_KEY] ?: return emptyList()
 
-            val channels = Gson().fromJson<List<TransactionDetails>>(
-                transactionsJson,
-                object : TypeToken<List<TransactionDetails>>() {}.type
-            )
+            val channels =
+                Gson().fromJson<List<TransactionDetails>>(
+                    transactionsJson,
+                    object : TypeToken<List<TransactionDetails>>() {}.type,
+                )
             return channels
         } catch (e: Exception) {
             return emptyList()
@@ -79,6 +79,4 @@ object TransactionManager {
             prefs.remove(LAST_SYNC)
         }
     }
-
-
 }

@@ -77,4 +77,3 @@ object NotificationStorage {
         appContext.notificationDataStore.edit { it.clear() }
     }
 }
-

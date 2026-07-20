@@ -19,9 +19,8 @@ data class TransactionState(
     val isRefresh: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null,
-    val message: String? = null
+    val message: String? = null,
 )
-
 
 class TransactionViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(TransactionState(isLoading = true))
@@ -36,11 +35,12 @@ class TransactionViewModel : UnifiedViewModel() {
     override fun onStateEvent(event: StateEvent) {
         when (event) {
             is StateEvent.UserLoggedOut -> {
-                _state.value = _state.value.copy(
-                    transactions = emptyList(),
-                    error = null,
-                    isLoading = false
-                )
+                _state.value =
+                    _state.value.copy(
+                        transactions = emptyList(),
+                        error = null,
+                        isLoading = false,
+                    )
             }
             else -> {}
         }
@@ -67,35 +67,38 @@ class TransactionViewModel : UnifiedViewModel() {
                 if (response.isSuccessful) {
                     val transactions = response.body().orEmpty()
                     TransactionManager.saveTransactions(transactions)
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        transactions = transactions,
-                        error = null
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            transactions = transactions,
+                            error = null,
+                        )
                 } else {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = "Failed to load transactions (${response.code()})"
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            error = "Failed to load transactions (${response.code()})",
+                        )
                 }
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Error loading transactions: ${e.message}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Error loading transactions: ${e.message}",
+                    )
             }
         }
     }
 
-    public fun CreateTransaction(
+    fun createTransaction(
         channelID: String,
         amount: Double,
         type: String,
         note: String,
-    ){
+    ) {
         val normalizedType = TransactionTypes.normalizeOrNull(type)
 
-        when{
+        when {
             channelID.isBlank() -> {
                 _state.value = _state.value.copy(error = "Channel ID is required")
                 return
@@ -105,9 +108,10 @@ class TransactionViewModel : UnifiedViewModel() {
                 return
             }
             normalizedType == null -> {
-                _state.value = _state.value.copy(
-                    error = "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        error = "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}",
+                    )
                 return
             }
             note.isBlank() -> {
@@ -119,42 +123,47 @@ class TransactionViewModel : UnifiedViewModel() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
             try {
-                val response = ApiClient.api.createTransaction(
-                    TransactionRequest(
-                        channelId = channelID,
-                        amount = amount,
-                        type = normalizedType,
-                        note = note.trim(),
+                val response =
+                    ApiClient.api.createTransaction(
+                        TransactionRequest(
+                            channelId = channelID,
+                            amount = amount,
+                            type = normalizedType,
+                            note = note.trim(),
+                        ),
                     )
-                )
                 if (response.isSuccessful) {
                     val created = response.body()
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        message = "Transaction created successfully",
-                        transactions = if (created != null) _state.value.transactions + created else _state.value.transactions
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            message = "Transaction created successfully",
+                            transactions = if (created != null) _state.value.transactions + created else _state.value.transactions,
+                        )
                     // 🔥 Publish event so Dashboard and Analytics refresh automatically
                     Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
-                    publishEvent(StateEvent.TransactionCreated(
-                        transactionId = created?.id ?: "",
-                        amount = amount,
-                        channelId = channelID
-                    ))
+                    publishEvent(
+                        StateEvent.TransactionCreated(
+                            transactionId = created?.id ?: "",
+                            amount = amount,
+                            channelId = channelID,
+                        ),
+                    )
                 } else {
                     Log.e("TransactionViewModel", "❌ Failed to create transaction: ${response.code()}")
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        error = "Failed to create transaction (${response.code()})"
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error = "Failed to create transaction (${response.code()})",
+                        )
                 }
-            }
-            catch (e: Exception) {
+            } catch (e: Exception) {
                 Log.e("TransactionViewModel", "❌ Exception during transaction creation", e)
-                _state.value = _state.value.copy(
-                    isSaving = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isSaving = false,
+                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
+                    )
             }
         }
     }

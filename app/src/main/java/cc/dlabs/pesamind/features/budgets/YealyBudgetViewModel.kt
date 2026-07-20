@@ -23,30 +23,25 @@ data class YearlyBudgetUiState(
     // Period
     val month: Int = 0,
     val year: Int = 0,
-
     // Budget data
     val budget: YearlyBudgetResponse? = null,
     val yearlyBudgetId: String = "",
-
     // Loading / saving
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val isAddingTransaction: Boolean = false,
     val isDeletingTransactionId: String? = null,
-
     // Add-transaction form
     val formName: String = "",
     val formAmount: String = "",
     val formType: String = TransactionType.INCOME,
     val formNameError: String? = null,
     val formAmountError: String? = null,
-
     // UI feedback
     val message: String? = null,
     val error: String? = null,
-
     // Confirmation delete
-    val pendingDeleteTx: BudgetTransactionResponse? = null
+    val pendingDeleteTx: BudgetTransactionResponse? = null,
 ) {
     val transactions: List<BudgetTransactionResponse>
         get() = budget?.transactions ?: emptyList()
@@ -64,7 +59,8 @@ data class YearlyBudgetUiState(
     val isDeficit: Boolean get() = balance < 0L
 
     val isFormValid: Boolean
-        get() = formName.isNotBlank() &&
+        get() =
+            formName.isNotBlank() &&
                 formAmount.isNotBlank() &&
                 formAmount.toDoubleOrNull() != null &&
                 (formAmount.toDoubleOrNull() ?: 0.0) > 0.0 &&
@@ -72,7 +68,6 @@ data class YearlyBudgetUiState(
 }
 
 class YearlyBudgetViewModel() : ViewModel() {
-
     private val _state = MutableStateFlow(YearlyBudgetUiState())
     val state: StateFlow<YearlyBudgetUiState> = _state.asStateFlow()
 
@@ -92,7 +87,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                     it.copy(
                         budget = cached,
                         yearlyBudgetId = cached.id,
-                        isLoading = false
+                        isLoading = false,
                     )
                 }
             } else {
@@ -116,7 +111,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                                 budget = budget,
                                 yearlyBudgetId = budget.id,
                                 isLoading = false,
-                                error = null
+                                error = null,
                             )
                         }
                     } else {
@@ -126,24 +121,26 @@ class YearlyBudgetViewModel() : ViewModel() {
                                 budget = null,
                                 yearlyBudgetId = "",
                                 isLoading = false,
-                                error = null  // No error, just no budget yet
+                                // No error, just no budget yet
+                                error = null,
                             )
                         }
                     }
                 } else {
                     // Handle specific HTTP errors
-                    val errorMessage = when (response.code()) {
-                        404 -> "No budget found for $year"
-                        401 -> "Authentication error. Please login again."
-                        500 -> "Server error. Please try again later."
-                        else -> "Failed to load budget: ${response.code()}"
-                    }
+                    val errorMessage =
+                        when (response.code()) {
+                            404 -> "No budget found for $year"
+                            401 -> "Authentication error. Please login again."
+                            500 -> "Server error. Please try again later."
+                            else -> "Failed to load budget: ${response.code()}"
+                        }
                     Log.e("YearlyBudgetVM", "Network error: $errorMessage")
 
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            error = if (it.budget == null) errorMessage else null
+                            error = if (it.budget == null) errorMessage else null,
                         )
                     }
                 }
@@ -152,7 +149,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        error = if (it.budget == null) "Network error: ${e.message}" else null
+                        error = if (it.budget == null) "Network error: ${e.message}" else null,
                     )
                 }
             } catch (e: Exception) {
@@ -160,7 +157,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        error = if (it.budget == null) "Error: ${e.message}" else null
+                        error = if (it.budget == null) "Error: ${e.message}" else null,
                     )
                 }
             }
@@ -175,9 +172,10 @@ class YearlyBudgetViewModel() : ViewModel() {
         }
     }
 
-    fun onNameChange(v: String) = _state.update {
-        it.copy(formName = v, formNameError = null)
-    }
+    fun onNameChange(v: String) =
+        _state.update {
+            it.copy(formName = v, formNameError = null)
+        }
 
     fun onAmountChange(v: String) {
         val cleaned = v.filter { c -> c.isDigit() || c == '.' }
@@ -206,11 +204,12 @@ class YearlyBudgetViewModel() : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(isAddingTransaction = true) }
 
-            val tx = BudgetTransactionRequest(
-                name = s.formName.trim(),
-                amount = amount!!,
-                type = s.formType
-            )
+            val tx =
+                BudgetTransactionRequest(
+                    name = s.formName.trim(),
+                    amount = amount!!,
+                    type = s.formType,
+                )
 
             try {
                 if (s.budget == null) {
@@ -225,7 +224,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
-                        error = "Failed to add transaction: ${e.message}"
+                        error = "Failed to add transaction: ${e.message}",
                     )
                 }
             }
@@ -234,10 +233,11 @@ class YearlyBudgetViewModel() : ViewModel() {
 
     private suspend fun createYearlyBudgetWithTransaction(tx: BudgetTransactionRequest) {
         val s = _state.value
-        val body = CreateYearlyBudgetRequest(
-            year = s.year.toLong(),
-            transactions = listOf(tx)
-        )
+        val body =
+            CreateYearlyBudgetRequest(
+                year = s.year.toLong(),
+                transactions = listOf(tx),
+            )
 
         Log.d("YearlyBudgetVM", "Creating yearly budget: year=${body.year}, tx=${tx.name}")
 
@@ -267,7 +267,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                         message = "Budget created and transaction added",
                         formName = "",
                         formAmount = "",
-                        formType = TransactionType.INCOME
+                        formType = TransactionType.INCOME,
                     )
                 }
             } else {
@@ -276,7 +276,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
-                        error = "Failed to create budget: ${response.code()}"
+                        error = "Failed to create budget: ${response.code()}",
                     )
                 }
             }
@@ -285,23 +285,28 @@ class YearlyBudgetViewModel() : ViewModel() {
             _state.update {
                 it.copy(
                     isAddingTransaction = false,
-                    error = "Network error: ${e.message}"
+                    error = "Network error: ${e.message}",
                 )
             }
         }
     }
 
-    private suspend fun patchBudgetAddTransaction(budgetId: String, tx: BudgetTransactionRequest) {
-        val body = UpdateYearlyBudgetRequest(
-            transactionOps = listOf(
-                BudgetTransactionOperation(
-                    name = tx.name,
-                    amount = tx.amount,
-                    type = tx.type,
-                    action = "add"
-                )
+    private suspend fun patchBudgetAddTransaction(
+        budgetId: String,
+        tx: BudgetTransactionRequest,
+    ) {
+        val body =
+            UpdateYearlyBudgetRequest(
+                transactionOps =
+                    listOf(
+                        BudgetTransactionOperation(
+                            name = tx.name,
+                            amount = tx.amount,
+                            type = tx.type,
+                            action = "add",
+                        ),
+                    ),
             )
-        )
 
         try {
             val response = api.updateYearlyBudget(budgetId, body)
@@ -323,7 +328,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                         message = "Transaction added",
                         formName = "",
                         formAmount = "",
-                        formType = TransactionType.INCOME
+                        formType = TransactionType.INCOME,
                     )
                 }
             } else {
@@ -331,7 +336,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
-                        error = "Failed to add transaction: ${response.code()}"
+                        error = "Failed to add transaction: ${response.code()}",
                     )
                 }
             }
@@ -340,17 +345,15 @@ class YearlyBudgetViewModel() : ViewModel() {
             _state.update {
                 it.copy(
                     isAddingTransaction = false,
-                    error = "Network error: ${e.message}"
+                    error = "Network error: ${e.message}",
                 )
             }
         }
     }
 
-    fun confirmDeleteTransaction(tx: BudgetTransactionResponse) =
-        _state.update { it.copy(pendingDeleteTx = tx) }
+    fun confirmDeleteTransaction(tx: BudgetTransactionResponse) = _state.update { it.copy(pendingDeleteTx = tx) }
 
-    fun cancelDeleteTransaction() =
-        _state.update { it.copy(pendingDeleteTx = null) }
+    fun cancelDeleteTransaction() = _state.update { it.copy(pendingDeleteTx = null) }
 
     fun deleteTransaction() {
         val tx = _state.value.pendingDeleteTx ?: return
@@ -360,11 +363,13 @@ class YearlyBudgetViewModel() : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val body = UpdateYearlyBudgetRequest(
-                    transactionOps = listOf(
-                        BudgetTransactionOperation(id = tx.id, action = "delete")
+                val body =
+                    UpdateYearlyBudgetRequest(
+                        transactionOps =
+                            listOf(
+                                BudgetTransactionOperation(id = tx.id, action = "delete"),
+                            ),
                     )
-                )
                 val response = api.updateYearlyBudget(budgetId, body)
                 if (response.isSuccessful) {
                     val updated = response.body()!!
@@ -381,7 +386,7 @@ class YearlyBudgetViewModel() : ViewModel() {
                         it.copy(
                             budget = updated,
                             isDeletingTransactionId = null,
-                            message = "${tx.name} removed"
+                            message = "${tx.name} removed",
                         )
                     }
                 } else {
@@ -399,5 +404,6 @@ class YearlyBudgetViewModel() : ViewModel() {
     }
 
     fun clearMessage() = _state.update { it.copy(message = null) }
-    fun clearError()   = _state.update { it.copy(error = null) }
+
+    fun clearError() = _state.update { it.copy(error = null) }
 }

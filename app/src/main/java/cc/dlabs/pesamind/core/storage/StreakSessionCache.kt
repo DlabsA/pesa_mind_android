@@ -11,7 +11,10 @@ object StreakSessionCache {
 
     fun get(): StreakSnapshot? = snapshot
 
-    fun set(count: Int, lastActiveDate: String?) {
+    fun set(
+        count: Int,
+        lastActiveDate: String?,
+    ) {
         snapshot = StreakSnapshot(count = count, lastActiveDate = lastActiveDate)
     }
 
@@ -19,4 +22,3 @@ object StreakSessionCache {
         snapshot = null
     }
 }
-

@@ -14,7 +14,7 @@ object TokenManager {
     enum class LockState {
         NONE,
         PIN,
-        PATTERN
+        PATTERN,
     }
 
     private val TOKEN_KEY = stringPreferencesKey("jwt_token")
@@ -33,7 +33,10 @@ object TokenManager {
     }
 
     // ── Token ────────────────────────────────────────────────
-    suspend fun saveTokens(token: String?, refresh: String?) {
+    suspend fun saveTokens(
+        token: String?,
+        refresh: String?,
+    ) {
         if (!isInitialized()) return
         appContext.dataStore.edit { preferences ->
             token?.let { preferences[TOKEN_KEY] = it }
@@ -61,11 +64,12 @@ object TokenManager {
 
     suspend fun isLoggedIn(): Boolean = getToken() != null
 
-    suspend fun getLockState(): LockState = when {
-        isPinEnabled() -> LockState.PIN
-        isPatternEnabled() -> LockState.PATTERN
-        else -> LockState.NONE
-    }
+    suspend fun getLockState(): LockState =
+        when {
+            isPinEnabled() -> LockState.PIN
+            isPatternEnabled() -> LockState.PATTERN
+            else -> LockState.NONE
+        }
 
     suspend fun hasAnyLock(): Boolean = getLockState() != LockState.NONE
 
@@ -88,8 +92,7 @@ object TokenManager {
         return appContext.dataStore.data.first()[PIN_KEY]
     }
 
-    suspend fun isPinEnabled(): Boolean =
-        if (!isInitialized()) false else appContext.dataStore.data.first()[PIN_ENABLED] ?: false
+    suspend fun isPinEnabled(): Boolean = if (!isInitialized()) false else appContext.dataStore.data.first()[PIN_ENABLED] ?: false
 
     // ── Pattern ──────────────────────────────────────────────
     suspend fun savePattern(pattern: String) {
@@ -117,6 +120,5 @@ object TokenManager {
         }
     }
 
-    suspend fun isPatternEnabled(): Boolean =
-        if (!isInitialized()) false else appContext.dataStore.data.first()[PATTERN_ENABLED] ?: false
+    suspend fun isPatternEnabled(): Boolean = if (!isInitialized()) false else appContext.dataStore.data.first()[PATTERN_ENABLED] ?: false
 }

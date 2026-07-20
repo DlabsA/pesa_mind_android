@@ -15,11 +15,10 @@ data class ChangePasswordState(
     val confirmPassword: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
-    val success: Boolean = false
+    val success: Boolean = false,
 )
 
 class ChangePasswordViewModel : ViewModel() {
-
     private val _state = MutableStateFlow(ChangePasswordState())
     val state: StateFlow<ChangePasswordState> = _state.asStateFlow()
 
@@ -61,33 +60,38 @@ class ChangePasswordViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = s.copy(isLoading = true, error = null)
             try {
-                val response = ApiClient.api.changePassword(
-                    ChangePasswordRequest(
-                        current_password = s.currentPassword,
-                        new_password = s.newPassword,
-                        confirm_password = s.confirmPassword
+                val response =
+                    ApiClient.api.changePassword(
+                        ChangePasswordRequest(
+                            current_password = s.currentPassword,
+                            new_password = s.newPassword,
+                            confirm_password = s.confirmPassword,
+                        ),
                     )
-                )
                 if (response.isSuccessful) {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        success = true
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            success = true,
+                        )
                 } else {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = when (response.code()) {
-                            401 -> "Current password is incorrect"
-                            400 -> "Invalid request"
-                            else -> "Failed (${response.code()})"
-                        }
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            error =
+                                when (response.code()) {
+                                    401 -> "Current password is incorrect"
+                                    400 -> "Invalid request"
+                                    else -> "Failed (${response.code()})"
+                                },
+                        )
                 }
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Cannot reach server"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Cannot reach server",
+                    )
             }
         }
     }

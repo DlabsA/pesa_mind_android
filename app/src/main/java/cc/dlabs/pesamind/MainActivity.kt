@@ -6,8 +6,8 @@ import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,7 +23,6 @@ import cc.dlabs.pesamind.core.storage.NotificationStorage
 import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
-import android.provider.Settings
 import cc.dlabs.pesamind.features.settings.notifications.MessageMonitoringService
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
@@ -39,12 +38,13 @@ class PesaMindApp : Application() {
         ThemeManager.init(this)
     }
 }
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
     companion object {
         private const val TAG = "PESAMIND"
     }
+
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
             val denied = results.filterValues { !it }.keys
@@ -67,10 +67,10 @@ class MainActivity : ComponentActivity() {
                 PesaMindNavGraph(navController = navController)
             }
         }
-        
+
         // Start the message monitoring service to ensure SMS monitoring runs in the background
         startMessageMonitoringService()
-        
+
         requestRequiredPermissions()
     }
 
@@ -89,10 +89,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestRequiredPermissions() {
-        val permissionsToRequest = buildRequiredPermissions().filter { permission ->
-            ContextCompat.checkSelfPermission(this, permission) !=
+        val permissionsToRequest =
+            buildRequiredPermissions().filter { permission ->
+                ContextCompat.checkSelfPermission(this, permission) !=
                     PackageManager.PERMISSION_GRANTED
-        }
+            }
 
         if (permissionsToRequest.isEmpty()) {
             Log.d(TAG, "All permissions already granted")
@@ -100,9 +101,10 @@ class MainActivity : ComponentActivity() {
         }
 
         // Check if we should show rationale for any of the not-granted permissions
-        val needsRationale = permissionsToRequest.any { permission ->
-            shouldShowRequestPermissionRationale(permission)
-        }
+        val needsRationale =
+            permissionsToRequest.any { permission ->
+                shouldShowRequestPermissionRationale(permission)
+            }
 
         if (needsRationale) {
             // Show a rationale dialog before launching the permission request
@@ -115,9 +117,6 @@ class MainActivity : ComponentActivity() {
             permissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
-    /**
-     * Handle permanently denied permissions or partial denials.
-     */
 
     /**
      * Build the list of permissions your app needs.
@@ -154,9 +153,9 @@ class MainActivity : ComponentActivity() {
             .setTitle("Permission Required")
             .setMessage(
                 "To receive and identify SMS transactions, you must grant the " +
-                        "'Receive SMS' permission. Please enable it in the app settings."
+                    "'Receive SMS' permission. Please enable it in the app settings.",
             )
-            .setCancelable(false)               // Cannot be dismissed by back button
+            .setCancelable(false) // Cannot be dismissed by back button
             .setPositiveButton("Go to Settings") { _, _ ->
                 openAppSettings()
             }
@@ -173,9 +172,10 @@ class MainActivity : ComponentActivity() {
      * Opens the app's detail settings screen where the user can grant permissions.
      */
     private fun openAppSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", packageName, null)
-        }
+        val intent =
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
         startActivity(intent)
     }
 
@@ -188,9 +188,9 @@ class MainActivity : ComponentActivity() {
             .setTitle("Permissions Needed")
             .setMessage(
                 "This app needs access to incoming SMS to monitor transactions, " +
-                        "and phone state permission to identify the SIM card that " +
-                        "received the message. These permissions are essential for " +
-                        "the app to function correctly."
+                    "and phone state permission to identify the SIM card that " +
+                    "received the message. These permissions are essential for " +
+                    "the app to function correctly.",
             )
             .setCancelable(true)
             .setPositiveButton("Continue") { _, _ ->

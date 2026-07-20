@@ -11,12 +11,14 @@ import android.util.Log
  * even when the app is not actively open.
  */
 class BootReceiver : BroadcastReceiver() {
-
     companion object {
         private const val TAG = "BootReceiver"
     }
 
-    override fun onReceive(context: Context?, intent: Intent?) {
+    override fun onReceive(
+        context: Context?,
+        intent: Intent?,
+    ) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) {
             return
         }
@@ -34,11 +36,12 @@ class BootReceiver : BroadcastReceiver() {
             context.startForegroundService(serviceIntent)
 
             // Also launch the main activity so the app is ready to use
-            val launchIntent = context.packageManager
-                .getLaunchIntentForPackage(context.packageName)
-                ?.apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
+            val launchIntent =
+                context.packageManager
+                    .getLaunchIntentForPackage(context.packageName)
+                    ?.apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
 
             if (launchIntent != null) {
                 context.startActivity(launchIntent)
@@ -46,12 +49,8 @@ class BootReceiver : BroadcastReceiver() {
             } else {
                 Log.w(TAG, "Could not create launch intent for package")
             }
-
         } catch (e: Exception) {
             Log.e(TAG, "Error handling boot completion: ${e.message}", e)
         }
     }
 }
-
-
-

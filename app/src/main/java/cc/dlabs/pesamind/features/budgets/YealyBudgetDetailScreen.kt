@@ -77,30 +77,34 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
+import cc.dlabs.pesamind.core.utils.TransactionTypes
 import java.text.NumberFormat
 import java.util.Locale
-import cc.dlabs.pesamind.core.utils.TransactionTypes
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
+
 private fun Long.toUgx() = ugxFmt.format(this)
+
 private fun Double.toUgx() = ugxFmt.format(this.toLong())
 
 @Composable
-private fun typeColor(type: String): Color = when (type) {
-    TransactionTypes.INCOME -> MaterialTheme.colorScheme.tertiary
-    TransactionTypes.EXPENSE -> MaterialTheme.colorScheme.error
-    TransactionTypes.SAVINGS -> MaterialTheme.colorScheme.primary
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
+private fun typeColor(type: String): Color =
+    when (type) {
+        TransactionTypes.INCOME -> MaterialTheme.colorScheme.tertiary
+        TransactionTypes.EXPENSE -> MaterialTheme.colorScheme.error
+        TransactionTypes.SAVINGS -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
-private fun typeIcon(type: String): ImageVector = when (type) {
-    TransactionTypes.INCOME -> Icons.AutoMirrored.Outlined.TrendingUp
-    TransactionTypes.EXPENSE -> Icons.AutoMirrored.Outlined.TrendingDown
-    TransactionTypes.SAVINGS -> Icons.Outlined.Savings
-    else -> Icons.Outlined.Payments
-}
+private fun typeIcon(type: String): ImageVector =
+    when (type) {
+        TransactionTypes.INCOME -> Icons.AutoMirrored.Outlined.TrendingUp
+        TransactionTypes.EXPENSE -> Icons.AutoMirrored.Outlined.TrendingDown
+        TransactionTypes.SAVINGS -> Icons.Outlined.Savings
+        else -> Icons.Outlined.Payments
+    }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -109,7 +113,7 @@ private fun typeIcon(type: String): ImageVector = when (type) {
 fun YearlyBudgetDetailScreen(
     navController: NavController,
     year: Int,
-    vm: YearlyBudgetViewModel = viewModel()
+    vm: YearlyBudgetViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -117,10 +121,16 @@ fun YearlyBudgetDetailScreen(
     LaunchedEffect(year) { vm.init(year) }
 
     LaunchedEffect(state.message) {
-        state.message?.let { snackbarHostState.showSnackbar(it); vm.clearMessage() }
+        state.message?.let {
+            snackbarHostState.showSnackbar(it)
+            vm.clearMessage()
+        }
     }
     LaunchedEffect(state.error) {
-        state.error?.let { snackbarHostState.showSnackbar(it); vm.clearError() }
+        state.error?.let {
+            snackbarHostState.showSnackbar(it)
+            vm.clearError()
+        }
     }
 
     Scaffold(
@@ -133,19 +143,21 @@ fun YearlyBudgetDetailScreen(
                 badge = year.toString(),
                 onBack = { navController.popBackStack() },
             )
-        }
+        },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(
-                start = 18.dp,
-                end = 18.dp,
-                top = 14.dp,
-                bottom = 40.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            contentPadding =
+                PaddingValues(
+                    start = 18.dp,
+                    end = 18.dp,
+                    top = 14.dp,
+                    bottom = 40.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             // ── Summary card
             item {
@@ -155,7 +167,7 @@ fun YearlyBudgetDetailScreen(
                     savings = state.totalSavings,
                     balance = state.balance,
                     isDeficit = state.isDeficit,
-                    isLoading = state.isLoading
+                    isLoading = state.isLoading,
                 )
             }
 
@@ -171,7 +183,7 @@ fun YearlyBudgetDetailScreen(
                     onNameChange = vm::onNameChange,
                     onAmountChange = vm::onAmountChange,
                     onTypeChange = vm::onTypeChange,
-                    onAdd = vm::addTransaction
+                    onAdd = vm::addTransaction,
                 )
             }
 
@@ -180,28 +192,30 @@ fun YearlyBudgetDetailScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = "Budgeted Transactions",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.2).sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        style =
+                            MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.2).sp,
+                            ),
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     if (state.transactions.isNotEmpty()) {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                         ) {
                             Text(
                                 text = "${state.transactions.size}",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
+                                style =
+                                    MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                    ),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                             )
                         }
                     }
@@ -218,7 +232,7 @@ fun YearlyBudgetDetailScreen(
                     TransactionRow(
                         tx = tx,
                         isDeleting = state.isDeletingTransactionId == tx.id,
-                        onDelete = { vm.confirmDeleteTransaction(tx) }
+                        onDelete = { vm.confirmDeleteTransaction(tx) },
                     )
                 }
             }
@@ -233,14 +247,14 @@ fun YearlyBudgetDetailScreen(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.10f),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Outlined.Delete,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
@@ -248,30 +262,29 @@ fun YearlyBudgetDetailScreen(
             title = {
                 Text(
                     "Remove Transaction",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
             },
             text = {
                 Text(
                     "\"${tx.name}\" will be removed from this budget.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             },
             confirmButton = {
                 Button(
                     onClick = { vm.deleteTransaction() },
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 ) { Text("Remove") }
             },
             dismissButton = {
                 TextButton(onClick = { vm.cancelDeleteTransaction() }) { Text("Cancel") }
-            }
+            },
         )
     }
 }
-
 
 // ─── Budget Summary Card ──────────────────────────────────────────────────────
 
@@ -282,7 +295,7 @@ private fun BudgetSummaryCard(
     savings: Long,
     balance: Long,
     isDeficit: Boolean,
-    isLoading: Boolean
+    isLoading: Boolean,
 ) {
     val balanceColor = if (isDeficit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
 
@@ -290,35 +303,37 @@ private fun BudgetSummaryCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header with balance indicator
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "Monthly Calculated Budget",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.2).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
+                    style =
+                        MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.2).sp,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (!isLoading && (income > 0 || expenditure > 0)) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = balanceColor.copy(alpha = 0.10f)
+                        color = balanceColor.copy(alpha = 0.10f),
                     ) {
                         Text(
                             text = if (isDeficit) "Deficit" else "Surplus",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
+                            style =
+                                MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                ),
                             color = balanceColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                     }
                 }
@@ -332,63 +347,66 @@ private fun BudgetSummaryCard(
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(vertical = 2.dp)) {
                         SummaryStatRow(
                             label = "Expenditure",
                             value = expenditure,
                             color = MaterialTheme.colorScheme.error,
-                            icon = Icons.AutoMirrored.Outlined.TrendingDown
+                            icon = Icons.AutoMirrored.Outlined.TrendingDown,
                         )
                         SummaryDivider()
                         SummaryStatRow(
                             label = "Income",
                             value = income,
                             color = MaterialTheme.colorScheme.tertiary,
-                            icon = Icons.AutoMirrored.Outlined.TrendingUp
+                            icon = Icons.AutoMirrored.Outlined.TrendingUp,
                         )
                         SummaryDivider()
                         SummaryStatRow(
                             label = "Savings",
                             value = savings,
                             color = MaterialTheme.colorScheme.primary,
-                            icon = Icons.Outlined.Savings
+                            icon = Icons.Outlined.Savings,
                         )
 
                         // Balance row (only if there's data)
                         if (income > 0L || expenditure > 0L) {
                             SummaryDivider()
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     text = "Balance",
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style =
+                                        MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                        ),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 Text(
-                                    text = buildAnnotatedString {
-                                        withStyle(SpanStyle(color = balanceColor)) {
-                                            append(if (isDeficit) "−" else "+")
-                                        }
-                                        withStyle(
-                                            SpanStyle(
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = balanceColor
-                                            )
-                                        ) { append(Math.abs(balance).toUgx()) }
-                                        withStyle(
-                                            SpanStyle(fontSize = 10.sp, color = balanceColor.copy(0.6f))
-                                        ) { append(" UGX") }
-                                    }
+                                    text =
+                                        buildAnnotatedString {
+                                            withStyle(SpanStyle(color = balanceColor)) {
+                                                append(if (isDeficit) "−" else "+")
+                                            }
+                                            withStyle(
+                                                SpanStyle(
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = balanceColor,
+                                                ),
+                                            ) { append(Math.abs(balance).toUgx()) }
+                                            withStyle(
+                                                SpanStyle(fontSize = 10.sp, color = balanceColor.copy(0.6f)),
+                                            ) { append(" UGX") }
+                                        },
                                 )
                             }
                         }
@@ -404,23 +422,24 @@ private fun SummaryStatRow(
     label: String,
     value: Long,
     color: Color,
-    icon: ImageVector
+    icon: ImageVector,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = color.copy(alpha = 0.10f),
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(28.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
@@ -429,18 +448,19 @@ private fun SummaryStatRow(
             Text(
                 label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = color)) {
-                    append(value.toUgx())
-                }
-                withStyle(SpanStyle(fontSize = 10.sp, color = color.copy(0.6f))) {
-                    append(" UGX")
-                }
-            }
+            text =
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = color)) {
+                        append(value.toUgx())
+                    }
+                    withStyle(SpanStyle(fontSize = 10.sp, color = color.copy(0.6f))) {
+                        append(" UGX")
+                    }
+                },
         )
     }
 }
@@ -448,11 +468,12 @@ private fun SummaryStatRow(
 @Composable
 private fun SummaryDivider() {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp)
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
     )
 }
 
@@ -469,25 +490,26 @@ private fun AddTransactionCard(
     onNameChange: (String) -> Unit,
     onAmountChange: (String) -> Unit,
     onTypeChange: (String) -> Unit,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = "Add a Transaction",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.2).sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface
+                style =
+                    MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.2).sp,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
             )
 
             // Name field
@@ -501,11 +523,12 @@ private fun AddTransactionCard(
                 supportingText = nameError?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                )
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                    ),
             )
 
             // Amount field
@@ -524,24 +547,26 @@ private fun AddTransactionCard(
                     Text(
                         "UGX  ",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                )
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                    ),
             )
 
             // Type chips
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Type",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style =
+                        MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TransactionTypes.valid.forEach { t ->
@@ -553,24 +578,26 @@ private fun AddTransactionCard(
                             label = {
                                 Text(
                                     TransactionTypes.displayName(t),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                                    )
+                                    style =
+                                        MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                        ),
                                 )
                             },
                             leadingIcon = {
                                 Icon(
                                     typeIcon(t),
                                     contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(14.dp),
                                 )
                             },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = color,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
+                            colors =
+                                FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = color,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
                         )
                     }
                 }
@@ -583,29 +610,31 @@ private fun AddTransactionCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                contentPadding = PaddingValues(vertical = 13.dp)
+                contentPadding = PaddingValues(vertical = 13.dp),
             ) {
                 if (isSaving) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
+                        strokeWidth = 2.dp,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "Adding…",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        style =
+                            MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
                     )
                 } else {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
                         "Add Transaction",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
+                        style =
+                            MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
                     )
                 }
             }
@@ -619,7 +648,7 @@ private fun AddTransactionCard(
 private fun TransactionRow(
     tx: BudgetTransactionResponse,
     isDeleting: Boolean,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     val color = typeColor(tx.type)
     val icon = typeIcon(tx.type)
@@ -628,34 +657,37 @@ private fun TransactionRow(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
         ) {
             // Colored left strip
             Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
-                    .background(color)
+                modifier =
+                    Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+                        .background(color),
             )
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // Type icon badge
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = color.copy(alpha = 0.10f),
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(38.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
@@ -666,35 +698,37 @@ private fun TransactionRow(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = tx.name,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
+                        style =
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = TransactionTypes.displayName(tx.type),
                         style = MaterialTheme.typography.labelSmall,
-                        color = color.copy(alpha = 0.80f)
+                        color = color.copy(alpha = 0.80f),
                     )
                 }
 
                 // Amount
                 Text(
-                    text = buildAnnotatedString {
-                        withStyle(
-                            SpanStyle(
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = color
-                            )
-                        ) { append(tx.amount.toUgx()) }
-                        withStyle(
-                            SpanStyle(fontSize = 10.sp, color = color.copy(0.6f))
-                        ) { append(" UGX") }
-                    }
+                    text =
+                        buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = color,
+                                ),
+                            ) { append(tx.amount.toUgx()) }
+                            withStyle(
+                                SpanStyle(fontSize = 10.sp, color = color.copy(0.6f)),
+                            ) { append(" UGX") }
+                        },
                 )
 
                 // Delete button or spinner
@@ -702,23 +736,23 @@ private fun TransactionRow(
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
                         color = MaterialTheme.colorScheme.error,
-                        strokeWidth = 2.dp
+                        strokeWidth = 2.dp,
                     )
                 } else {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     ) {
                         IconButton(
                             onClick = onDelete,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
                                 Icons.Outlined.Delete,
                                 contentDescription = "Delete",
                                 tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
                             )
                         }
                     }
@@ -733,36 +767,37 @@ private fun TransactionRow(
 @Composable
 private fun TransactionsEmptyState() {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 24.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier.size(64.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Outlined.Receipt,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
                 )
             }
         }
         Text(
             "No transactions yet",
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             "Add income, expenditure and savings\nitems using the form above.",
             style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -771,10 +806,14 @@ private fun TransactionsEmptyState() {
 private fun TransactionsSkeleton() {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f, targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse
-        ), label = "alpha"
+        initialValue = 0.3f,
+        targetValue = 0.8f,
+        animationSpec =
+            infiniteRepeatable(
+                tween(900, easing = FastOutSlowInEasing),
+                RepeatMode.Reverse,
+            ),
+        label = "alpha",
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         repeat(3) {
@@ -782,12 +821,13 @@ private fun TransactionsSkeleton() {
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(0.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
                 ) {
                     Box(
                         Modifier
@@ -795,42 +835,43 @@ private fun TransactionsSkeleton() {
                             .height(66.dp)
                             .background(
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f),
-                                RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
-                            )
+                                RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
+                            ),
                     )
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Box(
                             Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha * 0.08f))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha * 0.08f)),
                         )
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(
                                 Modifier.fillMaxWidth(0.5f).height(12.dp)
                                     .background(
                                         MaterialTheme.colorScheme.onSurface.copy(alpha * 0.12f),
-                                        RoundedCornerShape(6.dp)
-                                    )
+                                        RoundedCornerShape(6.dp),
+                                    ),
                             )
                             Box(
                                 Modifier.fillMaxWidth(0.3f).height(10.dp)
                                     .background(
                                         MaterialTheme.colorScheme.onSurface.copy(alpha * 0.08f),
-                                        RoundedCornerShape(5.dp)
-                                    )
+                                        RoundedCornerShape(5.dp),
+                                    ),
                             )
                         }
                         Box(
                             Modifier.width(80.dp).height(14.dp)
                                 .background(
                                     MaterialTheme.colorScheme.onSurface.copy(alpha * 0.10f),
-                                    RoundedCornerShape(6.dp)
-                                )
+                                    RoundedCornerShape(6.dp),
+                                ),
                         )
                     }
                 }
@@ -843,38 +884,42 @@ private fun TransactionsSkeleton() {
 private fun SummaryCardSkeleton() {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f, targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            tween(950, easing = FastOutSlowInEasing), RepeatMode.Reverse
-        ), label = "alpha"
+        initialValue = 0.3f,
+        targetValue = 0.75f,
+        animationSpec =
+            infiniteRepeatable(
+                tween(950, easing = FastOutSlowInEasing),
+                RepeatMode.Reverse,
+            ),
+        label = "alpha",
     )
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             repeat(3) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Box(
                         Modifier.width(90.dp).height(12.dp)
                             .background(
                                 MaterialTheme.colorScheme.onSurface.copy(alpha * 0.20f),
-                                RoundedCornerShape(6.dp)
-                            )
+                                RoundedCornerShape(6.dp),
+                            ),
                     )
                     Box(
                         Modifier.width(110.dp).height(14.dp)
                             .background(
                                 MaterialTheme.colorScheme.onSurface.copy(alpha * 0.15f),
-                                RoundedCornerShape(6.dp)
-                            )
+                                RoundedCornerShape(6.dp),
+                            ),
                     )
                 }
             }

@@ -1,10 +1,10 @@
 package cc.dlabs.pesamind.features.budgets
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -85,10 +85,12 @@ private val ugxFormat = NumberFormat.getNumberInstance(Locale.US)
 
 private fun Long.toUgxString(): String = ugxFormat.format(this)
 
-private val months = listOf(
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December"
-)
+private val months =
+    listOf(
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    )
+
 private fun Int.toMonthName() = months.getOrElse(this - 1) { "Month $this" }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -129,18 +131,20 @@ fun BudgetScreen(
             BudgetHeader(
                 state = state,
                 viewModel = vm,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp),
+                modifier =
+                    Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 8.dp),
             )
-        }
+        },
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { vm.refresh() },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             val showInitialSkeleton =
                 state.isLoading &&
@@ -152,8 +156,9 @@ fun BudgetScreen(
                 BudgetSkeletonView()
             } else {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize(),
+                    modifier =
+                        Modifier
+                            .fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(bottom = 100.dp),
                 ) {
@@ -179,47 +184,47 @@ fun BudgetScreen(
 
                     item {
                         StaggeredCard(index = 1, visible = cardsVisible) {
-                        NextMonthBudgetCard(
-                            nextMonth = state.nextMonthIndex,
-                            nextYear = state.nextMonthYear,
-                            hasExisting = state.hasNextMonthBudget,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            onSetBudget = {
-                                navController.navigate(
-                                    Routes.SetMonthlyBudget.createRoute(
-                                        state.nextMonthIndex,
-                                        state.nextMonthYear,
+                            NextMonthBudgetCard(
+                                nextMonth = state.nextMonthIndex,
+                                nextYear = state.nextMonthYear,
+                                hasExisting = state.hasNextMonthBudget,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                onSetBudget = {
+                                    navController.navigate(
+                                        Routes.SetMonthlyBudget.createRoute(
+                                            state.nextMonthIndex,
+                                            state.nextMonthYear,
+                                        ),
                                     )
-                                )
-                            },
-                        )
+                                },
+                            )
                         }
                     }
 
                     item {
                         StaggeredCard(index = 2, visible = cardsVisible) {
-                        CurrentMonthCard(
-                            yearly = state.yearlyBudget,
-                            monthly = state.currentMonthlyBudget,
-                            isLoading = state.isLoadingMonthly,
-                            month = state.displayMonth,
-                            year = state.displayYear,
-                            balance = state.monthlyBalance,
-                            isDeficit = state.isMonthlyDeficit,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            onDetails = {
-                                if (state.yearlyBudget == null) {
-                                    navController.navigate(Routes.SetYearlyBudget.route)
-                                } else {
-                                    navController.navigate(
-                                        Routes.SetMonthlyBudget.createRoute(
-                                            state.displayMonth,
-                                            state.displayYear,
+                            CurrentMonthCard(
+                                yearly = state.yearlyBudget,
+                                monthly = state.currentMonthlyBudget,
+                                isLoading = state.isLoadingMonthly,
+                                month = state.displayMonth,
+                                year = state.displayYear,
+                                balance = state.monthlyBalance,
+                                isDeficit = state.isMonthlyDeficit,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                onDetails = {
+                                    if (state.yearlyBudget == null) {
+                                        navController.navigate(Routes.SetYearlyBudget.route)
+                                    } else {
+                                        navController.navigate(
+                                            Routes.SetMonthlyBudget.createRoute(
+                                                state.displayMonth,
+                                                state.displayYear,
+                                            ),
                                         )
-                                    )
-                                }
-                            },
-                        )
+                                    }
+                                },
+                            )
                         }
                     }
 
@@ -247,24 +252,31 @@ private fun StaggeredCard(
         animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
         label = "budget_stagger_offset_$index",
     )
-    Box(Modifier.graphicsLayer { this.alpha = alpha; translationY = offsetY }) { content() }
+    Box(
+        Modifier.graphicsLayer {
+            this.alpha = alpha
+            translationY = offsetY
+        },
+    ) { content() }
 }
 
 @Composable
 private fun BudgetOfflineBanner(modifier: Modifier = Modifier) {
     val bannerText = MaterialTheme.colorScheme.onErrorContainer
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                brush = Brush.horizontalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.errorContainer,
-                        MaterialTheme.colorScheme.tertiaryContainer,
-                    )
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(
+                    brush =
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.errorContainer,
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                            ),
+                        ),
+                    shape = RoundedCornerShape(12.dp),
                 ),
-                shape = RoundedCornerShape(12.dp),
-            )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -294,35 +306,41 @@ private fun BudgetSkeletonView() {
     val shimmerAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            tween(900, easing = FastOutSlowInEasing),
-            RepeatMode.Reverse,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                tween(900, easing = FastOutSlowInEasing),
+                RepeatMode.Reverse,
+            ),
         label = "budget_shimmer_alpha",
     )
 
     @Composable
-    fun SkeletonBlock(height: Dp, modifier: Modifier = Modifier.fillMaxWidth()) {
+    fun SkeletonBlock(
+        height: Dp,
+        modifier: Modifier = Modifier.fillMaxWidth(),
+    ) {
         Box(
-            modifier = modifier
-                .height(height)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha * 0.92f),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha),
-                        )
-                    )
-                )
+            modifier =
+                modifier
+                    .height(height)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha),
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha * 0.92f),
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha),
+                            ),
+                        ),
+                    ),
         )
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         SkeletonBlock(height = 4.dp, modifier = Modifier.fillMaxWidth().padding(horizontal = 120.dp))
@@ -373,24 +391,24 @@ private fun YearlyBudgetCard(
     isLoading: Boolean,
     year: Int,
     modifier: Modifier = Modifier,
-    navController: NavHostController
+    navController: NavHostController,
 ) {
     BudgetCard(modifier = modifier) {
         Column(modifier = Modifier.padding(18.dp)) {
-
             // Header row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "Yearly Budget",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.3).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
+                    style =
+                        MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.3).sp,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 
@@ -403,7 +421,7 @@ private fun YearlyBudgetCard(
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         YearlyStatRow(
@@ -411,7 +429,7 @@ private fun YearlyBudgetCard(
                             value = yearly.totalExpenditures,
                             valueColor = MaterialTheme.colorScheme.error,
                             icon = Icons.AutoMirrored.Outlined.TrendingDown,
-                            iconTint = MaterialTheme.colorScheme.error
+                            iconTint = MaterialTheme.colorScheme.error,
                         )
                         StatDivider()
                         YearlyStatRow(
@@ -419,7 +437,7 @@ private fun YearlyBudgetCard(
                             value = yearly.totalIncome,
                             valueColor = MaterialTheme.colorScheme.tertiary,
                             icon = Icons.AutoMirrored.Outlined.TrendingUp,
-                            iconTint = MaterialTheme.colorScheme.tertiary
+                            iconTint = MaterialTheme.colorScheme.tertiary,
                         )
                         StatDivider()
                         YearlyStatRow(
@@ -427,7 +445,7 @@ private fun YearlyBudgetCard(
                             value = yearly.totalSavings,
                             valueColor = MaterialTheme.colorScheme.primary,
                             icon = Icons.Outlined.WbSunny,
-                            iconTint = MaterialTheme.colorScheme.primary
+                            iconTint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -435,17 +453,18 @@ private fun YearlyBudgetCard(
                 Spacer(Modifier.height(14.dp))
 
                 Button(
-                    onClick = {navController.navigate(Routes.SetYearlyBudget.route)},
+                    onClick = { navController.navigate(Routes.SetYearlyBudget.route) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    contentPadding = PaddingValues(vertical = 12.dp)
+                    contentPadding = PaddingValues(vertical = 12.dp),
                 ) {
                     Text(
                         "More Details",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        style =
+                            MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
                     )
                 }
             } else {
@@ -453,10 +472,10 @@ private fun YearlyBudgetCard(
                 EmptyBudgetHint(text = "No yearly budget for $year yet.")
                 Spacer(Modifier.height(18.dp))
                 Button(
-                    onClick = {navController.navigate(Routes.SetYearlyBudget.route)},
+                    onClick = { navController.navigate(Routes.SetYearlyBudget.route) },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
                 ) {
                     Text("Create Budget")
                 }
@@ -471,23 +490,24 @@ private fun YearlyStatRow(
     value: Long,
     valueColor: Color,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconTint: Color
+    iconTint: Color,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = iconTint.copy(alpha = 0.10f),
-                modifier = Modifier.size(30.dp)
+                modifier = Modifier.size(30.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(15.dp))
@@ -496,31 +516,32 @@ private fun YearlyStatRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
         Text(
-            text = buildAnnotatedString {
-                withStyle(
-                    SpanStyle(
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = valueColor
-                    )
-                ) {
-                    append(value.toUgxString())
-                }
-                withStyle(
-                    SpanStyle(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = valueColor.copy(alpha = 0.65f)
-                    )
-                ) {
-                    append(" UGX")
-                }
-            }
+            text =
+                buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = valueColor,
+                        ),
+                    ) {
+                        append(value.toUgxString())
+                    }
+                    withStyle(
+                        SpanStyle(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = valueColor.copy(alpha = 0.65f),
+                        ),
+                    ) {
+                        append(" UGX")
+                    }
+                },
         )
     }
 }
@@ -528,11 +549,12 @@ private fun YearlyStatRow(
 @Composable
 private fun StatDivider() {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp)
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
     )
 }
 
@@ -544,7 +566,7 @@ private fun NextMonthBudgetCard(
     nextYear: Int,
     hasExisting: Boolean,
     modifier: Modifier = Modifier,
-    onSetBudget: () -> Unit
+    onSetBudget: () -> Unit,
 ) {
     Column(
         modifier = modifier,
@@ -552,75 +574,88 @@ private fun NextMonthBudgetCard(
     ) {
         Text(
             text = "Next month's budget",
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.2).sp
-            ),
-            color = MaterialTheme.colorScheme.onSurface
+            style =
+                MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.2).sp,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
         )
 
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onSetBudget),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSetBudget),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(0.dp)
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            elevation = CardDefaults.cardElevation(0.dp),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // Calendar icon badge
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                    modifier = Modifier.size(46.dp)
+                    modifier = Modifier.size(46.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Outlined.CalendarMonth,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (hasExisting) "${nextMonth.toMonthName()} Budget"
-                        else "Set ${nextMonth.toMonthName()} Budget",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        text =
+                            if (hasExisting) {
+                                "${nextMonth.toMonthName()} Budget"
+                            } else {
+                                "Set ${nextMonth.toMonthName()} Budget"
+                            },
+                        style =
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = if (hasExisting) "View & edit $nextYear plan"
-                        else "Plan ahead for $nextYear",
+                        text =
+                            if (hasExisting) {
+                                "View & edit $nextYear plan"
+                            } else {
+                                "Plan ahead for $nextYear"
+                            },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowForwardIos,
                             contentDescription = "Go",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(13.dp),
                         )
                     }
                 }
@@ -641,45 +676,49 @@ private fun CurrentMonthCard(
     balance: Long,
     isDeficit: Boolean,
     modifier: Modifier = Modifier,
-    onDetails: () -> Unit
+    onDetails: () -> Unit,
 ) {
     val isYearlyMissing = yearly == null
-    val statusBg = if (isDeficit) {
-        MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
-    } else {
-        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f)
-    }
+    val statusBg =
+        if (isDeficit) {
+            MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+        } else {
+            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f)
+        }
     val statusColor = if (isDeficit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
     val statusText = if (isDeficit) "Deficit" else "Surplus"
 
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-
         // The card itself — slight negative top offset to overlap the icon
         Card(
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-            ),
-            elevation = CardDefaults.cardElevation(0.dp)
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                ),
+            elevation = CardDefaults.cardElevation(0.dp),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 22.dp, start = 18.dp, end = 18.dp, bottom = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 22.dp, start = 18.dp, end = 18.dp, bottom = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = "${month.toMonthName()} Budget",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.5).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
+                    style =
+                        MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.5).sp,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
 
                 Spacer(Modifier.height(10.dp))
@@ -736,22 +775,22 @@ private fun CurrentMonthCard(
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp),
-                        strokeWidth = 2.5.dp
+                        strokeWidth = 2.5.dp,
                     )
                 } else if (monthly != null) {
-
                     // Status chip
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = statusBg
+                        color = statusBg,
                     ) {
                         Text(
                             text = "Transactions Status: $statusText",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
+                            style =
+                                MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
                             color = statusColor,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                         )
                     }
 
@@ -759,32 +798,35 @@ private fun CurrentMonthCard(
 
                     // Hero balance figure
                     Text(
-                        text = buildAnnotatedString {
-                            if (isDeficit) withStyle(
-                                SpanStyle(
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 36.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                )
-                            ) {
-                                append("−")
-                            }
-                            withStyle(
-                                SpanStyle(
-                                    fontSize = 36.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = (-1).sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            ) { append(Math.abs(balance).toUgxString()) }
-                            withStyle(
-                                SpanStyle(
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) { append(" UGX") }
-                        }
+                        text =
+                            buildAnnotatedString {
+                                if (isDeficit) {
+                                    withStyle(
+                                        SpanStyle(
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontSize = 36.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                        ),
+                                    ) {
+                                        append("−")
+                                    }
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = (-1).sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                ) { append(Math.abs(balance).toUgxString()) }
+                                withStyle(
+                                    SpanStyle(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                ) { append(" UGX") }
+                            },
                     )
 
                     Spacer(Modifier.height(20.dp))
@@ -793,7 +835,7 @@ private fun CurrentMonthCard(
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             MonthlyStatRow("Income", monthly.totalIncome, MaterialTheme.colorScheme.tertiary)
@@ -804,7 +846,7 @@ private fun CurrentMonthCard(
                                 label = "Balance",
                                 value = Math.abs(balance),
                                 valueColor = if (isDeficit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
-                                prefix = if (isDeficit) "−" else "+"
+                                prefix = if (isDeficit) "−" else "+",
                             )
                         }
                     }
@@ -816,17 +858,17 @@ private fun CurrentMonthCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        contentPadding = PaddingValues(vertical = 14.dp)
+                        contentPadding = PaddingValues(vertical = 14.dp),
                     ) {
                         Text(
                             "More Details",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.3.sp
-                            )
+                            style =
+                                MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.3.sp,
+                                ),
                         )
                     }
-
                 } else {
                     Spacer(Modifier.height(8.dp))
                     EmptyBudgetHint(text = "No budget set for ${month.toMonthName()} $year.")
@@ -835,7 +877,7 @@ private fun CurrentMonthCard(
                         onClick = onDetails,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                     ) {
                         Text("Create Budget")
                     }
@@ -850,32 +892,36 @@ private fun MonthlyStatRow(
     label: String,
     value: Long,
     valueColor: Color,
-    prefix: String = ""
+    prefix: String = "",
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = buildAnnotatedString {
-                if (prefix.isNotEmpty()) withStyle(
-                    SpanStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = valueColor)
-                ) { append(prefix) }
-                withStyle(
-                    SpanStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = valueColor)
-                ) { append(value.toUgxString()) }
-                withStyle(
-                    SpanStyle(fontSize = 10.sp, color = valueColor.copy(alpha = 0.6f))
-                ) { append(" UGX") }
-            }
+            text =
+                buildAnnotatedString {
+                    if (prefix.isNotEmpty()) {
+                        withStyle(
+                            SpanStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = valueColor),
+                        ) { append(prefix) }
+                    }
+                    withStyle(
+                        SpanStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = valueColor),
+                    ) { append(value.toUgxString()) }
+                    withStyle(
+                        SpanStyle(fontSize = 10.sp, color = valueColor.copy(alpha = 0.6f)),
+                    ) { append(" UGX") }
+                },
         )
     }
 }
@@ -889,7 +935,7 @@ private fun EmptyBudgetHint(text: String) {
         style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -899,26 +945,27 @@ private fun BudgetStatsSkeleton() {
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            tween(950, easing = FastOutSlowInEasing),
-            RepeatMode.Reverse
-        ),
-        label = "alpha"
+        animationSpec =
+            infiniteRepeatable(
+                tween(950, easing = FastOutSlowInEasing),
+                RepeatMode.Reverse,
+            ),
+        label = "alpha",
     )
 
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier.padding(vertical = 8.dp, horizontal = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             repeat(3) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Box(
                         Modifier
@@ -926,8 +973,8 @@ private fun BudgetStatsSkeleton() {
                             .height(12.dp)
                             .background(
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.25f),
-                                RoundedCornerShape(6.dp)
-                            )
+                                RoundedCornerShape(6.dp),
+                            ),
                     )
                     Box(
                         Modifier
@@ -935,8 +982,8 @@ private fun BudgetStatsSkeleton() {
                             .height(14.dp)
                             .background(
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.20f),
-                                RoundedCornerShape(6.dp)
-                            )
+                                RoundedCornerShape(6.dp),
+                            ),
                     )
                 }
             }

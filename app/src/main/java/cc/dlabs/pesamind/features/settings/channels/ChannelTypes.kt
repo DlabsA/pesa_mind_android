@@ -52,38 +52,38 @@ object ChannelDescBank {
     const val TROPICAL_BANK = "Tropical Bank"
     const val UBA_UGANDA = "UBA Uganda"
 
-    val valid = listOf(
-        ABSA_BANK,
-        BANK_OF_AFRICA,
-        BANK_OF_BARODA,
-        BANK_OF_INDIA,
-        CAIRO_BANK,
-        CENTENARY_BANK,
-        CITIBANK,
-        DFCU_BANK,
-        DIAMOND_TRUST_BANK,
-        ECOBANK,
-        EQUITY_BANK,
-        EXIM_BANK,
-        FINANCE_TRUST_BANK,
-        GTBANK,
-        HOUSING_FINANCE_BANK,
-        I_M_BANK,
-        KCB_BANK,
-        NCBA_BANK,
-        OPPORTUNITY_BANK,
-        PEARL_BANK,
-        POSTBANK_UGANDA,
-        PRIDE_BANK,
-        SALAAM_BANK,
-        STANBIC_BANK,
-        STANDARD_CHARTERED_BANK,
-        TROPICAL_BANK,
-        UBA_UGANDA
-    )
+    val valid =
+        listOf(
+            ABSA_BANK,
+            BANK_OF_AFRICA,
+            BANK_OF_BARODA,
+            BANK_OF_INDIA,
+            CAIRO_BANK,
+            CENTENARY_BANK,
+            CITIBANK,
+            DFCU_BANK,
+            DIAMOND_TRUST_BANK,
+            ECOBANK,
+            EQUITY_BANK,
+            EXIM_BANK,
+            FINANCE_TRUST_BANK,
+            GTBANK,
+            HOUSING_FINANCE_BANK,
+            I_M_BANK,
+            KCB_BANK,
+            NCBA_BANK,
+            OPPORTUNITY_BANK,
+            PEARL_BANK,
+            POSTBANK_UGANDA,
+            PRIDE_BANK,
+            SALAAM_BANK,
+            STANBIC_BANK,
+            STANDARD_CHARTERED_BANK,
+            TROPICAL_BANK,
+            UBA_UGANDA,
+        )
 
     fun normalizeOrNull(raw: String): String? {
         return valid.firstOrNull { it.equals(raw.trim(), ignoreCase = true) }
     }
 }
-

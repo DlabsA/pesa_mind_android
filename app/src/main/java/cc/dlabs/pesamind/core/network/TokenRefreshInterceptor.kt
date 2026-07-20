@@ -1,12 +1,12 @@
 package cc.dlabs.pesamind.core.network
-import  cc.dlabs.pesamind.core.network.ApiClient.BASE_URL
+import android.util.Log
+import cc.dlabs.pesamind.core.network.ApiClient.BASE_URL
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
+import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
-import android.util.Log
-import cc.dlabs.pesamind.core.storage.AuthManager
 
 /**
  * Interceptor that handles 401 Unauthorized responses by:
@@ -15,7 +15,6 @@ import cc.dlabs.pesamind.core.storage.AuthManager
  * 3. Clearing tokens and logging out if refresh fails (prevents infinite loops)
  */
 class TokenRefreshInterceptor : Interceptor {
-    
     private companion object {
         private const val TAG = "TokenRefreshInterceptor"
         private var isRefreshing = false
@@ -24,7 +23,7 @@ class TokenRefreshInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
-        
+
         // Check if we've already attempted a refresh for this request chain
         val hasAttemptedRefresh = refreshAttemptedForThisChain.get() ?: false
         if (hasAttemptedRefresh) {
@@ -32,7 +31,7 @@ class TokenRefreshInterceptor : Interceptor {
             Log.w(TAG, "Already attempted refresh for this chain, skipping to prevent infinite loop")
             return chain.proceed(originalRequest)
         }
-        
+
         val response = chain.proceed(originalRequest)
 
         // If not a 401, return the response as-is
@@ -58,23 +57,24 @@ class TokenRefreshInterceptor : Interceptor {
             // Attempt to refresh the token (ONE TIME ONLY)
             Log.d(TAG, "Attempting to refresh token...")
             val refreshed = refreshToken()
-            
+
             if (refreshed) {
                 isRefreshing = false
                 refreshAttemptedForThisChain.set(true)
                 Log.d(TAG, "✓ Token refreshed successfully, retrying request")
-                
+
                 // Rebuild the request with the new token
                 val newToken = runBlocking { TokenManager.getToken() }
-                val retryRequest = originalRequest.newBuilder()
-                    .removeHeader("Authorization")
-                    .apply {
-                        if (!newToken.isNullOrEmpty()) {
-                            addHeader("Authorization", "Bearer $newToken")
+                val retryRequest =
+                    originalRequest.newBuilder()
+                        .removeHeader("Authorization")
+                        .apply {
+                            if (!newToken.isNullOrEmpty()) {
+                                addHeader("Authorization", "Bearer $newToken")
+                            }
                         }
-                    }
-                    .build()
-                
+                        .build()
+
                 // Retry with the new token (ONE MORE TIME ONLY)
                 chain.proceed(retryRequest)
             } else {
@@ -93,7 +93,7 @@ class TokenRefreshInterceptor : Interceptor {
             response
         }
     }
-    
+
     /**
      * Handle logout: clear tokens and notify the app
      */
@@ -109,53 +109,57 @@ class TokenRefreshInterceptor : Interceptor {
      * Attempts to refresh the access token using the refresh token
      * @return true if refresh was successful, false otherwise
      */
-    private fun refreshToken(): Boolean = runBlocking {
-        return@runBlocking try {
-            val refreshTokenValue = TokenManager.getRefreshToken()
-            
-            if (refreshTokenValue.isNullOrEmpty()) {
-                // No refresh token available, cannot refresh
-                Log.e(TAG, "No refresh token available")
-                false
-            } else {
-                Log.d(TAG, "Sending refresh token request...")
-                // Create a new API service without interceptors to avoid infinite loops
-                val refreshService = createRefreshApiService()
-                val refreshRequest = RefreshRequest(refreshTokenValue)
-                
-                val response = refreshService.refresh(refreshRequest)
-                
-                if (response.isSuccessful && response.body() != null) {
-                    val authResponse = response.body()!!
-                    
-                    // Save new tokens
-                    TokenManager.clearTokens()
-                    TokenManager.saveTokens(authResponse.accessToken, authResponse.refreshToken)
-                    Log.d(TAG, "✓ New tokens saved successfully")
-                    true
-                } else {
-                    // Refresh failed
-                    Log.e(TAG, "Refresh failed with code: ${response.code()}")
+    private fun refreshToken(): Boolean =
+        runBlocking {
+            return@runBlocking try {
+                val refreshTokenValue = TokenManager.getRefreshToken()
+
+                if (refreshTokenValue.isNullOrEmpty()) {
+                    // No refresh token available, cannot refresh
+                    Log.e(TAG, "No refresh token available")
                     false
+                } else {
+                    Log.d(TAG, "Sending refresh token request...")
+                    // Create a new API service without interceptors to avoid infinite loops
+                    val refreshService = createRefreshApiService()
+                    val refreshRequest = RefreshRequest(refreshTokenValue)
+
+                    val response = refreshService.refresh(refreshRequest)
+
+                    if (response.isSuccessful && response.body() != null) {
+                        val authResponse = response.body()!!
+
+                        // Save new tokens
+                        TokenManager.clearTokens()
+                        TokenManager.saveTokens(authResponse.accessToken, authResponse.refreshToken)
+                        Log.d(TAG, "✓ New tokens saved successfully")
+                        true
+                    } else {
+                        // Refresh failed
+                        Log.e(TAG, "Refresh failed with code: ${response.code()}")
+                        false
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error refreshing token: ${e.message}", e)
+                e.printStackTrace()
+                false
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error refreshing token: ${e.message}", e)
-            e.printStackTrace()
-            false
         }
-    }
 
     /**
      * Creates a separate Retrofit API service for token refresh without the auth interceptor
      * to avoid infinite loops when refreshing tokens
      */
     private fun createRefreshApiService(): ApiService {
-        val refreshClient = okhttp3.OkHttpClient.Builder()
-            .addInterceptor(okhttp3.logging.HttpLoggingInterceptor().apply {
-                level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
-            })
-            .build()
+        val refreshClient =
+            okhttp3.OkHttpClient.Builder()
+                .addInterceptor(
+                    okhttp3.logging.HttpLoggingInterceptor().apply {
+                        level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
+                    },
+                )
+                .build()
 
         return retrofit2.Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -165,6 +169,3 @@ class TokenRefreshInterceptor : Interceptor {
             .create(ApiService::class.java)
     }
 }
-
-
-

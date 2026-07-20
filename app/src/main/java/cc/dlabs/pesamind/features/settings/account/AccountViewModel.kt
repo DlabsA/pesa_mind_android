@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
-import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,11 +20,10 @@ data class AccountState(
     val error: String? = null,
     val successMessage: String? = null,
     val balance: Double? = null,
-    val type: String? = null
+    val type: String? = null,
 )
 
 class AccountViewModel : ViewModel() {
-
     private val _state = MutableStateFlow(AccountState())
     val state: StateFlow<AccountState> = _state.asStateFlow()
 
@@ -42,18 +40,19 @@ class AccountViewModel : ViewModel() {
 
                 val hasCachedData =
                     cachedAccount.id.isNotBlank() ||
-                            cachedAccount.username.isNotBlank() ||
-                            cachedAccount.email.isNotBlank()
+                        cachedAccount.username.isNotBlank() ||
+                        cachedAccount.email.isNotBlank()
 
                 if (hasCachedData) {
-                    _state.value = AccountState(
-                        username = cachedAccount.username,
-                        email = cachedAccount.email,
-                        avatarUrl = cachedAccount.avatarUrl,
-                        balance = cachedAccount.balance,
-                        type = cachedAccount.type,
-                        isLoading = false
-                    )
+                    _state.value =
+                        AccountState(
+                            username = cachedAccount.username,
+                            email = cachedAccount.email,
+                            avatarUrl = cachedAccount.avatarUrl,
+                            balance = cachedAccount.balance,
+                            type = cachedAccount.type,
+                            isLoading = false,
+                        )
                     return@launch
                 }
 
@@ -68,37 +67,42 @@ class AccountViewModel : ViewModel() {
                             username = user.username,
                             avatarUrl = user.avatarUrl,
                             balance = user.balance.toString(),
-                            type = user.type
+                            type = user.type,
                         )
 
-                        _state.value = AccountState(
-                            username = user.username,
-                            email = user.email,
-                            avatarUrl = user.avatarUrl,
-                            balance = user.balance,
-                            type = user.type,
-                            isLoading = false
-                        )
+                        _state.value =
+                            AccountState(
+                                username = user.username,
+                                email = user.email,
+                                avatarUrl = user.avatarUrl,
+                                balance = user.balance,
+                                type = user.type,
+                                isLoading = false,
+                            )
                     } else {
-                        _state.value = _state.value.copy(
-                            isLoading = false,
-                            error = "Empty profile response"
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                isLoading = false,
+                                error = "Empty profile response",
+                            )
                     }
                 } else {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = "Failed to load profile"
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            error = "Failed to load profile",
+                        )
                 }
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Cannot reach server: ${e.message}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Cannot reach server: ${e.message}",
+                    )
             }
         }
     }
+
     fun onUsernameChange(value: String) {
         _state.value = _state.value.copy(username = value, error = null)
     }
@@ -121,34 +125,39 @@ class AccountViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = current.copy(isSaving = true, error = null)
             try {
-                val response = ApiClient.api.updateProfile(
-                    UpdateProfileRequest(
-                        username = current.username,
-                        email = current.email
+                val response =
+                    ApiClient.api.updateProfile(
+                        UpdateProfileRequest(
+                            username = current.username,
+                            email = current.email,
+                        ),
                     )
-                )
                 if (response.isSuccessful) {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        successMessage = "Profile updated successfully"
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            successMessage = "Profile updated successfully",
+                        )
                     AccountManager.saveEmail(current.email)
                     AccountManager.saveUsername(current.username)
                 } else {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        error = when (response.code()) {
-                            409 -> "Email already in use"
-                            400 -> "Invalid details"
-                            else -> "Update failed (${response.code()})"
-                        }
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error =
+                                when (response.code()) {
+                                    409 -> "Email already in use"
+                                    400 -> "Invalid details"
+                                    else -> "Update failed (${response.code()})"
+                                },
+                        )
                 }
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isSaving = false,
-                    error = "Cannot reach server"
-                )
+                _state.value =
+                    _state.value.copy(
+                        isSaving = false,
+                        error = "Cannot reach server",
+                    )
             }
         }
     }

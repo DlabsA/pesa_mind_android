@@ -38,11 +38,12 @@ fun DetailScreenTopBar(
         shadowElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)
-                .heightIn(min = 64.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)
+                    .heightIn(min = 64.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -90,4 +91,3 @@ fun DetailScreenTopBar(
         }
     }
 }
-

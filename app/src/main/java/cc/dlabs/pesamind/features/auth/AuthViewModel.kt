@@ -19,12 +19,18 @@ import kotlinx.coroutines.launch
 
 sealed interface AuthUiState {
     data object Idle : AuthUiState
+
     data object Loading : AuthUiState
+
     data class Error(val message: String) : AuthUiState
+
     data class LoginSuccess(val destination: String) : AuthUiState
+
     data object RegisterSuccess : AuthUiState
+
     // Google OAuth states
     data class GoogleSignInNeeded(val message: String = "") : AuthUiState
+
     data object GoogleSignupSuccess : AuthUiState
 }
 
@@ -47,7 +53,6 @@ data class RegisterFormState(
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
 class AuthViewModel : ViewModel() {
-
     // Repositories
     private val googleAuthRepository = GoogleAuthRepository()
 
@@ -102,16 +107,18 @@ class AuthViewModel : ViewModel() {
         val form = _loginForm.value
 
         // Inline validation — mirrors Swift's per-field emailError / passwordError
-        val emailErr = when {
-            form.email.isBlank() -> "Email is required"
-            !android.util.Patterns.EMAIL_ADDRESS.matcher(form.email.trim()).matches() -> "Enter a valid email"
-            else -> null
-        }
-        val passwordErr = when {
-            form.password.isBlank() -> "Password is required"
-            form.password.length < 6 -> "Password must be at least 6 characters"
-            else -> null
-        }
+        val emailErr =
+            when {
+                form.email.isBlank() -> "Email is required"
+                !android.util.Patterns.EMAIL_ADDRESS.matcher(form.email.trim()).matches() -> "Enter a valid email"
+                else -> null
+            }
+        val passwordErr =
+            when {
+                form.password.isBlank() -> "Password is required"
+                form.password.length < 6 -> "Password must be at least 6 characters"
+                else -> null
+            }
 
         if (emailErr != null || passwordErr != null) {
             _loginForm.update { it.copy(emailError = emailErr, passwordError = passwordErr) }
@@ -132,35 +139,34 @@ class AuthViewModel : ViewModel() {
 
                         body.profile?.let { profile ->
                             AccountManager.saveAccount(
-                                id       = profile.id ?: "",
-                                email    = form.email.trim(),
+                                id = profile.id ?: "",
+                                email = form.email.trim(),
                                 username = profile.username ?: "",
                                 avatarUrl = profile.avatarUrl ?: "",
-                                balance  = profile.balance?.toString() ?: "",
-                                type     = profile.type ?: "",
+                                balance = profile.balance?.toString() ?: "",
+                                type = profile.type ?: "",
                             )
                         }
 
-                        val destination = when (TokenManager.getLockState()) {
-                            LockState.NONE    -> "lock_setup"
-                            LockState.PIN     -> "pin_unlock"
-                            LockState.PATTERN -> "pattern_unlock"
-                        }
+                        val destination =
+                            when (TokenManager.getLockState()) {
+                                LockState.NONE -> "lock_setup"
+                                LockState.PIN -> "pin_unlock"
+                                LockState.PATTERN -> "pattern_unlock"
+                            }
                         _authState.value = AuthUiState.LoginSuccess(destination)
-
                     } else {
                         _authState.value = AuthUiState.Error(body?.error ?: "Invalid email or password")
                     }
-
                 } else {
-                    val message = when (response.code()) {
-                        401  -> "Invalid email or password"
-                        404  -> "Account not found"
-                        else -> "Login failed (${response.code()})"
-                    }
+                    val message =
+                        when (response.code()) {
+                            401 -> "Invalid email or password"
+                            404 -> "Account not found"
+                            else -> "Login failed (${response.code()})"
+                        }
                     _authState.value = AuthUiState.Error(message)
                 }
-
             } catch (t: Throwable) {
                 Log.e("AuthVM", "Login error", t)
                 _authState.value = AuthUiState.Error(networkErrorMessage(t))
@@ -174,22 +180,24 @@ class AuthViewModel : ViewModel() {
         val form = _registerForm.value
 
         val usernameErr = if (form.username.isBlank()) "Username is required" else null
-        val emailErr = when {
-            form.email.isBlank() -> "Email is required"
-            !android.util.Patterns.EMAIL_ADDRESS.matcher(form.email.trim()).matches() -> "Enter a valid email"
-            else -> null
-        }
-        val passwordErr = when {
-            form.password.isBlank() -> "Password is required"
-            form.password.length < 6 -> "Password must be at least 6 characters"
-            else -> null
-        }
+        val emailErr =
+            when {
+                form.email.isBlank() -> "Email is required"
+                !android.util.Patterns.EMAIL_ADDRESS.matcher(form.email.trim()).matches() -> "Enter a valid email"
+                else -> null
+            }
+        val passwordErr =
+            when {
+                form.password.isBlank() -> "Password is required"
+                form.password.length < 6 -> "Password must be at least 6 characters"
+                else -> null
+            }
 
         if (usernameErr != null || emailErr != null || passwordErr != null) {
             _registerForm.update {
                 it.copy(
                     usernameError = usernameErr,
-                    emailError    = emailErr,
+                    emailError = emailErr,
                     passwordError = passwordErr,
                 )
             }
@@ -199,9 +207,10 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _authState.value = AuthUiState.Loading
             try {
-                val response = ApiClient.api.register(
-                    RegisterRequest(form.username, form.email.trim(), form.password)
-                )
+                val response =
+                    ApiClient.api.register(
+                        RegisterRequest(form.username, form.email.trim(), form.password),
+                    )
 
                 if (response.isSuccessful) {
                     val body = response.body()
@@ -211,21 +220,21 @@ class AuthViewModel : ViewModel() {
                         _authState.value = AuthUiState.Error(body?.error ?: "Registration failed")
                     }
                 } else {
-                    val message = when (response.code()) {
-                        409  -> "Email already in use"
-                        400  -> "Invalid details"
-                        else -> "Registration failed (${response.code()})"
-                    }
+                    val message =
+                        when (response.code()) {
+                            409 -> "Email already in use"
+                            400 -> "Invalid details"
+                            else -> "Registration failed (${response.code()})"
+                        }
                     _authState.value = AuthUiState.Error(message)
                 }
-
             } catch (t: Throwable) {
                 Log.e("AuthVM", "Register error", t)
                 _authState.value = AuthUiState.Error(networkErrorMessage(t))
             }
         }
     }
-    
+
     // ── Google OAuth ──────────────────────────────────────────────────────────
 
     /**
@@ -238,52 +247,60 @@ class AuthViewModel : ViewModel() {
 
     /**
      * Handles Google Sign-In using platform-specific OAuth endpoint.
-     * 
+     *
      * NEW SIMPLIFIED FLOW:
      * - Backend now auto-generates username from google_display_name
      * - No username selection dialog needed
      * - Tokens are returned immediately on first request
      * - Both new and existing users get same flow
      */
-    fun handleGoogleSignIn(email: String, googleId: String, displayName: String?, profilePhotoUrl: String?) {
+    fun handleGoogleSignIn(
+        email: String,
+        googleId: String,
+        displayName: String?,
+        profilePhotoUrl: String?,
+    ) {
         viewModelScope.launch {
             _authState.value = AuthUiState.Loading
             try {
                 Log.d("AuthVM", "Signing in with Google account details using platform-specific endpoint...")
-                val result = googleAuthRepository.platformGoogleSignIn(
-                    platform = "android",  // ← Android platform identifier
-                    email = email,
-                    googleId = googleId,
-                    displayName = displayName,
-                    profilePhotoUrl = profilePhotoUrl
-                )
+                val result =
+                    googleAuthRepository.platformGoogleSignIn(
+                        // Android platform identifier
+                        platform = "android",
+                        email = email,
+                        googleId = googleId,
+                        displayName = displayName,
+                        profilePhotoUrl = profilePhotoUrl,
+                    )
 
                 result.onSuccess { response ->
                     Log.d("AuthVM", "Google sign-in response: isNewUser=${response.isNewUser}, hasTokens=${response.accessToken != null}")
-                    
+
                     // NEW FLOW: Backend handles everything (username generation, account creation, etc.)
                     // Both new and existing users get tokens back
                     if (response.accessToken != null && response.refreshToken != null) {
                         Log.d("AuthVM", "Saving tokens and account info")
                         TokenManager.saveTokens(response.accessToken, response.refreshToken)
-                        
+
                         response.profile?.let { profile ->
                             AccountManager.saveAccount(
-                                id       = profile.id ?: "",
-                                email    = email,
+                                id = profile.id ?: "",
+                                email = email,
                                 username = profile.username ?: "",
                                 avatarUrl = profile.avatarUrl ?: "",
-                                balance  = profile.balance?.toString() ?: "",
-                                type     = profile.type ?: "",
+                                balance = profile.balance?.toString() ?: "",
+                                type = profile.type ?: "",
                             )
                         }
-                        
-                        val destination = when (TokenManager.getLockState()) {
-                            LockState.NONE    -> "lock_setup"
-                            LockState.PIN     -> "pin_unlock"
-                            LockState.PATTERN -> "pattern_unlock"
-                        }
-                        
+
+                        val destination =
+                            when (TokenManager.getLockState()) {
+                                LockState.NONE -> "lock_setup"
+                                LockState.PIN -> "pin_unlock"
+                                LockState.PATTERN -> "pattern_unlock"
+                            }
+
                         // Both new users and returning users are logged in successfully
                         if (response.isNewUser) {
                             Log.d("AuthVM", "New user created with auto-generated username")
@@ -309,7 +326,7 @@ class AuthViewModel : ViewModel() {
     /**
      * DEPRECATED: No longer needed in simplified OAuth flow.
      * Backend now auto-generates username from google_display_name.
-     * 
+     *
      * Kept for backward compatibility only.
      * New flow uses handleGoogleSignIn() which returns tokens immediately.
      */
@@ -319,7 +336,7 @@ class AuthViewModel : ViewModel() {
         googleId: String,
         username: String,
         displayName: String?,
-        profilePhotoUrl: String?
+        profilePhotoUrl: String?,
     ) {
         // Validate username
         val usernameErr = validateUsername(username)
@@ -332,30 +349,31 @@ class AuthViewModel : ViewModel() {
             _authState.value = AuthUiState.Loading
             try {
                 Log.d("AuthVM", "Completing Google signup with username: $username")
-                val result = googleAuthRepository.completeGoogleSignup(
-                    email = email,
-                    googleId = googleId,
-                    username = username,
-                    displayName = displayName,
-                    profilePhotoUrl = profilePhotoUrl
-                )
+                val result =
+                    googleAuthRepository.completeGoogleSignup(
+                        email = email,
+                        googleId = googleId,
+                        username = username,
+                        displayName = displayName,
+                        profilePhotoUrl = profilePhotoUrl,
+                    )
 
                 result.onSuccess { response ->
                     Log.d("AuthVM", "Google signup completed, saving tokens")
                     if (response.accessToken != null && response.refreshToken != null) {
                         TokenManager.saveTokens(response.accessToken, response.refreshToken)
-                        
+
                         response.profile?.let { profile ->
                             AccountManager.saveAccount(
-                                id       = profile.id ?: "",
-                                email    = email,
+                                id = profile.id ?: "",
+                                email = email,
                                 username = profile.username ?: username,
                                 avatarUrl = profile.avatarUrl ?: "",
-                                balance  = profile.balance?.toString() ?: "",
-                                type     = profile.type ?: "",
+                                balance = profile.balance?.toString() ?: "",
+                                type = profile.type ?: "",
                             )
                         }
-                        
+
                         _authState.value = AuthUiState.GoogleSignupSuccess
                     } else {
                         _authState.value = AuthUiState.Error("No tokens received from server")
@@ -374,7 +392,7 @@ class AuthViewModel : ViewModel() {
     /**
      * DEPRECATED: No longer needed in simplified OAuth flow.
      * Backend now auto-generates and manages usernames.
-     * 
+     *
      * Kept for backward compatibility only.
      */
     @Deprecated("Backend now auto-generates username. Manual username checking not needed.")
@@ -390,7 +408,7 @@ class AuthViewModel : ViewModel() {
             try {
                 Log.d("AuthVM", "Checking username availability: $username")
                 val result = googleAuthRepository.checkUsername(username)
-                
+
                 result.onSuccess { response ->
                     if (!response.available) {
                         _authState.value = AuthUiState.Error("Username is already taken")
@@ -412,13 +430,14 @@ class AuthViewModel : ViewModel() {
      * - Min 3 chars, max 50 chars
      * - Alphanumeric and underscore only
      */
-    private fun validateUsername(username: String): String? = when {
-        username.isBlank() -> "Username is required"
-        username.length < 3 -> "Username must be at least 3 characters"
-        username.length > 50 -> "Username must be at most 50 characters"
-        !username.matches(Regex("^[a-zA-Z0-9_]+$")) -> "Username can only contain letters, numbers, and underscores"
-        else -> null
-    }
+    private fun validateUsername(username: String): String? =
+        when {
+            username.isBlank() -> "Username is required"
+            username.length < 3 -> "Username must be at least 3 characters"
+            username.length > 50 -> "Username must be at most 50 characters"
+            !username.matches(Regex("^[a-zA-Z0-9_]+$")) -> "Username can only contain letters, numbers, and underscores"
+            else -> null
+        }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -429,8 +448,9 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    private fun networkErrorMessage(t: Throwable): String = when (t) {
-        is ExceptionInInitializerError -> "Check API base URL in ApiClient."
-        else -> "Cannot reach server. Check your connection."
-    }
+    private fun networkErrorMessage(t: Throwable): String =
+        when (t) {
+            is ExceptionInInitializerError -> "Check API base URL in ApiClient."
+            else -> "Cannot reach server. Check your connection."
+        }
 }

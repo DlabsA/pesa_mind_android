@@ -8,6 +8,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -20,6 +23,8 @@ import cc.dlabs.pesamind.features.auth.LoginScreen
 import cc.dlabs.pesamind.features.auth.PatternUnlockScreen
 import cc.dlabs.pesamind.features.auth.PinUnlockScreen
 import cc.dlabs.pesamind.features.auth.RegisterScreen
+import cc.dlabs.pesamind.features.budgets.SetMonthlyBudgetScreen
+import cc.dlabs.pesamind.features.budgets.YearlyBudgetDetailScreen
 import cc.dlabs.pesamind.features.home.AddTransactionScreen
 import cc.dlabs.pesamind.features.home.MainScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
@@ -29,23 +34,19 @@ import cc.dlabs.pesamind.features.settings.notifications.TransactionListScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
-import cc.dlabs.pesamind.features.budgets.SetMonthlyBudgetScreen
-import cc.dlabs.pesamind.features.budgets.YearlyBudgetDetailScreen
 import java.util.Calendar
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 
 @Composable
 fun PesaMindNavGraph(navController: NavHostController) {
     var startDestination by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        val destination = when (TokenManager.getLockState()) {
-            LockState.NONE -> if (TokenManager.isLoggedIn()) Routes.Dashboard.route else Routes.Login.route
-            LockState.PIN -> Routes.PinUnlock.route
-            LockState.PATTERN -> Routes.PatternUnlock.route
-        }
+        val destination =
+            when (TokenManager.getLockState()) {
+                LockState.NONE -> if (TokenManager.isLoggedIn()) Routes.Dashboard.route else Routes.Login.route
+                LockState.PIN -> Routes.PinUnlock.route
+                LockState.PATTERN -> Routes.PatternUnlock.route
+            }
         startDestination = destination
     }
     if (startDestination == null) {
@@ -62,7 +63,7 @@ fun PesaMindNavGraph(navController: NavHostController) {
             composable(Routes.PatternSetup.route) {
                 PatternUnlockScreen(
                     navController,
-                    isSetup = true
+                    isSetup = true,
                 )
             }
             composable(Routes.PinUnlock.route) { PinUnlockScreen(navController) }
@@ -84,17 +85,18 @@ fun PesaMindNavGraph(navController: NavHostController) {
             composable(Routes.TransactionList.route) { TransactionListScreen(navController) }
             composable(
                 route = Routes.SetMonthlyBudget.route,
-                arguments = listOf(
-                    navArgument("month") { type = NavType.IntType },
-                    navArgument("year") { type = NavType.IntType }
-                )
+                arguments =
+                    listOf(
+                        navArgument("month") { type = NavType.IntType },
+                        navArgument("year") { type = NavType.IntType },
+                    ),
             ) { backStackEntry ->
                 val month = backStackEntry.arguments?.getInt("month") ?: 1
                 val year = backStackEntry.arguments?.getInt("year") ?: 2026
                 SetMonthlyBudgetScreen(
                     navController = navController,
                     month = month,
-                    year = year
+                    year = year,
                 )
             }
             composable(Routes.SetYearlyBudget.route) {

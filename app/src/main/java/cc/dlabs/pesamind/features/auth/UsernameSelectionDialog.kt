@@ -51,7 +51,7 @@ import androidx.compose.ui.window.DialogProperties
 
 /**
  * Dialog for username selection during Google OAuth signup
- * 
+ *
  * Shows input for username with validation feedback
  */
 @Composable
@@ -61,7 +61,7 @@ fun UsernameSelectionDialog(
     onCheckUsername: (username: String) -> Unit,
     isLoading: Boolean = false,
     errorMessage: String? = null,
-    displayName: String? = null
+    displayName: String? = null,
 ) {
     var username by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
@@ -69,39 +69,42 @@ fun UsernameSelectionDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = !isLoading,
-            dismissOnClickOutside = !isLoading
-        )
+        properties =
+            DialogProperties(
+                dismissOnBackPress = !isLoading,
+                dismissOnClickOutside = !isLoading,
+            ),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface),
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.9f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
+            tonalElevation = 8.dp,
         ) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier =
+                    Modifier
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Title
                 Text(
                     text = "Choose Your Username",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
 
                 // Subtitle
                 Text(
                     text = "This is how others will identify you on PesaMind",
                     fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 if (displayName != null) {
@@ -110,7 +113,7 @@ fun UsernameSelectionDialog(
                         text = "Welcome, $displayName!",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
 
@@ -130,7 +133,7 @@ fun UsernameSelectionDialog(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        modifier = Modifier.padding(bottom = 6.dp),
                     )
 
                     AuthTextField(
@@ -145,61 +148,65 @@ fun UsernameSelectionDialog(
                         label = "",
                         placeholder = "e.g., john_doe",
                         leadingIcon = Icons.Outlined.Person,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                focusManager.clearFocus()
-                                if (username.isNotBlank()) {
-                                    onSubmit(username)
-                                }
-                            }
-                        ),
-                        modifier = Modifier.focusRequester(usernameFocus)
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Done,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onDone = {
+                                    focusManager.clearFocus()
+                                    if (username.isNotBlank()) {
+                                        onSubmit(username)
+                                    }
+                                },
+                            ),
+                        modifier = Modifier.focusRequester(usernameFocus),
                     )
                 }
 
                 // Username requirements info
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Info,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                         Text(
                             text = "Requirements:",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
 
-                    val requirements = listOf(
-                        "3-50 characters",
-                        "Letters, numbers, underscore only",
-                        "Must be unique"
-                    )
+                    val requirements =
+                        listOf(
+                            "3-50 characters",
+                            "Letters, numbers, underscore only",
+                            "Must be unique",
+                        )
 
                     requirements.forEach { requirement ->
                         Text(
                             text = "• $requirement",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(start = 24.dp)
+                            modifier = Modifier.padding(start = 24.dp),
                         )
                     }
                 }
@@ -209,31 +216,33 @@ fun UsernameSelectionDialog(
                 // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        enabled = !isLoading
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                        enabled = !isLoading,
                     ) {
                         Text("Cancel", color = MaterialTheme.colorScheme.primary)
                     }
 
                     Button(
                         onClick = { onSubmit(username) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp),
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(44.dp),
                         enabled = username.isNotBlank() && !isLoading,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
                                 color = Color.White,
                                 strokeWidth = 2.dp,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
                             )
                         } else {
                             Text("Continue", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -249,7 +258,3 @@ fun UsernameSelectionDialog(
         usernameFocus.requestFocus()
     }
 }
-
-
-
-

@@ -19,14 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
@@ -36,7 +37,7 @@ import coil3.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import kotlinx.coroutines.launch
-import cc.dlabs.pesamind.R
+
 @Composable
 fun SettingsScreen(rootNav: NavHostController) {
     val teal = Color(0xFF1A9E8F)
@@ -76,12 +77,13 @@ fun SettingsScreen(rootNav: NavHostController) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val googleClient = GoogleSignIn.getClient(
-                            context,
-                            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                .requestEmail()
-                                .build()
-                        )
+                        val googleClient =
+                            GoogleSignIn.getClient(
+                                context,
+                                GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                    .requestEmail()
+                                    .build(),
+                            )
 
                         googleClient.signOut().addOnCompleteListener {
                             scope.launch {
@@ -94,7 +96,7 @@ fun SettingsScreen(rootNav: NavHostController) {
                                 }
                             }
                         }
-                    }
+                    },
                 ) {
                     Text("Log Out", color = Color(0xFFE74C3C), fontWeight = FontWeight.SemiBold)
                 }
@@ -103,59 +105,65 @@ fun SettingsScreen(rootNav: NavHostController) {
                 TextButton(onClick = { showLogoutDialog = false }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
     ) {
-
         // ── Header ───────────────────────────────────────────
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Avatar circle with initial
                 Surface(
-                    modifier = Modifier.size(72.dp)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary,
-                            )
-                        )
-                    ),
+                    modifier =
+                        Modifier.size(72.dp)
+                            .background(
+                                brush =
+                                    Brush.linearGradient(
+                                        colors =
+                                            listOf(
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.secondary,
+                                            ),
+                                    ),
+                            ),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.15f)),
+                        modifier =
+                            Modifier
+                                .size(100.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (account?.avatarUrl?.isNotBlank() == true) {
                             AsyncImage(
                                 model = account?.avatarUrl,
                                 contentDescription = "Profile Avatar",
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape),
+                                modifier =
+                                    Modifier
+                                        .size(100.dp)
+                                        .clip(CircleShape),
                                 contentScale = ContentScale.Crop,
                                 placeholder = painterResource(R.mipmap.ic_launcher_foreground),
-                                error = painterResource(R.mipmap.ic_launcher_foreground)
+                                error = painterResource(R.mipmap.ic_launcher_foreground),
                             )
                         } else {
                             Image(
                                 painter = painterResource(R.mipmap.ic_launcher_foreground),
                                 contentDescription = "App Logo",
-                                modifier = Modifier.size(100.dp)
+                                modifier = Modifier.size(100.dp),
                             )
                         }
                     }
@@ -165,19 +173,19 @@ fun SettingsScreen(rootNav: NavHostController) {
                     Text(
                         text = displayName,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
                     )
                     Text(
                         text = displayEmail,
                         fontSize = 13.sp,
-                        color = Color.Gray
+                        color = Color.Gray,
                     )
                 } else {
                     Text(
                         text = accountError ?: "",
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -191,7 +199,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = teal,
             title = "Account",
             subtitle = "Username, email",
-            onClick = { rootNav.navigate(Routes.AccountSettings.route) }
+            onClick = { rootNav.navigate(Routes.AccountSettings.route) },
         )
 
         SettingsDivider()
@@ -201,7 +209,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = teal,
             title = "Security",
             subtitle = "PIN, Pattern lock",
-            onClick = { rootNav.navigate(Routes.SecuritySettings.route) }
+            onClick = { rootNav.navigate(Routes.SecuritySettings.route) },
         )
 
         SettingsDivider()
@@ -211,7 +219,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = teal,
             title = "Financial Channel",
             subtitle = "Configure financial channels",
-            onClick = { rootNav.navigate(Routes.Channels.route) }
+            onClick = { rootNav.navigate(Routes.Channels.route) },
         )
 
         SettingsDivider()
@@ -221,11 +229,8 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = teal,
             title = "Transactions",
             subtitle = "View recent Transactions",
-            onClick = { rootNav.navigate(Routes.TransactionList.route) }
+            onClick = { rootNav.navigate(Routes.TransactionList.route) },
         )
-
-
-
 
         // ── Section: Preferences ─────────────────────────────
         SettingsSectionHeader(title = "Preferences")
@@ -239,7 +244,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             onCheckedChange = { isChecked ->
                 isDarkMode = isChecked
                 ThemeManager.setDarkModeEnabled(isChecked)
-            }
+            },
         )
 
 //        SettingsDivider()
@@ -273,7 +278,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             title = "About PesaMind",
             subtitle = "Version 1.0.0",
             onClick = { /* TODO */ },
-            showChevron = false
+            showChevron = false,
         )
 
         SettingsDivider()
@@ -283,7 +288,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = Color.Gray,
             title = "Privacy Policy",
             subtitle = null,
-            onClick = { /* TODO */ }
+            onClick = { /* TODO */ },
         )
 
         SettingsDivider()
@@ -293,32 +298,33 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = Color.Gray,
             title = "Help & Support",
             subtitle = null,
-            onClick = { /* TODO */ }
+            onClick = { /* TODO */ },
         )
 
         Spacer(Modifier.height(16.dp))
 
         // ── Log out ──────────────────────────────────────────
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showLogoutDialog = true }
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { showLogoutDialog = true }
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.Logout,
                 contentDescription = "Log Out",
                 tint = Color(0xFFE74C3C),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 text = "Log Out",
                 color = Color(0xFFE74C3C),
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
+                fontSize = 15.sp,
             )
         }
 
@@ -336,11 +342,12 @@ private fun SettingsSectionHeader(title: String) {
         fontWeight = FontWeight.SemiBold,
         color = Color.Gray,
         letterSpacing = 1.sp,
-        modifier = Modifier.padding(
-            start = 20.dp,
-            top = 16.dp,
-            bottom = 4.dp
-        )
+        modifier =
+            Modifier.padding(
+                start = 20.dp,
+                top = 16.dp,
+                bottom = 4.dp,
+            ),
     )
 }
 
@@ -351,27 +358,28 @@ private fun SettingsRow(
     title: String,
     subtitle: String?,
     onClick: () -> Unit,
-    showChevron: Boolean = true
+    showChevron: Boolean = true,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Icon box
         Surface(
             modifier = Modifier.size(38.dp),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-            color = iconTint.copy(alpha = 0.1f)
+            color = iconTint.copy(alpha = 0.1f),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     icon,
                     contentDescription = title,
                     tint = iconTint,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -392,7 +400,7 @@ private fun SettingsRow(
                 Icons.Filled.ChevronRight,
                 contentDescription = null,
                 tint = Color.LightGray,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -405,27 +413,28 @@ private fun SettingsToggleRow(
     title: String,
     subtitle: String?,
     isChecked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!isChecked) }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(!isChecked) }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Icon box
         Surface(
             modifier = Modifier.size(38.dp),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-            color = iconTint.copy(alpha = 0.1f)
+            color = iconTint.copy(alpha = 0.1f),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     icon,
                     contentDescription = title,
                     tint = iconTint,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -444,7 +453,7 @@ private fun SettingsToggleRow(
         Switch(
             checked = isChecked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.size(height = 24.dp, width = 48.dp)
+            modifier = Modifier.size(height = 24.dp, width = 48.dp),
         )
     }
 }
@@ -453,6 +462,6 @@ private fun SettingsToggleRow(
 private fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 72.dp),
-        color = Color.LightGray.copy(alpha = 0.5f)
+        color = Color.LightGray.copy(alpha = 0.5f),
     )
 }

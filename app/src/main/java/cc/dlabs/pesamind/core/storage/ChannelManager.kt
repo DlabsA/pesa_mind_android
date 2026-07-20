@@ -66,16 +66,18 @@ object ChannelManager {
             val channelsJson = data[CHANNELS_KEY] ?: return emptyList()
             val flagsJson = data[SMS_NOTIFICATION_FLAGS] ?: "{}"
 
-            val channels = Gson().fromJson<List<ChannelDetails>>(
-                channelsJson,
-                object : TypeToken<List<ChannelDetails>>() {}.type
-            )
+            val channels =
+                Gson().fromJson<List<ChannelDetails>>(
+                    channelsJson,
+                    object : TypeToken<List<ChannelDetails>>() {}.type,
+                )
 
             @Suppress("UNCHECKED_CAST")
-            val flags = Gson().fromJson<Map<String, Boolean>>(
-                flagsJson,
-                object : TypeToken<Map<String, Boolean>>() {}.type
-            ) as? Map<String, Boolean> ?: emptyMap()
+            val flags =
+                Gson().fromJson<Map<String, Boolean>>(
+                    flagsJson,
+                    object : TypeToken<Map<String, Boolean>>() {}.type,
+                ) as? Map<String, Boolean> ?: emptyMap()
 
             // Merge SMS notification flags back to channels
             return channels.map { channel ->
@@ -93,16 +95,22 @@ object ChannelManager {
     /**
      * Update SMS notification flag for a specific channel (non-CASH only)
      */
-    suspend fun updateChannelSmsNotification(channelId: String, enabled: Boolean) {
+    suspend fun updateChannelSmsNotification(
+        channelId: String,
+        enabled: Boolean,
+    ) {
         if (!isInitialized()) return
         appContext.channelDataStore.edit { prefs ->
             val flagsJson = prefs[SMS_NOTIFICATION_FLAGS] ?: "{}"
 
             @Suppress("UNCHECKED_CAST")
-            val flags = (Gson().fromJson<Map<String, Boolean>>(
-                flagsJson,
-                object : TypeToken<Map<String, Boolean>>() {}.type
-            ) as? Map<String, Boolean> ?: emptyMap()).toMutableMap()
+            val flags =
+                (
+                    Gson().fromJson<Map<String, Boolean>>(
+                        flagsJson,
+                        object : TypeToken<Map<String, Boolean>>() {}.type,
+                    ) as? Map<String, Boolean> ?: emptyMap()
+                ).toMutableMap()
 
             flags[channelId] = enabled
             prefs[SMS_NOTIFICATION_FLAGS] = Gson().toJson(flags)
@@ -119,10 +127,11 @@ object ChannelManager {
             val flagsJson = data[SMS_NOTIFICATION_FLAGS] ?: "{}"
 
             @Suppress("UNCHECKED_CAST")
-            val flags = Gson().fromJson<Map<String, Boolean>>(
-                flagsJson,
-                object : TypeToken<Map<String, Boolean>>() {}.type
-            ) as? Map<String, Boolean> ?: emptyMap()
+            val flags =
+                Gson().fromJson<Map<String, Boolean>>(
+                    flagsJson,
+                    object : TypeToken<Map<String, Boolean>>() {}.type,
+                ) as? Map<String, Boolean> ?: emptyMap()
 
             return flags[channelId] ?: true
         } catch (e: Exception) {
@@ -134,23 +143,29 @@ object ChannelManager {
      * Check if any channel with this sender ID has SMS notifications enabled
      */
     data class ChannelInfo(val channel: ChannelDetails, val enabled: Boolean)
-    suspend fun isSmsAllowedForSender(receivingSimNumber: String, simInfo: Int, senderID: String): ChannelInfo? {
+
+    suspend fun isSmsAllowedForSender(
+        receivingSimNumber: String,
+        simInfo: Int,
+        senderID: String,
+    ): ChannelInfo? {
         if (!isInitialized()) return null
 
-        val channelTypeMatched = when (senderID) {
-            MessageSender.MTN_MOB_MONEY -> ChannelDescMobileMoney.MTNMOBILEMONEY
-            MessageSender.AIRTEL_MONEY -> ChannelDescMobileMoney.AIRTELMONEY
-            MessageSender.STANBIC_BANK -> ChannelTypes.BANK
-            MessageSender.CENTENARY_BANK -> ChannelTypes.BANK
-            else -> null // Return null if no match
-        }
-
+        val channelTypeMatched =
+            when (senderID) {
+                MessageSender.MTN_MOB_MONEY -> ChannelDescMobileMoney.MTNMOBILEMONEY
+                MessageSender.AIRTEL_MONEY -> ChannelDescMobileMoney.AIRTELMONEY
+                MessageSender.STANBIC_BANK -> ChannelTypes.BANK
+                MessageSender.CENTENARY_BANK -> ChannelTypes.BANK
+                else -> null // Return null if no match
+            }
 
         // Get existing channels (cached)
         val channels = getChannels()
-        val matchingChannel = channels.find {
-            it.channelDesc == channelTypeMatched
-        }
+        val matchingChannel =
+            channels.find {
+                it.channelDesc == channelTypeMatched
+            }
 
         // If found, return it
         if (matchingChannel != null) {
@@ -164,28 +179,30 @@ object ChannelManager {
             return null
         }
 
-        val newChannel = try {
-            val request = CreateChannelRequest(
-                name = "Auto‑created ${channelDesc}",
-                description = receivingSimNumber,
-                channelType = channelType,
-                channelDesc = channelDesc,
-                status = true
-            )
-            val response = ApiClient.api.createChannel(request)
-            if (response.isSuccessful) {
-                response.body()?.also {
-                    // Refresh local cache
-                    val updatedChannels = channels + it
-                    saveChannels(updatedChannels)
-                    return ChannelInfo(it, true)
+        val newChannel =
+            try {
+                val request =
+                    CreateChannelRequest(
+                        name = "Auto‑created $channelDesc",
+                        description = receivingSimNumber,
+                        channelType = channelType,
+                        channelDesc = channelDesc,
+                        status = true,
+                    )
+                val response = ApiClient.api.createChannel(request)
+                if (response.isSuccessful) {
+                    response.body()?.also {
+                        // Refresh local cache
+                        val updatedChannels = channels + it
+                        saveChannels(updatedChannels)
+                        return ChannelInfo(it, true)
+                    }
+                } else {
+                    Log.e("ChannelManager", "Error creating channel for sender $senderID: ${response.errorBody()?.string()}")
                 }
-            } else {
-                Log.e("ChannelManager", "Error creating channel for sender $senderID: ${response.errorBody()?.string()}")
+            } catch (e: Exception) {
+                Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)
-        }
 
         return newChannel?.let { ChannelInfo(it as ChannelDetails, true) }
     }
@@ -200,6 +217,7 @@ object ChannelManager {
             else -> Pair(null, null)
         }
     }
+
     /**
      * Get last sync time
      */

@@ -4,7 +4,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -22,7 +21,6 @@ import cc.dlabs.pesamind.R
  * - Allows the SmsReceiver to function reliably in the background
  */
 class MessageMonitoringService : Service() {
-
     companion object {
         private const val TAG = "MessageMonitoringService"
         private const val NOTIFICATION_ID = 1001
@@ -35,9 +33,13 @@ class MessageMonitoringService : Service() {
         createNotificationChannel()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         Log.d(TAG, "MessageMonitoringService started")
-        
+
         // Start as foreground service (required on Android 8+)
         startForeground(NOTIFICATION_ID, buildNotification())
 
@@ -56,14 +58,15 @@ class MessageMonitoringService : Service() {
      * Creates a notification channel for Android 8+ (required for foreground services).
      */
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Message Monitoring",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Monitors incoming SMS transactions"
-            setShowBadge(false)
-        }
+        val channel =
+            NotificationChannel(
+                CHANNEL_ID,
+                "Message Monitoring",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Monitors incoming SMS transactions"
+                setShowBadge(false)
+            }
 
         val manager = getSystemService(NotificationManager::class.java)
         manager?.createNotificationChannel(channel)
@@ -75,17 +78,19 @@ class MessageMonitoringService : Service() {
      */
     private fun buildNotification(): android.app.Notification {
         // Intent to open the app when notification is tapped
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
-            ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP }
+        val intent =
+            packageManager.getLaunchIntentForPackage(packageName)
+                ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP }
 
-        val pendingIntent = intent?.let {
-            PendingIntent.getActivity(
-                this,
-                0,
-                it,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
+        val pendingIntent =
+            intent?.let {
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    it,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -93,12 +98,8 @@ class MessageMonitoringService : Service() {
             .setContentText("Monitoring SMS transactions...")
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)  // Cannot be dismissed by user
+            .setOngoing(true) // Cannot be dismissed by user
             .setContentIntent(pendingIntent)
             .build()
     }
 }
-
-
-
-

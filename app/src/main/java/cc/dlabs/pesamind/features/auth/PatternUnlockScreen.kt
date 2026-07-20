@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material3.*
@@ -17,7 +18,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -38,7 +38,7 @@ private enum class PatternState { Idle, Drawing, Success, Error }
 fun PatternUnlockScreen(
     navController: NavHostController,
     isSetup: Boolean = false,
-    vm: UnlockViewModel = viewModel()
+    vm: UnlockViewModel = viewModel(),
 ) {
     val haptic = LocalHapticFeedback.current
     val vmState by vm.state.collectAsStateWithLifecycle()
@@ -59,13 +59,14 @@ fun PatternUnlockScreen(
     val successColor = Color(0xFF4CAF50)
 
     val activeLineColor by animateColorAsState(
-        targetValue = when (patternState) {
-            PatternState.Error   -> errorColor
-            PatternState.Success -> successColor
-            else                 -> primaryColor
-        },
+        targetValue =
+            when (patternState) {
+                PatternState.Error -> errorColor
+                PatternState.Success -> successColor
+                else -> primaryColor
+            },
         animationSpec = tween(300),
-        label = "lineColor"
+        label = "lineColor",
     )
 
     fun patternKey() = selectedDots.joinToString(",")
@@ -105,7 +106,7 @@ fun PatternUnlockScreen(
                     patternState = PatternState.Error
                     feedbackMessage = err
                     selectedDots.clear()
-                }
+                },
             )
         }
     }
@@ -114,19 +115,20 @@ fun PatternUnlockScreen(
     // Root layout — dark surface behind a centred card
     // -----------------------------------------------------------------------
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-
             // ----------------------------------------------------------------
             // Header
             // ----------------------------------------------------------------
@@ -134,22 +136,25 @@ fun PatternUnlockScreen(
 
             Text(
                 text = if (isSetup) "Set Pattern" else "Welcome back",
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
+                style =
+                    MaterialTheme.typography.displaySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp,
+                    ),
+                color = MaterialTheme.colorScheme.onBackground,
             )
 
             Spacer(Modifier.height(6.dp))
 
             Text(
-                text = if (isSetup)
-                    "Draw a pattern connecting at least $minDots dots"
-                else
-                    "Draw your unlock pattern to continue",
+                text =
+                    if (isSetup) {
+                        "Draw a pattern connecting at least $minDots dots"
+                    } else {
+                        "Draw your unlock pattern to continue"
+                    },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(Modifier.height(40.dp))
@@ -175,7 +180,7 @@ fun PatternUnlockScreen(
                 lineColor = activeLineColor,
                 dotColorUnselected = primaryColor.copy(alpha = 0.9f),
                 dotColorSelected = primaryColor,
-                isLoading = vmState.isLoading
+                isLoading = vmState.isLoading,
             )
 
             // ----------------------------------------------------------------
@@ -185,25 +190,28 @@ fun PatternUnlockScreen(
 
             Box(
                 modifier = Modifier.height(20.dp),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 val displayed = feedbackMessage ?: vmState.errorMessage
                 when {
-                    vmState.isLoading -> Text(
-                        text = "Verifying…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    displayed != null -> Text(
-                        text = displayed,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = errorColor
-                    )
-                    patternState == PatternState.Idle -> Text(
-                        text = "Connect dots to draw your pattern",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
+                    vmState.isLoading ->
+                        Text(
+                            text = "Verifying…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    displayed != null ->
+                        Text(
+                            text = displayed,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = errorColor,
+                        )
+                    patternState == PatternState.Idle ->
+                        Text(
+                            text = "Connect dots to draw your pattern",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        )
                 }
             }
 
@@ -215,26 +223,22 @@ fun PatternUnlockScreen(
 
                 TextButton(
                     onClick = { /* vm.unlockWithBiometric() */ },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Fingerprint,
                         contentDescription = "Use biometrics",
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = "Use biometrics instead",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
         }
     }
 }
-
-
-
-

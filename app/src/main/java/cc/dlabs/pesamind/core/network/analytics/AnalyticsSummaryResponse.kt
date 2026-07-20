@@ -7,7 +7,7 @@ data class AnalyticsSummaryResponse(
     val metadata: Metadata,
     val context: ContextData,
     var health: Health,
-    val recommendations: List<Recommendation> = emptyList()
+    val recommendations: List<Recommendation> = emptyList(),
 )
 
 data class SummaryData(
@@ -24,7 +24,7 @@ data class SummaryData(
     @SerializedName("active_categories")
     val activeCategories: Int,
     @SerializedName("current_month")
-    val currentMonth: String
+    val currentMonth: String,
 )
 
 data class Metadata(
@@ -32,7 +32,7 @@ data class Metadata(
     @SerializedName("generated_at")
     val generatedAt: String,
     val currency: String,
-    val timezone: String
+    val timezone: String,
 )
 
 data class ContextData(
@@ -49,13 +49,15 @@ data class ContextData(
     @SerializedName("active_categories")
     val activeCategories: Int,
     @SerializedName("previous_month")
-    val previousMonth: String
+    val previousMonth: String,
 )
+
 data class FinancialHealthResponse(
     val data: Health,
     val metadata: Metadata,
-    val recommendations: List<Recommendation> = emptyList()
+    val recommendations: List<Recommendation> = emptyList(),
 )
+
 data class Health(
     @SerializedName("health_score")
     val score: Int,
@@ -63,24 +65,26 @@ data class Health(
     val trend: String,
     val components: Map<String, Component> = emptyMap(),
     val strengths: List<String> = emptyList(),
-    val weaknesses: List<String> = emptyList()
+    val weaknesses: List<String> = emptyList(),
 )
 
 data class Component(
     val score: Int,
     val status: String,
     val description: String,
-    val trend: String
+    val trend: String,
 )
+
 data class Recommendation(
     val type: String,
     val title: String,
     val message: String,
     val confidence: Double,
-    val severity: String
+    val severity: String,
 )
+
 data class StreakResponse(
-    val  id: String,
+    val id: String,
     @SerializedName("created_at")
     val createdAt: String,
     @SerializedName("updated_at")
@@ -96,5 +100,5 @@ data class StreakResponse(
     @SerializedName("streak_type")
     val streakType: String,
     @SerializedName("last_updated_at")
-    val lastUpdatedAt: String
+    val lastUpdatedAt: String,
 )

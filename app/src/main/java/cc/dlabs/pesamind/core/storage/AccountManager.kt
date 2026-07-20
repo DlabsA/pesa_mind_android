@@ -31,7 +31,7 @@ object AccountManager {
         username: String,
         avatarUrl: String,
         balance: String,
-        type: String
+        type: String,
     ) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
@@ -50,12 +50,14 @@ object AccountManager {
             it[Email] = email
         }
     }
+
     suspend fun saveUsername(username: String) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
             it[Username] = username
         }
     }
+
     suspend fun saveBalance(balance: String) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
@@ -74,7 +76,7 @@ object AccountManager {
             email = data[Email] ?: "",
             avatarUrl = data[AvatarUrl] ?: "",
             type = data[Type] ?: "",
-            balance = data[Balance]?.toDoubleOrNull() ?: 0.0
+            balance = data[Balance]?.toDoubleOrNull() ?: 0.0,
         )
     }
 

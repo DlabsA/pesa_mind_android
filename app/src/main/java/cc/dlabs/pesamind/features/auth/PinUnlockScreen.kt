@@ -5,12 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +27,7 @@ import cc.dlabs.pesamind.core.theme.Spacing
 fun PinUnlockScreen(
     navController: NavHostController,
     isSetup: Boolean = false,
-    vm: UnlockViewModel = viewModel()
+    vm: UnlockViewModel = viewModel(),
 ) {
     var pin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -53,19 +53,20 @@ fun PinUnlockScreen(
                     onError = { error ->
                         errorMessage = error
                         pin = ""
-                    }
+                    },
                 )
             }
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = Spacing.Space6.dp, vertical = Spacing.Space8.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = Spacing.Space6.dp, vertical = Spacing.Space8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(0.dp)
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         Spacer(modifier = Modifier.height(Spacing.Space4.dp))
 
@@ -73,7 +74,7 @@ fun PinUnlockScreen(
             text = if (isSetup) "Create PIN" else "Enter PIN",
             style = MaterialTheme.typography.displaySmall,
             color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(Spacing.Space3.dp))
@@ -81,29 +82,31 @@ fun PinUnlockScreen(
         Text(
             text = if (isSetup) "Set a 4-digit PIN to secure the app" else "Use your 4-digit PIN to continue",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Spacer(Modifier.height(Spacing.Space10.dp))
 
         // PIN dots display
         Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = Spacing.Space8.dp, vertical = Spacing.Space5.dp)
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Space8.dp, vertical = Spacing.Space5.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Space6.dp)) {
                 repeat(maxPin) { index ->
                     Text(
                         text = if (index < pin.length) "●" else "○",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = if (index < pin.length) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
-                        fontWeight = FontWeight.Bold
+                        color =
+                            if (index < pin.length) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.outline
+                            },
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -116,13 +119,13 @@ fun PinUnlockScreen(
             Text(
                 text = displayError,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+                color = MaterialTheme.colorScheme.error,
             )
         } else if (state.isLoading) {
             Text(
                 text = "Checking PIN…",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -130,62 +133,69 @@ fun PinUnlockScreen(
 
         // Keypad
         Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = Spacing.Space5.dp, vertical = Spacing.Space4.dp),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Space2.dp)
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.Space5.dp, vertical = Spacing.Space4.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Space2.dp),
         ) {
-            val keys = listOf(
-                listOf("1", "2", "3"),
-                listOf("4", "5", "6"),
-                listOf("7", "8", "9"),
-                listOf("face", "0", "back")
-            )
+            val keys =
+                listOf(
+                    listOf("1", "2", "3"),
+                    listOf("4", "5", "6"),
+                    listOf("7", "8", "9"),
+                    listOf("face", "0", "back"),
+                )
 
             keys.forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(
-                        Spacing.Space4.dp,
-                        alignment = Alignment.CenterHorizontally
-                    )
+                    horizontalArrangement =
+                        Arrangement.spacedBy(
+                            Spacing.Space4.dp,
+                            alignment = Alignment.CenterHorizontally,
+                        ),
                 ) {
                     row.forEach { key ->
                         Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                                .clickable(enabled = !state.isLoading) {
-                                    errorMessage = null
-                                    when (key) {
-                                        "back" -> if (pin.isNotEmpty()) pin = pin.dropLast(1)
-                                        "face" -> Unit // Biometric placeholder
-                                        else -> if (pin.length < maxPin) pin += key
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                                    .clickable(enabled = !state.isLoading) {
+                                        errorMessage = null
+                                        when (key) {
+                                            "back" -> if (pin.isNotEmpty()) pin = pin.dropLast(1)
+                                            "face" -> Unit // Biometric placeholder
+                                            else -> if (pin.length < maxPin) pin += key
+                                        }
+                                    },
+                            contentAlignment = Alignment.Center,
                         ) {
                             when (key) {
-                                "back" -> Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Backspace,
-                                    contentDescription = "Delete",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                "face" -> Icon(
-                                    imageVector = Icons.Filled.Fingerprint,
-                                    contentDescription = "Biometric",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                else -> Text(
-                                    text = key,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                "back" ->
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Backspace,
+                                        contentDescription = "Delete",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                "face" ->
+                                    Icon(
+                                        imageVector = Icons.Filled.Fingerprint,
+                                        contentDescription = "Biometric",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                else ->
+                                    Text(
+                                        text = key,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium,
+                                    )
                             }
                         }
                     }
@@ -196,4 +206,3 @@ fun PinUnlockScreen(
         Spacer(Modifier.weight(1f))
     }
 }
-
