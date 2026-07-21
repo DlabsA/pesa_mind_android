@@ -109,7 +109,7 @@ fun AnalyticsScreen(
             label = "analytics_phase_switch",
         ) { phase ->
             when {
-                phase is AnalyticsPhase.Loading && state.analytics == null ->
+                (phase is AnalyticsPhase.Loading && state.analytics == null) || state.isRefreshing ->
                     SkeletonColumn(
                         blockHeights = listOf(36.dp, 90.dp, 140.dp, 200.dp, 180.dp, 160.dp),
                         modifier = Modifier.fillMaxSize(),
@@ -150,6 +150,7 @@ private fun AnalyticsScrollBody(
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
         onRefresh = onRefresh,
+        indicator = {},
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(

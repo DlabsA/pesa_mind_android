@@ -1,0 +1,26 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "Edit|Write|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/ktlint-on-edit.sh\"",
+          "timeout": 180
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/graphify-stop-sync.sh\"",
+          "timeout": 120
+        }
+      ]
+    }
+  ]
+}

@@ -148,7 +148,7 @@ fun DashboardScreen(
             label = "phase_switch",
         ) { phase ->
             when {
-                phase is DashboardPhase.Loading && state.dashboard == null ->
+                (phase is DashboardPhase.Loading && state.dashboard == null) || state.isRefreshing ->
                     SkeletonColumn(
                         blockHeights = listOf(36.dp, 130.dp, 52.dp, 170.dp, 140.dp, 120.dp),
                         modifier = Modifier.fillMaxSize(),
@@ -191,6 +191,7 @@ private fun DashboardScrollBody(
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
         onRefresh = onRefresh,
+        indicator = {},
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(

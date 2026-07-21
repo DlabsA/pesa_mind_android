@@ -211,23 +211,25 @@ class BudgetViewModel
                     )
                 }
 
-                val yearlyDeferred = async { fetchYearlyBudget(year.toInt()) }
-                val monthlyDeferred = async { fetchMonthlyBudget(month, year) }
-                val nextMonthDeferred =
-                    async {
-                        val nextM = if (month == 12) 1 else month + 1
-                        val nextY = if (month == 12) year + 1 else year
-                        fetchMonthlyBudget(nextM, nextY, isNext = true)
-                    }
-                val streakDeferred = async { fetchStreak() }
+                try {
+                    val yearlyDeferred = async { fetchYearlyBudget(year.toInt()) }
+                    val monthlyDeferred = async { fetchMonthlyBudget(month, year) }
+                    val nextMonthDeferred =
+                        async {
+                            val nextM = if (month == 12) 1 else month + 1
+                            val nextY = if (month == 12) year + 1 else year
+                            fetchMonthlyBudget(nextM, nextY, isNext = true)
+                        }
+                    val streakDeferred = async { fetchStreak() }
 
-                yearlyDeferred.await()
-                monthlyDeferred.await()
-                nextMonthDeferred.await()
-                streakDeferred.await()
-
-                pendingSync = false
-                _state.update { it.copy(isRefreshing = false) }
+                    yearlyDeferred.await()
+                    monthlyDeferred.await()
+                    nextMonthDeferred.await()
+                    streakDeferred.await()
+                } finally {
+                    pendingSync = false
+                    _state.update { it.copy(isRefreshing = false) }
+                }
             }
         }
 

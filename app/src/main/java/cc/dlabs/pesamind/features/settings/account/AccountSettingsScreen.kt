@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.ShimmerBox
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,11 +62,22 @@ fun AccountSettingsScreen(
     ) { padding ->
 
         if (state.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(horizontal = Spacing.Space6.dp, vertical = Spacing.Space4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
             ) {
-                CircularProgressIndicator(color = teal)
+                ShimmerBox(Modifier.size(80.dp), cornerRadius = 40.dp)
+                Spacer(Modifier.height(Spacing.Space1.dp))
+                ShimmerBox(Modifier.width(120.dp).height(Spacing.Space4.dp))
+                ShimmerBox(Modifier.width(160.dp).height(13.dp))
+                HorizontalDivider()
+                ShimmerBox(Modifier.fillMaxWidth().height(56.dp), cornerRadius = 12.dp)
+                ShimmerBox(Modifier.fillMaxWidth().height(56.dp), cornerRadius = 12.dp)
             }
             return@Scaffold
         }

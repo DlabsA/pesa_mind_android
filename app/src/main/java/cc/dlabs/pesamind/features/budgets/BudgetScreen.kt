@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +34,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,8 +68,10 @@ import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.theme.Radius
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.ShimmerBox
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.core.ui.StatsRowsSkeleton
 import java.text.NumberFormat
@@ -137,16 +139,20 @@ fun BudgetScreen(
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { vm.refresh() },
+            indicator = {},
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
         ) {
             val showInitialSkeleton =
-                state.isLoading &&
-                    state.yearlyBudget == null &&
-                    state.currentMonthlyBudget == null &&
-                    !state.isOffline
+                state.isRefreshing ||
+                    (
+                        state.isLoading &&
+                            state.yearlyBudget == null &&
+                            state.currentMonthlyBudget == null &&
+                            !state.isOffline
+                    )
 
             if (showInitialSkeleton) {
                 BudgetSkeletonView()
@@ -726,11 +732,11 @@ private fun CurrentMonthCard(
                         )
                     }
                 } else if (isLoading && monthly == null) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp),
-                        strokeWidth = 2.5.dp,
-                    )
+                    ShimmerBox(Modifier.width(140.dp).height(24.dp), cornerRadius = Radius.Medium.dp)
+                    Spacer(Modifier.height(Spacing.Space4.dp))
+                    ShimmerBox(Modifier.width(180.dp).height(36.dp), cornerRadius = Radius.Medium.dp)
+                    Spacer(Modifier.height(Spacing.Space5.dp))
+                    ShimmerBox(Modifier.fillMaxWidth().height(84.dp), cornerRadius = 14.dp)
                 } else if (monthly != null) {
                     // Status chip
                     Surface(

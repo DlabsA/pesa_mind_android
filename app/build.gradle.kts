@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +9,35 @@ plugins {
     id("com.google.gms.google-services")
     alias(libs.plugins.ktlint)
 }
+
+// Release signing secrets, resolved in order: Gradle property (-P, or
+// ~/.gradle/gradle.properties) -> env var -> gitignored keystore.properties at repo root.
+// No literal fallback for storePassword/keyPassword — if unset, release signing is skipped.
+val keystoreProperties =
+    Properties().apply {
+        val keystorePropertiesFile = rootProject.file("keystore.properties")
+        if (keystorePropertiesFile.exists()) {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        }
+    }
+
+fun resolveSigningValue(
+    gradlePropertyOrEnvKey: String,
+    keystorePropertiesKey: String,
+): String? =
+    (findProperty(gradlePropertyOrEnvKey) as String?)
+        ?: System.getenv(gradlePropertyOrEnvKey)
+        ?: keystoreProperties.getProperty(keystorePropertiesKey)
+
+val releaseStorePassword = resolveSigningValue("KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyPassword = resolveSigningValue("KEY_PASSWORD", "keyPassword")
+val releaseKeyAlias = resolveSigningValue("KEY_ALIAS", "keyAlias") ?: "pesa_mind"
+val releaseStoreFilePath =
+    resolveSigningValue("KEYSTORE_FILE", "storeFile")
+        ?: (System.getProperty("user.home") + "/.android/my-release-key.keystore")
+
+// Gate: only wire up release signing if both secrets are actually available.
+val hasReleaseSigningConfig = releaseStorePassword != null && releaseKeyPassword != null
 
 fun readDotEnvValue(key: String): String? {
     val envFile = rootProject.file(".env")
@@ -44,11 +75,13 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file(System.getProperty("user.home") + "/.android/my-release-key.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "K@sh404730"
-            keyAlias = "pesa_mind"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "K@sh404730"
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = file(releaseStoreFilePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -59,11 +92,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            // Debug builds sign with the default debug keystore — do not reuse release signing.
             buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
         }
     }

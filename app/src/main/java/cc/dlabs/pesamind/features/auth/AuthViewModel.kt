@@ -160,11 +160,12 @@ class AuthViewModel : UnifiedViewModel() {
                     }
                 } else {
                     val message =
-                        when (response.code()) {
-                            401 -> "Invalid email or password"
-                            404 -> "Account not found"
-                            else -> "Login failed (${response.code()})"
-                        }
+                        extractErrorFromResponse(response)
+                            ?: when (response.code()) {
+                                401 -> "Invalid email or password"
+                                404 -> "Account not found"
+                                else -> "Login failed (${response.code()})"
+                            }
                     _authState.value = AuthUiState.Error(message)
                 }
             } catch (t: Throwable) {
@@ -221,11 +222,12 @@ class AuthViewModel : UnifiedViewModel() {
                     }
                 } else {
                     val message =
-                        when (response.code()) {
-                            409 -> "Email already in use"
-                            400 -> "Invalid details"
-                            else -> "Registration failed (${response.code()})"
-                        }
+                        extractErrorFromResponse(response)
+                            ?: when (response.code()) {
+                                409 -> "Email already in use"
+                                400 -> "Invalid details"
+                                else -> "Registration failed (${response.code()})"
+                            }
                     _authState.value = AuthUiState.Error(message)
                 }
             } catch (t: Throwable) {
@@ -453,4 +455,20 @@ class AuthViewModel : UnifiedViewModel() {
             is ExceptionInInitializerError -> "Check API base URL in ApiClient."
             else -> "Cannot reach server. Check your connection."
         }
+
+    /**
+     * Extract error message from HTTP response body (JSON: {"error": "message"}).
+     * Returns null if unable to parse, letting the caller fall back to status-code-based messages.
+     */
+    private fun extractErrorFromResponse(response: retrofit2.Response<*>): String? {
+        return try {
+            val errorBody = response.errorBody()?.string() ?: return null
+            val gson = com.google.gson.Gson()
+            val errorObj = gson.fromJson(errorBody, Map::class.java)
+            (errorObj?.get("error") as? String)?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w("AuthVM", "Failed to parse error response", e)
+            null
+        }
+    }
 }

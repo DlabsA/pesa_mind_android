@@ -156,14 +156,15 @@ fun TransactionListScreen(
         PullToRefreshBox(
             isRefreshing = isLoading,
             onRefresh = { viewModel.refresh() },
+            indicator = {},
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
         ) {
             when {
-                // ── Loading skeleton ───────────────────────────────────────
-                isLoading && transactions.isEmpty() -> {
+                // ── Loading skeleton (initial load AND pull-to-refresh) ──────
+                isLoading -> {
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = Spacing.Space4.dp, vertical = Spacing.Space3.dp),
                         verticalArrangement = Arrangement.spacedBy(Spacing.Space3.dp),

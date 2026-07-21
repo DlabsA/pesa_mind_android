@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.ShimmerBox
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,8 +50,34 @@ fun SecuritySettingsScreen(
         },
     ) { padding ->
         if (state.isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = teal)
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(horizontal = Spacing.Space4.dp),
+            ) {
+                Spacer(Modifier.height(Spacing.Space2.dp))
+                ShimmerBox(Modifier.width(70.dp).height(13.dp))
+                Spacer(Modifier.height(Spacing.Space3.dp))
+                repeat(2) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = Spacing.Space4.dp, horizontal = Spacing.Space1.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ShimmerBox(Modifier.size(28.dp), cornerRadius = 14.dp)
+                        Spacer(Modifier.width(Spacing.Space4.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            ShimmerBox(Modifier.width(100.dp).height(Spacing.Space4.dp))
+                            Spacer(Modifier.height(Spacing.Space1.dp))
+                            ShimmerBox(Modifier.width(140.dp).height(13.dp))
+                        }
+                    }
+                    if (it == 0) HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                }
             }
             return@Scaffold
         }

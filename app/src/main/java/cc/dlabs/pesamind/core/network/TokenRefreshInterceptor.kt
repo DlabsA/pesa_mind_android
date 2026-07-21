@@ -23,6 +23,13 @@ class TokenRefreshInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
+        val requestUrl = originalRequest.url.toString()
+
+        // Skip token refresh for auth endpoints - they should return their own error messages
+        if (isAuthEndpoint(requestUrl)) {
+            Log.d(TAG, "Auth endpoint detected, skipping refresh logic: $requestUrl")
+            return chain.proceed(originalRequest)
+        }
 
         // Check if we've already attempted a refresh for this request chain
         val hasAttemptedRefresh = refreshAttemptedForThisChain.get() ?: false
@@ -168,4 +175,14 @@ class TokenRefreshInterceptor : Interceptor {
             .build()
             .create(ApiService::class.java)
     }
+
+    /**
+     * Check if a URL is an auth endpoint that should not trigger token refresh.
+     * Auth endpoints return their own error messages and should not be intercepted.
+     */
+    private fun isAuthEndpoint(url: String): Boolean =
+        url.contains("/auth/login") ||
+            url.contains("/auth/register") ||
+            url.contains("/auth/refresh") ||
+            url.contains("/auth/verify")
 }

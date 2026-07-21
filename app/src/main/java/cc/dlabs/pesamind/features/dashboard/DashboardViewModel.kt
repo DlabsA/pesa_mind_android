@@ -138,12 +138,15 @@ class DashboardViewModel
             }
             viewModelScope.launch {
                 _state.update { it.copy(isRefreshing = true) }
-                if (networkMonitor.isConnectedNow) {
-                    fetchFromNetwork()
-                } else {
-                    _state.update { it.copy(isOffline = true) }
+                try {
+                    if (networkMonitor.isConnectedNow) {
+                        fetchFromNetwork()
+                    } else {
+                        _state.update { it.copy(isOffline = true) }
+                    }
+                } finally {
+                    _state.update { it.copy(isRefreshing = false) }
                 }
-                _state.update { it.copy(isRefreshing = false) }
             }
         }
 
