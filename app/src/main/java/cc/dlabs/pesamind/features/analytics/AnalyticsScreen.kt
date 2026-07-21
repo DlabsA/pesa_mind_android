@@ -57,6 +57,8 @@ import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.ErrorState
+import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -108,10 +110,19 @@ fun AnalyticsScreen(
         ) { phase ->
             when {
                 phase is AnalyticsPhase.Loading && state.analytics == null ->
-                    AnalyticsSkeletonView()
+                    SkeletonColumn(
+                        blockHeights = listOf(36.dp, 90.dp, 140.dp, 200.dp, 180.dp, 160.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
                 phase is AnalyticsPhase.Error && state.analytics == null ->
-                    AnalyticsErrorView(message = phase.message) { viewModel.load() }
+                    ErrorState(
+                        message = phase.message,
+                        onRetry = { viewModel.load() },
+                        title = "Couldn't load analytics",
+                        icon = Icons.Default.CloudOff,
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
                 else ->
                     AnalyticsScrollBody(
@@ -2961,95 +2972,6 @@ private fun HealthScorePill(score: Int) {
             color = color,
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
         )
-    }
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun AnalyticsSkeletonView() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerAlpha by infiniteTransition.animateFloat(
-        0.3f,
-        0.7f,
-        infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "shimmer_alpha",
-    )
-
-    @Composable
-    fun SkeletonBlock(
-        height: Dp,
-        modifier: Modifier = Modifier.fillMaxWidth(),
-    ) {
-        Box(
-            modifier =
-                modifier
-                    .height(height)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.surfaceVariant,
-                            ),
-                        ),
-                    ),
-        )
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SkeletonBlock(height = 36.dp, modifier = Modifier.width(160.dp))
-        SkeletonBlock(height = 90.dp)
-        SkeletonBlock(height = 140.dp)
-        SkeletonBlock(height = 200.dp)
-        SkeletonBlock(height = 180.dp)
-        SkeletonBlock(height = 160.dp)
-    }
-}
-
-// ─── Error State ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun AnalyticsErrorView(
-    message: String,
-    onRetry: () -> Unit,
-) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.padding(32.dp),
-        ) {
-            Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(52.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "Couldn't load analytics",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            Surface(shape = RoundedCornerShape(50), color = LightColors.Savings) {
-                TextButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Icon(Icons.Default.Refresh, null, tint = LightColors.Savings, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Try Again",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = LightColors.Savings,
-                    )
-                }
-            }
-        }
     }
 }
 

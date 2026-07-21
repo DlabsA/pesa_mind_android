@@ -1,11 +1,5 @@
 package cc.dlabs.pesamind.features.budgets
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -76,6 +71,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
+import cc.dlabs.pesamind.core.ui.EmptyState
+import cc.dlabs.pesamind.core.ui.ShimmerBox
+import cc.dlabs.pesamind.core.ui.SkeletonCard
+import cc.dlabs.pesamind.core.ui.StatsRowsSkeleton
+import cc.dlabs.pesamind.core.ui.rememberShimmerAlpha
 import cc.dlabs.pesamind.core.utils.TransactionTypes
 import java.text.NumberFormat
 import java.util.Locale
@@ -774,114 +774,41 @@ private fun TransactionRow(
 
 @Composable
 private fun TransactionsEmptyState() {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            modifier = Modifier.size(64.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Outlined.Receipt,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-        }
-        Text(
-            "No transactions yet",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            "Add income, expenditure and savings\nitems using the form above.",
-            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
-    }
+    EmptyState(
+        icon = Icons.Outlined.Receipt,
+        title = "No transactions yet",
+        subtitle = "Add income, expenditure and savings\nitems using the form above.",
+        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+        iconSize = 64.dp,
+        iconContentSize = 28.dp,
+        iconShape = RoundedCornerShape(18.dp),
+        iconTint = MaterialTheme.colorScheme.primary,
+        iconBackground = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        titleStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        subtitleStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+        iconSpacing = 8.dp,
+        textSpacing = 8.dp,
+    )
 }
 
 @Composable
 private fun TransactionsSkeleton() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec =
-            infiniteRepeatable(
-                tween(900, easing = FastOutSlowInEasing),
-                RepeatMode.Reverse,
-            ),
-        label = "alpha",
-    )
+    val accentAlpha = rememberShimmerAlpha()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         repeat(3) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(0.dp),
-                modifier = Modifier.fillMaxWidth(),
+            SkeletonCard(
+                accentBrush = SolidColor(MaterialTheme.colorScheme.onSurface.copy(alpha = accentAlpha * 0.2f)),
             ) {
                 Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .width(4.dp)
-                            .height(66.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f),
-                                RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
-                            ),
-                    )
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(
-                            Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha * 0.08f)),
-                        )
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(
-                                Modifier.fillMaxWidth(0.5f).height(12.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha * 0.12f),
-                                        RoundedCornerShape(6.dp),
-                                    ),
-                            )
-                            Box(
-                                Modifier.fillMaxWidth(0.3f).height(10.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha * 0.08f),
-                                        RoundedCornerShape(5.dp),
-                                    ),
-                            )
-                        }
-                        Box(
-                            Modifier.width(80.dp).height(14.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha * 0.10f),
-                                    RoundedCornerShape(6.dp),
-                                ),
-                        )
+                    ShimmerBox(Modifier.size(38.dp), cornerRadius = 10.dp)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ShimmerBox(Modifier.fillMaxWidth(0.5f).height(12.dp))
+                        ShimmerBox(Modifier.fillMaxWidth(0.3f).height(10.dp))
                     }
+                    ShimmerBox(Modifier.width(80.dp).height(14.dp))
                 }
             }
         }
@@ -890,47 +817,5 @@ private fun TransactionsSkeleton() {
 
 @Composable
 private fun SummaryCardSkeleton() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.75f,
-        animationSpec =
-            infiniteRepeatable(
-                tween(950, easing = FastOutSlowInEasing),
-                RepeatMode.Reverse,
-            ),
-        label = "alpha",
-    )
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            repeat(3) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Box(
-                        Modifier.width(90.dp).height(12.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha * 0.20f),
-                                RoundedCornerShape(6.dp),
-                            ),
-                    )
-                    Box(
-                        Modifier.width(110.dp).height(14.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha * 0.15f),
-                                RoundedCornerShape(6.dp),
-                            ),
-                    )
-                }
-            }
-        }
-    }
+    StatsRowsSkeleton()
 }

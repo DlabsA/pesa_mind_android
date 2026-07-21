@@ -1,12 +1,8 @@
 package cc.dlabs.pesamind.features.budgets
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -22,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +52,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -66,7 +60,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,6 +69,8 @@ import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.SkeletonColumn
+import cc.dlabs.pesamind.core.ui.StatsRowsSkeleton
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -302,52 +297,10 @@ private fun BudgetOfflineBanner(modifier: Modifier = Modifier) {
 
 @Composable
 private fun BudgetSkeletonView() {
-    val infiniteTransition = rememberInfiniteTransition(label = "budget_skeleton")
-    val shimmerAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec =
-            infiniteRepeatable(
-                tween(900, easing = FastOutSlowInEasing),
-                RepeatMode.Reverse,
-            ),
-        label = "budget_shimmer_alpha",
+    SkeletonColumn(
+        blockHeights = listOf(4.dp, 210.dp, 92.dp, 260.dp),
+        modifier = Modifier.fillMaxSize(),
     )
-
-    @Composable
-    fun SkeletonBlock(
-        height: Dp,
-        modifier: Modifier = Modifier.fillMaxWidth(),
-    ) {
-        Box(
-            modifier =
-                modifier
-                    .height(height)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha),
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha * 0.92f),
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha),
-                            ),
-                        ),
-                    ),
-        )
-    }
-
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SkeletonBlock(height = 4.dp, modifier = Modifier.fillMaxWidth().padding(horizontal = 120.dp))
-        SkeletonBlock(height = 210.dp)
-        SkeletonBlock(height = 92.dp)
-        SkeletonBlock(height = 260.dp)
-    }
 }
 
 // ─── Dashboard Header ─────────────────────────────────────────────────────────
@@ -941,52 +894,5 @@ private fun EmptyBudgetHint(text: String) {
 
 @Composable
 private fun BudgetStatsSkeleton() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.75f,
-        animationSpec =
-            infiniteRepeatable(
-                tween(950, easing = FastOutSlowInEasing),
-                RepeatMode.Reverse,
-            ),
-        label = "alpha",
-    )
-
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp, horizontal = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            repeat(3) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Box(
-                        Modifier
-                            .width(90.dp)
-                            .height(12.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.25f),
-                                RoundedCornerShape(6.dp),
-                            ),
-                    )
-                    Box(
-                        Modifier
-                            .width(120.dp)
-                            .height(14.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.20f),
-                                RoundedCornerShape(6.dp),
-                            ),
-                    )
-                }
-            }
-        }
-    }
+    StatsRowsSkeleton()
 }

@@ -101,7 +101,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -113,6 +112,8 @@ import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
+import cc.dlabs.pesamind.core.ui.EmptyState
+import cc.dlabs.pesamind.core.ui.SkeletonCard
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 
@@ -275,8 +276,139 @@ fun ChannelScreen(
 
             // ── Content area
             when {
-                state.isLoading -> ChannelListSkeleton()
-                state.channels.isEmpty() -> ChannelEmptyState(onAddClick = { showCreateDialog = true })
+                state.isLoading -> {
+                    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+                    val shimmerOffset by infiniteTransition.animateFloat(
+                        initialValue = -1f,
+                        targetValue = 2f,
+                        animationSpec =
+                            infiniteRepeatable(
+                                animation = tween(1200, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart,
+                            ),
+                        label = "shimmerOffset",
+                    )
+                    val shimmerBrush =
+                        Brush.linearGradient(
+                            colors =
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 1f),
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                ),
+                            start = Offset(shimmerOffset * 800f, 0f),
+                            end = Offset((shimmerOffset + 1f) * 800f, 0f),
+                        )
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        repeat(3) {
+                            SkeletonCard(
+                                shape = RoundedCornerShape(18.dp),
+                                accentBrush = shimmerBrush,
+                                modifier =
+                                    Modifier.shadow(
+                                        2.dp,
+                                        RoundedCornerShape(18.dp),
+                                        ambientColor = getPrimaryColor().copy(0.05f),
+                                    ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth(0.5f)
+                                                .height(16.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(shimmerBrush),
+                                    )
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .width(60.dp)
+                                                .height(24.dp)
+                                                .clip(CircleShape)
+                                                .background(shimmerBrush),
+                                    )
+                                }
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth(0.35f)
+                                            .height(12.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(shimmerBrush),
+                                )
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(52.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(shimmerBrush),
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .width(72.dp)
+                                            .height(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(shimmerBrush),
+                                    )
+                                    Box(
+                                        Modifier
+                                            .width(80.dp)
+                                            .height(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(shimmerBrush),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                state.channels.isEmpty() ->
+                    EmptyState(
+                        icon = Icons.Outlined.Inbox,
+                        title = "No channels yet",
+                        subtitle = "Add your first financial channel to start\ntracking payments and transfers.",
+                        modifier = Modifier.fillMaxSize().padding(32.dp),
+                        iconShape = RoundedCornerShape(24.dp),
+                        iconTint = getPrimaryColor(),
+                        iconBackground = getPrimaryColor().copy(alpha = 0.10f),
+                        subtitleStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                        textSpacing = 6.dp,
+                        actionSpacing = 24.dp,
+                        action = {
+                            Button(
+                                onClick = { showCreateDialog = true },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor()),
+                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Add Channel",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                )
+                            }
+                        },
+                    )
                 visibleChannels.isEmpty() -> ChannelNoMatchesState(onClear = { searchQuery = "" })
                 else -> {
                     LazyColumn(
@@ -470,37 +602,25 @@ private fun ChannelSearchField(
 
 @Composable
 private fun ChannelNoMatchesState(onClear: () -> Unit) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.SearchOff,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(36.dp),
-        )
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = "No matching channels",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Try a different search term",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(16.dp))
-        TextButton(onClick = onClear) {
-            Text("Clear search")
-        }
-    }
+    EmptyState(
+        icon = Icons.Outlined.SearchOff,
+        title = "No matching channels",
+        subtitle = "Try a different search term",
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        iconSize = 36.dp,
+        iconContentSize = 36.dp,
+        iconBackground = Color.Transparent,
+        iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        subtitleStyle = MaterialTheme.typography.bodySmall,
+        iconSpacing = 14.dp,
+        textSpacing = 6.dp,
+        actionSpacing = 16.dp,
+        action = {
+            TextButton(onClick = onClear) {
+                Text("Clear search")
+            }
+        },
+    )
 }
 
 // ─── Channel type → icon / color ──────────────────────────────────────────────
@@ -519,208 +639,6 @@ private fun channelTypeIcon(type: String): ImageVector =
         ChannelTypes.BANK -> Icons.Outlined.AccountBalance
         else -> Icons.Outlined.Payments
     }
-
-// ─── Skeleton / Loading ───────────────────────────────────────────────────────
-
-@Composable
-private fun ChannelListSkeleton() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -1f,
-        targetValue = 2f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(1200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "shimmerOffset",
-    )
-
-    val shimmerBrush =
-        Brush.linearGradient(
-            colors =
-                listOf(
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 1f),
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                ),
-            start = Offset(shimmerOffset * 800f, 0f),
-            end = Offset((shimmerOffset + 1f) * 800f, 0f),
-        )
-
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        repeat(3) { SkeletonCard(shimmerBrush) }
-    }
-}
-
-@Composable
-private fun SkeletonCard(brush: Brush) {
-    Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp),
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = getPrimaryColor().copy(0.05f)),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .width(4.dp)
-                        .fillMaxHeight()
-                        .background(brush, RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)),
-            )
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = 14.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth(0.5f)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(brush),
-                    )
-                    Box(
-                        modifier =
-                            Modifier
-                                .width(60.dp)
-                                .height(24.dp)
-                                .clip(CircleShape)
-                                .background(brush),
-                    )
-                }
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth(0.35f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(brush),
-                )
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(brush),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    Box(
-                        Modifier
-                            .width(72.dp)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(brush),
-                    )
-                    Box(
-                        Modifier
-                            .width(80.dp)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(brush),
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun ChannelEmptyState(onAddClick: () -> Unit) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        // Icon in a soft teal pill
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = getPrimaryColor().copy(alpha = 0.10f),
-            modifier = Modifier.size(80.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Outlined.Inbox,
-                    contentDescription = null,
-                    tint = getPrimaryColor(),
-                    modifier = Modifier.size(36.dp),
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            text = "No channels yet",
-            style =
-                MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.3).sp,
-                ),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = "Add your first financial channel to start\ntracking payments and transfers.",
-            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Button(
-            onClick = onAddClick,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor()),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-        ) {
-            Icon(
-                Icons.Filled.Add,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "Add Channel",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            )
-        }
-    }
-}
 
 // ─── Channel Card ─────────────────────────────────────────────────────────────
 

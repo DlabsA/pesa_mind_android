@@ -32,6 +32,8 @@ import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.theme.DarkColors
 import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.ErrorState
+import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.features.analytics.AnomaliesCard
 import java.text.NumberFormat
 import java.util.Locale
@@ -147,10 +149,19 @@ fun DashboardScreen(
         ) { phase ->
             when {
                 phase is DashboardPhase.Loading && state.dashboard == null ->
-                    DashboardSkeletonView()
+                    SkeletonColumn(
+                        blockHeights = listOf(36.dp, 130.dp, 52.dp, 170.dp, 140.dp, 120.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
                 phase is DashboardPhase.Error && state.dashboard == null ->
-                    DashboardErrorView(message = phase.message) { viewModel.load() }
+                    ErrorState(
+                        message = phase.message,
+                        onRetry = { viewModel.load() },
+                        title = "Couldn't load dashboard",
+                        icon = Icons.Default.CloudOff,
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
                 else ->
                     DashboardScrollBody(
@@ -1245,102 +1256,6 @@ private fun AnomalyBadge(
             color = color,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
         )
-    }
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun DashboardSkeletonView() {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerAlpha by infiniteTransition.animateFloat(
-        0.3f,
-        0.7f,
-        infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "shimmer_alpha",
-    )
-
-    @Composable
-    fun SkeletonBlock(
-        height: Dp,
-        modifier: Modifier = Modifier.fillMaxWidth(),
-    ) {
-        Box(
-            modifier =
-                modifier
-                    .height(height)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.surfaceVariant,
-                            ),
-                        ),
-                    ),
-        )
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SkeletonBlock(height = 36.dp, modifier = Modifier.width(160.dp))
-        SkeletonBlock(height = 130.dp)
-        SkeletonBlock(height = 52.dp)
-        SkeletonBlock(height = 170.dp)
-        SkeletonBlock(height = 140.dp)
-        SkeletonBlock(height = 120.dp)
-    }
-}
-
-// ─── Error State ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun DashboardErrorView(
-    message: String,
-    onRetry: () -> Unit,
-) {
-    val isDark = isSystemInDarkTheme()
-    val primaryColor = if (isDark) DarkColors.Primary else LightColors.Primary
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.padding(32.dp),
-        ) {
-            Icon(
-                Icons.Default.CloudOff,
-                null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                modifier = Modifier.size(52.dp),
-            )
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "Couldn't load dashboard",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    textAlign = TextAlign.Center,
-                )
-            }
-            Surface(shape = RoundedCornerShape(50), color = primaryColor.copy(alpha = 0.10f)) {
-                TextButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Icon(Icons.Default.Refresh, null, tint = primaryColor, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Try Again",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = primaryColor,
-                    )
-                }
-            }
-        }
     }
 }
 
