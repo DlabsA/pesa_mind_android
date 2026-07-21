@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.settings.security
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +19,7 @@ data class SetPatternState(
     val hint: String = "Draw a pattern",
 )
 
-class SetPatternViewModel : ViewModel() {
+class SetPatternViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(SetPatternState())
     val state: StateFlow<SetPatternState> = _state.asStateFlow()
 

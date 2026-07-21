@@ -353,7 +353,7 @@ private fun BudgetSkeletonView() {
 // ─── Dashboard Header ─────────────────────────────────────────────────────────
 @Composable
 private fun BudgetHeader(
-    state: DashboardUiState,
+    state: BudgetUiState,
     viewModel: BudgetViewModel,
     modifier: Modifier = Modifier,
 ) {

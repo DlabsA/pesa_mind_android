@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.auth
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.storage.TokenManager
@@ -16,7 +16,7 @@ data class UnlockState(
     val isSetupMode: Boolean = false,
 )
 
-class UnlockViewModel : ViewModel() {
+class UnlockViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(UnlockState())
     val state: StateFlow<UnlockState> = _state.asStateFlow()
 

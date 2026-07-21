@@ -1,7 +1,8 @@
 package cc.dlabs.pesamind.features.settings.channels
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.StateEvent
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
@@ -21,7 +22,7 @@ data class ChannelState(
     val message: String? = null,
 )
 
-class ChannelViewModel : ViewModel() {
+class ChannelViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(ChannelState(isLoading = true))
     val state: StateFlow<ChannelState> = _state.asStateFlow()
 
@@ -102,59 +103,23 @@ class ChannelViewModel : ViewModel() {
             return
         }
 
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val response = ApiClient.api.getChannelsByType(normalizedType)
-                if (response.isSuccessful) {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            channels = response.body().orEmpty(),
-                        )
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            error = "Failed to filter channels (${response.code()})",
-                        )
-                }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isLoading = false,
-                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
-                    )
-            }
-        }
+        _state.launchWithState(
+            call = { ApiClient.api.getChannelsByType(normalizedType) },
+            setLoading = { s, loading -> s.copy(isLoading = loading) },
+            setError = { s, err -> s.copy(error = err) },
+            onSuccess = { s, body -> s.copy(channels = body.orEmpty()) },
+            mapHttpError = { "Failed to filter channels (${it.code()})" },
+        )
     }
 
     fun loadChannelsByStatus(status: Boolean) {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val response = ApiClient.api.getChannelsByStatus(status)
-                if (response.isSuccessful) {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            channels = response.body().orEmpty(),
-                        )
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            error = "Failed to filter channels (${response.code()})",
-                        )
-                }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isLoading = false,
-                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
-                    )
-            }
-        }
+        _state.launchWithState(
+            call = { ApiClient.api.getChannelsByStatus(status) },
+            setLoading = { s, loading -> s.copy(isLoading = loading) },
+            setError = { s, err -> s.copy(error = err) },
+            onSuccess = { s, body -> s.copy(channels = body.orEmpty()) },
+            mapHttpError = { "Failed to filter channels (${it.code()})" },
+        )
     }
 
     fun createChannel(
@@ -190,42 +155,32 @@ class ChannelViewModel : ViewModel() {
             }
         }
 
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isSaving = true, error = null)
-            try {
-                val body =
-                    CreateChannelRequest(
-                        name = name.trim(),
-                        description = description.trim(),
-                        channelType = normalizedType,
-                        channelDesc = normalizedChannelDesc ?: "Cash",
-                        status = status,
-                    )
-                val response = ApiClient.api.createChannel(body = body)
-
-                if (response.isSuccessful) {
-                    val created = response.body()
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            message = "Channel created successfully",
-                            channels = if (created != null) _state.value.channels + created else _state.value.channels,
-                        )
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            error = "Failed to create channel (${response.code()})",
-                        )
+        _state.launchWithState(
+            call = {
+                ApiClient.api.createChannel(
+                    body =
+                        CreateChannelRequest(
+                            name = name.trim(),
+                            description = description.trim(),
+                            channelType = normalizedType,
+                            channelDesc = normalizedChannelDesc ?: "Cash",
+                            status = status,
+                        ),
+                )
+            },
+            setLoading = { s, saving -> s.copy(isSaving = saving) },
+            setError = { s, err -> s.copy(error = err) },
+            onSuccess = { s, created ->
+                if (created != null) {
+                    publishEvent(StateEvent.ChannelCreated(channelId = created.id, channelName = created.name))
                 }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isSaving = false,
-                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
-                    )
-            }
-        }
+                s.copy(
+                    message = "Channel created successfully",
+                    channels = if (created != null) s.channels + created else s.channels,
+                )
+            },
+            mapHttpError = { "Failed to create channel (${it.code()})" },
+        )
     }
 
     fun updateChannel(
@@ -239,42 +194,27 @@ class ChannelViewModel : ViewModel() {
             return
         }
 
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isSaving = true, error = null)
-            try {
-                val response =
-                    ApiClient.api.updateChannel(
-                        id = id,
-                        body =
-                            UpdateChannelRequest(
-                                name = name.trim(),
-                                description = description.trim(),
-                                status = status,
-                            ),
-                    )
-
-                if (response.isSuccessful) {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            message = response.body()?.message ?: "Channel updated successfully",
-                        )
-                    loadChannels()
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            error = "Failed to update channel (${response.code()})",
-                        )
-                }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isSaving = false,
-                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
-                    )
-            }
-        }
+        _state.launchWithState(
+            call = {
+                ApiClient.api.updateChannel(
+                    id = id,
+                    body =
+                        UpdateChannelRequest(
+                            name = name.trim(),
+                            description = description.trim(),
+                            status = status,
+                        ),
+                )
+            },
+            setLoading = { s, saving -> s.copy(isSaving = saving) },
+            setError = { s, err -> s.copy(error = err) },
+            onSuccess = { s, body ->
+                publishEvent(StateEvent.ChannelUpdated(channelId = id, channelName = name))
+                loadChannels()
+                s.copy(message = body?.message ?: "Channel updated successfully")
+            },
+            mapHttpError = { "Failed to update channel (${it.code()})" },
+        )
     }
 
     fun deleteChannel(id: String) {
@@ -283,32 +223,19 @@ class ChannelViewModel : ViewModel() {
             return
         }
 
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isDeleting = true, error = null)
-            try {
-                val response = ApiClient.api.deleteChannel(id)
-                if (response.isSuccessful) {
-                    _state.value =
-                        _state.value.copy(
-                            isDeleting = false,
-                            message = response.body()?.message ?: "Channel deleted successfully",
-                            channels = _state.value.channels.filterNot { it.id == id },
-                        )
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isDeleting = false,
-                            error = "Failed to delete channel (${response.code()})",
-                        )
-                }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isDeleting = false,
-                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
-                    )
-            }
-        }
+        _state.launchWithState(
+            call = { ApiClient.api.deleteChannel(id) },
+            setLoading = { s, deleting -> s.copy(isDeleting = deleting) },
+            setError = { s, err -> s.copy(error = err) },
+            onSuccess = { s, body ->
+                publishEvent(StateEvent.ChannelDeleted(channelId = id))
+                s.copy(
+                    message = body?.message ?: "Channel deleted successfully",
+                    channels = s.channels.filterNot { it.id == id },
+                )
+            },
+            mapHttpError = { "Failed to delete channel (${it.code()})" },
+        )
     }
 
     /**

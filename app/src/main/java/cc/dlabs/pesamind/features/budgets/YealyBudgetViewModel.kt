@@ -1,8 +1,8 @@
 package cc.dlabs.pesamind.features.budgets
 
 import android.util.Log
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient.api
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionOperation
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionRequest
@@ -67,7 +67,7 @@ data class YearlyBudgetUiState(
                 formType.isNotBlank()
 }
 
-class YearlyBudgetViewModel() : ViewModel() {
+class YearlyBudgetViewModel() : UnifiedViewModel() {
     private val _state = MutableStateFlow(YearlyBudgetUiState())
     val state: StateFlow<YearlyBudgetUiState> = _state.asStateFlow()
 

@@ -1,8 +1,8 @@
 package cc.dlabs.pesamind.features.budgets
 
 import android.util.Log
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient.api
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
@@ -23,7 +23,7 @@ import javax.inject.Inject
 
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
-data class DashboardUiState(
+data class BudgetUiState(
     // Loading flags
     val isLoadingYearly: Boolean = false,
     val isLoadingMonthly: Boolean = false,
@@ -95,13 +95,13 @@ class BudgetViewModel
     @Inject
     constructor(
         private val networkMonitor: NetworkMonitor,
-    ) : ViewModel() {
+    ) : UnifiedViewModel() {
         companion object {
             private const val TAG = "BudgetViewModel"
         }
 
-        private val _state = MutableStateFlow(DashboardUiState())
-        val state: StateFlow<DashboardUiState> = _state.asStateFlow()
+        private val _state = MutableStateFlow(BudgetUiState())
+        val state: StateFlow<BudgetUiState> = _state.asStateFlow()
         private var pendingSync = false
 
         init {

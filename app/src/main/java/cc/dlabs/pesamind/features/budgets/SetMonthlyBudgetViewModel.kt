@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.budgets
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient.api
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionOperation
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionRequest
@@ -86,7 +86,7 @@ data class SetMonthlyBudgetUiState(
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
-class SetMonthlyBudgetViewModel() : ViewModel() {
+class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
     private val _state = MutableStateFlow(SetMonthlyBudgetUiState())
     val state: StateFlow<SetMonthlyBudgetUiState> = _state.asStateFlow()
 

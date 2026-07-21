@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.settings.security
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +18,7 @@ data class SetPinState(
     val success: Boolean = false,
 )
 
-class SetPinViewModel : ViewModel() {
+class SetPinViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(SetPinState())
     val state: StateFlow<SetPinState> = _state.asStateFlow()
 

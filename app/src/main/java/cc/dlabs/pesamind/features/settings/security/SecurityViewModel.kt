@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.settings.security
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +16,7 @@ data class SecurityState(
     val message: String? = null,
 )
 
-class SecurityViewModel : ViewModel() {
+class SecurityViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(SecurityState())
     val state: StateFlow<SecurityState> = _state.asStateFlow()
 

@@ -1,13 +1,11 @@
 package cc.dlabs.pesamind.features.settings.account
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 data class ChangePasswordState(
     val currentPassword: String = "",
@@ -18,7 +16,7 @@ data class ChangePasswordState(
     val success: Boolean = false,
 )
 
-class ChangePasswordViewModel : ViewModel() {
+class ChangePasswordViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(ChangePasswordState())
     val state: StateFlow<ChangePasswordState> = _state.asStateFlow()
 
@@ -57,42 +55,26 @@ class ChangePasswordViewModel : ViewModel() {
             }
         }
 
-        viewModelScope.launch {
-            _state.value = s.copy(isLoading = true, error = null)
-            try {
-                val response =
-                    ApiClient.api.changePassword(
-                        ChangePasswordRequest(
-                            current_password = s.currentPassword,
-                            new_password = s.newPassword,
-                            confirm_password = s.confirmPassword,
-                        ),
-                    )
-                if (response.isSuccessful) {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            success = true,
-                        )
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            error =
-                                when (response.code()) {
-                                    401 -> "Current password is incorrect"
-                                    400 -> "Invalid request"
-                                    else -> "Failed (${response.code()})"
-                                },
-                        )
+        _state.launchWithState(
+            call = {
+                ApiClient.api.changePassword(
+                    ChangePasswordRequest(
+                        current_password = s.currentPassword,
+                        new_password = s.newPassword,
+                        confirm_password = s.confirmPassword,
+                    ),
+                )
+            },
+            setLoading = { state, loading -> state.copy(isLoading = loading) },
+            setError = { state, err -> state.copy(error = err) },
+            onSuccess = { state, _ -> state.copy(success = true) },
+            mapHttpError = { response ->
+                when (response.code()) {
+                    401 -> "Current password is incorrect"
+                    400 -> "Invalid request"
+                    else -> "Failed (${response.code()})"
                 }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isLoading = false,
-                        error = "Cannot reach server",
-                    )
-            }
-        }
+            },
+        )
     }
 }

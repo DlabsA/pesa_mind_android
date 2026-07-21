@@ -1,8 +1,8 @@
 package cc.dlabs.pesamind.features.auth
 
 import android.util.Log
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
@@ -52,7 +52,7 @@ data class RegisterFormState(
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
-class AuthViewModel : ViewModel() {
+class AuthViewModel : UnifiedViewModel() {
     // Repositories
     private val googleAuthRepository = GoogleAuthRepository()
 

@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.settings.account
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
@@ -23,7 +23,7 @@ data class AccountState(
     val type: String? = null,
 )
 
-class AccountViewModel : ViewModel() {
+class AccountViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(AccountState())
     val state: StateFlow<AccountState> = _state.asStateFlow()
 
@@ -122,44 +122,30 @@ class AccountViewModel : ViewModel() {
             return
         }
 
-        viewModelScope.launch {
-            _state.value = current.copy(isSaving = true, error = null)
-            try {
-                val response =
-                    ApiClient.api.updateProfile(
-                        UpdateProfileRequest(
-                            username = current.username,
-                            email = current.email,
-                        ),
-                    )
-                if (response.isSuccessful) {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            successMessage = "Profile updated successfully",
-                        )
-                    AccountManager.saveEmail(current.email)
-                    AccountManager.saveUsername(current.username)
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            error =
-                                when (response.code()) {
-                                    409 -> "Email already in use"
-                                    400 -> "Invalid details"
-                                    else -> "Update failed (${response.code()})"
-                                },
-                        )
+        _state.launchWithState(
+            call = {
+                ApiClient.api.updateProfile(
+                    UpdateProfileRequest(
+                        username = current.username,
+                        email = current.email,
+                    ),
+                )
+            },
+            setLoading = { s, saving -> s.copy(isSaving = saving) },
+            setError = { s, err -> s.copy(error = err) },
+            onSuccess = { s, _ ->
+                AccountManager.saveEmail(current.email)
+                AccountManager.saveUsername(current.username)
+                s.copy(successMessage = "Profile updated successfully")
+            },
+            mapHttpError = { response ->
+                when (response.code()) {
+                    409 -> "Email already in use"
+                    400 -> "Invalid details"
+                    else -> "Update failed (${response.code()})"
                 }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isSaving = false,
-                        error = "Cannot reach server",
-                    )
-            }
-        }
+            },
+        )
     }
 
     fun clearMessage() {
