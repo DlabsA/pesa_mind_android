@@ -16,6 +16,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
+import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
+import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.ChannelManager
@@ -24,8 +26,12 @@ import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import cc.dlabs.pesamind.features.settings.notifications.MessageMonitoringService
+import dagger.hilt.EntryPoints
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class PesaMindApp : Application() {
@@ -36,6 +42,20 @@ class PesaMindApp : Application() {
         ChannelManager.init(this)
         NotificationStorage.init(this)
         ThemeManager.init(this)
+
+        // One-time prefs-blob -> Room import (idempotent, safe to fire on every launch).
+        // See docs/decisions/ADR-0004-offline-first.md. Caught, not propagated: this runs
+        // unsupervised at process startup, and the in-transaction rollback that keeps a
+        // failed attempt retriable on the *next* launch is worthless if an uncaught throw
+        // here crashes *this* launch before the app ever renders a frame.
+        val database = EntryPoints.get(this, DatabaseEntryPoint::class.java).database()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                PrefsToRoomMigrator.migrateIfNeeded(this@PesaMindApp, database)
+            } catch (e: Exception) {
+                Log.e("PesaMindApp", "Prefs -> Room migration failed; will retry next launch", e)
+            }
+        }
     }
 }
 

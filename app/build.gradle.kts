@@ -168,6 +168,13 @@ dependencies {
     // Android Security (EncryptedSharedPreferences)
     implementation(libs.androidx.security.crypto)
 
+    // Room (offline-first local database — see docs/decisions/ADR-0004-offline-first.md)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.paging)
+    kapt(libs.androidx.room.compiler)
+    implementation(libs.androidx.paging.runtime)
+
     implementation("androidx.compose.material3:material3:1.2.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
