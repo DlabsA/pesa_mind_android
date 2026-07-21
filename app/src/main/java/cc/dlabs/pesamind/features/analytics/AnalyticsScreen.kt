@@ -154,7 +154,7 @@ private fun AnalyticsScrollBody(
     ) {
         LazyColumn(
             contentPadding = PaddingValues(bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             // ── Header
@@ -164,7 +164,7 @@ private fun AnalyticsScrollBody(
                     viewModel = viewModel,
                     modifier =
                         Modifier
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = Spacing.Space4.dp)
                             .padding(top = 8.dp),
                 )
             }
@@ -179,7 +179,7 @@ private fun AnalyticsScrollBody(
                     ) {
                         AnalyticsOfflineBanner(
                             caption = viewModel.formattedLastUpdated,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
                     }
                 }
@@ -192,7 +192,7 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 1, visible = cardsVisible) {
                             SummaryMetricsCard(
                                 data = summary,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -204,7 +204,7 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 2, visible = cardsVisible) {
                             SpendingVelocityCard(
                                 section = velocity,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -216,7 +216,7 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 3, visible = cardsVisible) {
                             MonthlyTrendsCard(
                                 section = trends,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -228,7 +228,7 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 4, visible = cardsVisible) {
                             BudgetVsActualCard(
                                 section = bva,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -240,7 +240,7 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 5, visible = cardsVisible) {
                             ExpenseForecastCard(
                                 section = forecast,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -252,7 +252,7 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 6, visible = cardsVisible) {
                             CashFlowCard(
                                 section = cashFlow,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -266,7 +266,7 @@ private fun AnalyticsScrollBody(
                             AnomaliesCard(
                                 // Now safely smart-cast to non-null 'AnomalyData'
                                 section = a.anomalies,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -1209,17 +1209,17 @@ private fun StatPillComposable(
 
 private object BvaColors {
     // Status colours — intentionally reuse TrendColors semantics
-    val UnderBudget = Color(0xFF1D9E75) // green  (income green)
-    val OnBudget = Color(0xFF378ADD) // blue   (savings blue)
-    val OverBudget = Color(0xFFD85A30) // red    (expense red)
+    val UnderBudget = LightColors.Income // green  (income green)
+    val OnBudget = LightColors.Savings // blue   (savings blue)
+    val OverBudget = LightColors.Expense // red    (expense red)
 
-    val IncomeLine = Color(0xFF1D9E75)
-    val ExpenseLine = Color(0xFFD85A30)
-    val SavingsLine = Color(0xFF378ADD)
+    val IncomeLine = LightColors.Income
+    val ExpenseLine = LightColors.Expense
+    val SavingsLine = LightColors.Savings
 
     // Health pill backgrounds (muted)
-    val ExcellentBg = Color(0xFFE1F5EE)
-    val ExcellentText = Color(0xFF085041)
+    val ExcellentBg = LightColors.IncomeBg
+    val ExcellentText = IncomeText
     val GoodBg = Color(0xFFE3F0FB)
     val GoodText = Color(0xFF1A4A7A)
     val FairBg = Color(0xFFFFF3E0)
@@ -1270,7 +1270,7 @@ private fun healthPillColors(status: String) =
  *           StaggeredCard(index = 4, visible = cardsVisible) {
  *               BudgetVsActualCard(
  *                   section  = bva,
- *                   modifier = Modifier.padding(horizontal = 16.dp),
+ *                   modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
  *               )
  *           }
  *       }
@@ -1805,9 +1805,9 @@ private fun BudgetLineItemRow(item: BudgetLineItem) {
 // ---------------------------------------------------------------------------
 
 private object ForecastColors {
-    val Exceed = Color(0xFFD85A30) // expense red  — will exceed
-    val OnTrack = Color(0xFF1D9E75) // income green — on track
-    val Actual = Color(0xFF378ADD) // savings blue — actual bar
+    val Exceed = LightColors.Expense // expense red  — will exceed
+    val OnTrack = LightColors.Income // income green — on track
+    val Actual = LightColors.Savings // savings blue — actual bar
     val BudgetBar = Color(0xFFBDBDBD) // neutral grey — budget reference bar
 
     // Severity → alert chip colours
@@ -2469,9 +2469,9 @@ private fun CashFlowEntryChip(
 
 private object AnomalyColors {
     // Severity — new mapping: "high" | "medium" | "low"
-    val High = Color(0xFFD85A30) // expense red
+    val High = LightColors.Expense // expense red
     val Medium = Color(0xFFE07B00) // amber
-    val Low = Color(0xFF378ADD) // savings blue (informational)
+    val Low = LightColors.Savings // savings blue (informational)
 
     fun severityColor(severity: String) =
         when (severity.lowercase()) {
@@ -2835,7 +2835,7 @@ private fun AnomalyRangeRow(
                         .fillMaxWidth()
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(3.dp))
-                        .background(Color(0xFF1D9E75).copy(alpha = .20f)),
+                        .background(LightColors.Income.copy(alpha = .20f)),
             )
             // Actual spend marker — extends to show how far past normal it went
             Box(

@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
+import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ShimmerBox
@@ -163,9 +164,9 @@ fun SetMonthlyBudgetScreen(
                     start = 18.dp,
                     end = 18.dp,
                     top = 14.dp,
-                    bottom = 40.dp,
+                    bottom = Spacing.Space10.dp,
                 ),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Space5.dp),
         ) {
             // ── Summary card
             item {

@@ -195,7 +195,7 @@ private fun DashboardScrollBody(
     ) {
         LazyColumn(
             contentPadding = PaddingValues(bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             // ── Header
@@ -205,7 +205,7 @@ private fun DashboardScrollBody(
                     viewModel = viewModel,
                     modifier =
                         Modifier
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = Spacing.Space4.dp)
                             .padding(top = 8.dp),
                 )
             }
@@ -220,7 +220,7 @@ private fun DashboardScrollBody(
                     ) {
                         DashboardOfflineBanner(
                             caption = viewModel.formattedLastUpdated,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
                     }
                 }
@@ -233,7 +233,7 @@ private fun DashboardScrollBody(
                     StaggeredCard(index = 0, visible = cardsVisible) {
                         NetMovementCard(
                             data = d.summary.data,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
                     }
                 }
@@ -244,7 +244,7 @@ private fun DashboardScrollBody(
                         QuickStatsRow(
                             data = d.summary.data,
                             health = d.summary.health,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
                     }
                 }
@@ -256,7 +256,7 @@ private fun DashboardScrollBody(
                         if (financialHealth != null) {
                             FinancialHealthCard(
                                 health = financialHealth.data,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         } else {
                             UnavailableFeatureOverlay(
@@ -267,7 +267,7 @@ private fun DashboardScrollBody(
                                     Modifier
                                         .fillMaxWidth()
                                         .height(200.dp)
-                                        .padding(horizontal = 16.dp),
+                                        .padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -280,7 +280,7 @@ private fun DashboardScrollBody(
                         if (spendingVelocity != null) {
                             DashboardVelocityCard(
                                 data = spendingVelocity.data,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         } else {
                             UnavailableFeatureOverlay(
@@ -291,7 +291,7 @@ private fun DashboardScrollBody(
                                     Modifier
                                         .fillMaxWidth()
                                         .height(180.dp)
-                                        .padding(horizontal = 16.dp),
+                                        .padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -303,7 +303,7 @@ private fun DashboardScrollBody(
                         StaggeredCard(index = 4, visible = cardsVisible) {
                             DashboardBudgetCard(
                                 data = budgetActualData,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
@@ -315,7 +315,7 @@ private fun DashboardScrollBody(
                         StaggeredCard(index = 5, visible = cardsVisible) {
                             AnomaliesCard(
                                 section = d.anomalies,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }

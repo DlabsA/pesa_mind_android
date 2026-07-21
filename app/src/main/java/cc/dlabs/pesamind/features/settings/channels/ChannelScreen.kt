@@ -109,6 +109,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
@@ -415,7 +416,7 @@ fun ChannelScreen(
                         modifier =
                             Modifier
                                 .fillMaxSize()
-                                .padding(start = 16.dp, top = 8.dp, end = 16.dp),
+                                .padding(start = Spacing.Space4.dp, top = Spacing.Space2.dp, end = Spacing.Space4.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(visibleChannels, key = { it.id }) { channel ->
@@ -1118,7 +1119,7 @@ private fun ChannelFormDialog(
                             .weight(1f, fill = false)
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp, vertical = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Space5.dp),
                 ) {
                     // Name
                     OutlinedTextField(

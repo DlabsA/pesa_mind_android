@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
+import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.ShimmerBox
@@ -164,8 +165,8 @@ fun TransactionListScreen(
                 // ── Loading skeleton ───────────────────────────────────────
                 isLoading && transactions.isEmpty() -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.Space4.dp, vertical = Spacing.Space3.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.Space3.dp),
                     ) {
                         item {
                             SkeletonCard(
@@ -233,10 +234,10 @@ fun TransactionListScreen(
                     LazyColumn(
                         contentPadding =
                             PaddingValues(
-                                start = 16.dp,
-                                top = 12.dp,
-                                end = 16.dp,
-                                bottom = 32.dp,
+                                start = Spacing.Space4.dp,
+                                top = Spacing.Space3.dp,
+                                end = Spacing.Space4.dp,
+                                bottom = Spacing.Space8.dp,
                             ),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {

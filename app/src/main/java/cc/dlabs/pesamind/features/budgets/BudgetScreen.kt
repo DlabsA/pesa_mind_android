@@ -68,6 +68,7 @@ import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.core.ui.StatsRowsSkeleton
@@ -128,7 +129,7 @@ fun BudgetScreen(
                 viewModel = vm,
                 modifier =
                     Modifier
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = Spacing.Space4.dp)
                         .padding(top = 8.dp),
             )
         },
@@ -154,14 +155,14 @@ fun BudgetScreen(
                     modifier =
                         Modifier
                             .fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
                     contentPadding = PaddingValues(bottom = 100.dp),
                 ) {
                     item { Spacer(Modifier.height(4.dp)) }
 
                     if (state.isOffline) {
                         item {
-                            BudgetOfflineBanner(modifier = Modifier.padding(horizontal = 16.dp))
+                            BudgetOfflineBanner(modifier = Modifier.padding(horizontal = Spacing.Space4.dp))
                         }
                     }
 
@@ -171,7 +172,7 @@ fun BudgetScreen(
                                 yearly = state.yearlyBudget,
                                 isLoading = state.isLoadingYearly,
                                 year = state.displayYear,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 navController = navController,
                             )
                         }
@@ -183,7 +184,7 @@ fun BudgetScreen(
                                 nextMonth = state.nextMonthIndex,
                                 nextYear = state.nextMonthYear,
                                 hasExisting = state.hasNextMonthBudget,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 onSetBudget = {
                                     navController.navigate(
                                         Routes.SetMonthlyBudget.createRoute(
@@ -206,7 +207,7 @@ fun BudgetScreen(
                                 year = state.displayYear,
                                 balance = state.monthlyBalance,
                                 isDeficit = state.isMonthlyDeficit,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 onDetails = {
                                     if (state.yearlyBudget == null) {
                                         navController.navigate(Routes.SetYearlyBudget.route)
