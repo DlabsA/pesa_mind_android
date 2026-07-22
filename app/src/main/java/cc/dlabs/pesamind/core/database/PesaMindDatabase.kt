@@ -31,7 +31,7 @@ const val DATABASE_NAME = "pesamind.db"
         Tombstone::class,
     ],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class PesaMindDatabase : RoomDatabase() {

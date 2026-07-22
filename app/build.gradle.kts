@@ -72,6 +72,14 @@ android {
         versionName = "21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Room schema history (see docs/decisions/ADR-0004-offline-first.md) — committed
+        // under app/schemas so a future version bump has a real migration to test against.
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments += mapOf("room.schemaLocation" to "$projectDir/schemas")
+            }
+        }
     }
 
     signingConfigs {

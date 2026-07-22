@@ -18,6 +18,7 @@ import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.network.models.SMSMessage
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.utils.TransactionCreationResult
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import cc.dlabs.pesamind.features.home.TYPE_EXPENSE
 import cc.dlabs.pesamind.features.home.TYPE_INCOME
@@ -87,12 +88,25 @@ class SMSMessageProcessor(
             val channelId = channelInfo.channel.id
             val finalNote = parsedNote.ifEmpty { content.take(255) }
 
-            viewModel.createTransaction(
-                channelID = channelId,
-                amount = amount,
-                type = txType,
-                note = finalNote,
-            )
+            // Awaited, not fire-and-forget: we must know the real outcome before telling
+            // the user anything, and before persisting the pending-message record — both
+            // used to happen unconditionally, which meant a user could get a "Spent X UGX"
+            // notification for a transaction that never made it past a network exception.
+            val result =
+                viewModel.createTransactionAwaited(
+                    channelID = channelId,
+                    amount = amount,
+                    type = txType,
+                    note = finalNote,
+                )
+
+            when (result) {
+                is TransactionCreationResult.Failure -> {
+                    Log.w(TAG, "Transaction creation failed for SMS from $senderId: ${result.message}")
+                    return@withContext
+                }
+                is TransactionCreationResult.Success -> Unit
+            }
 
             val smsMessage =
                 SMSMessage(

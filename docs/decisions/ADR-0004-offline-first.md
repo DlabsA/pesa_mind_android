@@ -1,6 +1,11 @@
 # ADR-0004: Offline-first — Room-authoritative storage, durable sync, SMS ingestion & profile offline
 
-**Status:** In progress (Step 1 of 6 landed this commit — schema + migration only)
+**Status:** In progress. Step 1 (schema + migration) landed, but was inert — Room was
+populated once by the migrator and never read again. This session: (1) shipped a
+standalone hotfix so SMS ingestion stops lying about success while Room is still
+inert, (2) re-sequenced the remaining roadmap from six large infrastructure-first
+steps into vertical slices that each ship a working offline capability end-to-end.
+See "Roadmap revision" and "Hotfix" below.
 **Date:** 2026-07-22
 
 ## Context
@@ -254,6 +259,123 @@ airplane-mode test below, not an automated instrumented test in this commit.
   corrupt cache blob would've been stored as a real `serverId` value and could
   collide with another blank-id row. Fixed to match the profile path everywhere.
 
+## Roadmap revision (this session)
+
+The original Step 2→6 ordering shipped two large infrastructure commits (Step 2:
+repositories, Step 4: SMS) before anything actually worked offline, and Step 2+4
+*alone* still couldn't fix SMS — SMS needs offline channel auto-creation **and**
+offline transaction creation together, which the old split put in different steps.
+Replacing the roadmap with vertical slices, each independently shippable and each
+proving the write→outbox→sync pattern before the next slice reuses it:
+
+- **Hotfix** (this commit) — SMS false-success notification. No Room. Ships
+  immediately, independent of everything else below.
+- **Slice A** — the SMS capture path, offline end-to-end: `ChannelRepository` +
+  `TransactionRepository` + outbox + sync worker + SMS rewire + sync-status UI.
+  Broken into three independently-green commits (A1 repositories, A2 outbox+sync
+  worker, A3 SMS rewire+UI) rather than one large commit, per the constraint that
+  writes queue after A1 but nothing drains them until A2 — not shippable mid-slice,
+  fine on a branch.
+- **Slice B** — profile + budgets offline-first, reusing Slice A's now-proven
+  repository/outbox/sync pattern.
+- **Slice C** — refresh UX polish, dead-code removal (`TransactionManager`,
+  `BudgetManager`, `NotificationStorage`), remaining screens.
+
+This supersedes the old "Step 2/Step 3/.../Step 6" numbering below; those sections
+are kept as historical record of the original (superseded) plan and the Step 1
+work that already landed.
+
+## Step 0 verification (this session, before Slice A)
+
+Re-verified three Step 1 loose ends and the migration's real-world effect, using
+`data-path-tracer` for the 8 core user-action paths instead of hand-grepping each:
+
+- **`fallbackToDestructiveMigration()`**: not present in `DatabaseModule.kt`. Already
+  clean — no fix needed.
+- **`exportSchema`**: flipped `false` → `true` this commit. Added
+  `room.schemaLocation` via `defaultConfig.javaCompileOptions.annotationProcessorOptions`
+  in `app/build.gradle.kts` (kapt reads this the same way ksp reads its schemaArgs —
+  no ksp in this project, Room uses kapt). Generated and committed
+  `app/schemas/cc.dlabs.pesamind.core.database.PesaMindDatabase/1.json`. Free at
+  version 1; would have been unreconstructable once a v2 migration shipped without it.
+- **`@HiltWorker` + `@AssistedInject` spike**: compiles clean under this project's
+  pinned Kotlin 2.1.0 / Hilt 2.51.1 / kapt setup. kapt falls back to Kotlin
+  language-version 1.9 for stub generation (`w: Support for language version 2.0+ in
+  kapt is in Alpha`), which sidesteps the metadata-version bug that broke
+  `@Inject lateinit var` field injection (documented in Step 1 above) — assisted
+  injection uses a different codegen path, same as the `@EntryPoint` workaround did.
+  **Decision: no fallback `WorkerFactory` needed.** Slice A's sync worker can use
+  `@HiltWorker`/`@AssistedInject` directly. Spike file and its temporary
+  `androidx.work`/`androidx.hilt:hilt-work` dependency additions were deleted/reverted
+  after confirming — those dependencies land for real in Slice A2 when the sync
+  worker is actually written.
+- **Did the Step 1 migration move any real rows?** Unvalidated by any live run (no
+  device/emulator available in this session to check `adb shell run-as ... sqlite3`).
+  Static analysis is conclusive enough to report though: `PesaMindApp.onCreate()`
+  initializes `TokenManager`, `AccountManager`, `ChannelManager`, `NotificationStorage`,
+  `ThemeManager` — **not** `TransactionManager` or `BudgetManager`. Every method on
+  both of those guards on `isInitialized()` and silently no-ops otherwise, and this
+  is true even though `BudgetManager` and `TransactionManager` **are** called
+  throughout `BudgetViewModel`/`SetMonthlyBudgetViewModel`/`YearlyBudgetViewModel`/
+  `TransactionViewModel` in real app code today — every one of those calls has
+  always been a silent no-op. `AccountManager` and `ChannelManager`, by contrast,
+  are properly initialized and populated by real usage (login writes the account
+  cache, `loadChannels()` writes the channel cache). Conclusion: the migration
+  likely moved real profile and channel rows on a device that has actually been
+  used, but **zero transactions and zero budgets**, regardless of how much real
+  transaction/budget history that device has — first sync in Slice A/B remains the
+  true population event for those two entities, not something already exercised by
+  Step 1. Do not treat Step 1's migration as validated; it has never had real data
+  to move.
+
+## Hotfix (this commit): honest SMS-ingestion failure reporting
+
+`SMSMessageProcessor.processMessage` called `viewModel.createTransaction(...)` —
+which isn't even `suspend`, it just launches its own `viewModelScope.launch` — and
+then unconditionally persisted a pending-message record and fired a "Spent/Received
+X UGX" notification, regardless of whether the network call inside `createTransaction`
+ever completed or succeeded. Offline, or on any transient network failure, this
+meant a confirmed-looking success notification for a transaction that was silently
+discarded.
+
+Fix: split `TransactionViewModel`'s transaction-creation logic into a shared private
+`performCreateTransaction()` plus two public entry points — `createTransaction()`
+(unchanged fire-and-forget behavior for `AddTransactionScreen`, still backed by
+`viewModelScope.launch`) and a new suspending `createTransactionAwaited()` that
+returns a `TransactionCreationResult` (`Success`/`Failure`) instead of only mutating
+`_state`. `SmsReceiver` already constructs a throwaway `TransactionViewModel()`
+instance per message inside its own IO-dispatcher coroutine — it isn't attached to
+any Compose screen — so `SMSMessageProcessor` can call `createTransactionAwaited`
+directly and inspect the real result before doing anything user-visible.
+`NotificationStorage.savePendingMessage` and the local notification now both live
+inside the success branch only; on failure, the processor logs a warning and
+returns, doing neither. No queueing or retry — Slice A removes this failure mode
+entirely by making the write local-first; this hotfix only makes today's failure
+mode honest instead of ships-with-a-lie.
+
+`offline-sync-reviewer` caught that an early version of this refactor treated a 2xx
+response with an empty/unparseable body as `Failure`, where the pre-refactor code
+treated it as success (no state/list update, but still a success message and a
+published event with an empty transaction id). Since there's no idempotency key
+yet, flipping that to `Failure` would make `AddTransactionScreen` show an error on
+an HTTP-success response — inviting a user retry that POSTs a real duplicate.
+Fixed by making `TransactionCreationResult.Success.transaction` nullable so an
+empty-body 2xx still resolves to `Success`, matching old behavior exactly. With
+that fix, this commit has no behavior change beyond the SMS path's honest failure
+reporting; No Room dependency, standalone, independently revertable.
+
+`android-reviewer` additionally caught that `createTransaction()` and
+`createTransactionAwaited()` had forked, byte-for-byte-duplicated `_state`
+transition logic (the same `isSaving`/`message`/`error` copies written in two
+places). Collapsed `createTransaction()` to `viewModelScope.launch { createTransactionAwaited(...) }`
+and discard the result — `createTransactionAwaited` is now the single owner of
+those state transitions. Doing this exposed a real bug in my own first pass: the
+awaited function's validation-failure early-return returned `Failure` but never
+wrote the message into `_state`, which would have silently broken
+`AddTransactionScreen`'s validation-error UI (blank note, non-positive amount,
+etc. would fail with no visible feedback). Fixed by setting `_state` on that
+branch before returning.
+
 ## Airplane-mode acceptance test (target state — full test only meaningful once Steps 2-4 land; not yet exercisable from Step 1 alone)
 
 1. Enable airplane mode.
@@ -275,9 +397,16 @@ airplane-mode test below, not an automated instrumented test in this commit.
   rewires the ViewModels to read/write through Room instead. This commit only
   adds the schema and a one-time import; it does not yet change any screen's
   behavior.
-- Schema is version 1, `exportSchema = false` (no migration-testing
-  infrastructure set up yet — revisit if/when a version 2 schema change is
-  needed).
+- Schema is version 1. `exportSchema` was `false` at Step 1 (no migration-testing
+  infrastructure set up yet); flipped to `true` in the Step 0/hotfix commit above,
+  with `app/schemas/…/1.json` committed — this section is kept for historical
+  accuracy about what Step 1 itself shipped.
 - Follow-ups tracked, not actioned here: `TokenManager` encryption,
   `NotificationStorage`'s non-functional pending-message store, `ThemeManager`'s
   raw-`SharedPreferences` inconsistency, budget line-item-level offline editing.
+- `android-reviewer` also flagged (this session) that `TransactionViewModel` and
+  its new `TransactionCreationResult` type live under `core/utils/`, violating the
+  target contract's "no feature-specific ViewModels/types under `core/`" folder
+  rule — pre-existing drift, not introduced by the hotfix, and relocating it
+  touches enough call sites (home, transactions list, SMS) that it doesn't belong
+  in a standalone hotfix. Tracked as part of Slice C's cleanup.

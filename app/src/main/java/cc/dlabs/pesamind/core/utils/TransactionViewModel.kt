@@ -22,6 +22,15 @@ data class TransactionState(
     val message: String? = null,
 )
 
+sealed class TransactionCreationResult {
+    // transaction is nullable because a 2xx response with an empty/unparseable body still
+    // counts as success (matches pre-refactor behavior) — the caller just has nothing to
+    // append to its local list or attach a real id to.
+    data class Success(val transaction: TransactionDetails?) : TransactionCreationResult()
+
+    data class Failure(val message: String) : TransactionCreationResult()
+}
+
 class TransactionViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(TransactionState(isLoading = true))
     val state: StateFlow<TransactionState> = _state.asStateFlow()
@@ -96,75 +105,98 @@ class TransactionViewModel : UnifiedViewModel() {
         type: String,
         note: String,
     ) {
-        val normalizedType = TransactionTypes.normalizeOrNull(type)
+        viewModelScope.launch { createTransactionAwaited(channelID, amount, type, note) }
+    }
 
-        when {
-            channelID.isBlank() -> {
-                _state.value = _state.value.copy(error = "Channel ID is required")
-                return
-            }
-            amount <= 0 -> {
-                _state.value = _state.value.copy(error = "Amount must be greater than zero")
-                return
-            }
-            normalizedType == null -> {
-                _state.value =
-                    _state.value.copy(
-                        error = "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}",
-                    )
-                return
-            }
-            note.isBlank() -> {
-                _state.value = _state.value.copy(error = "Note is required")
-                return
-            }
+    /**
+     * Suspending, awaited variant for non-UI callers (e.g. [SMSMessageProcessor]) that must
+     * know the real outcome before acting — the fire-and-forget [createTransaction] above
+     * delegates here on its own coroutine and discards the result, since it only needs the
+     * `_state` side effect. This is the single place that owns the isSaving/message/error
+     * transitions for a transaction creation.
+     */
+    suspend fun createTransactionAwaited(
+        channelID: String,
+        amount: Double,
+        type: String,
+        note: String,
+    ): TransactionCreationResult {
+        val validationError = validateTransactionInput(channelID, amount, type, note)
+        if (validationError != null) {
+            _state.value = _state.value.copy(error = validationError)
+            return TransactionCreationResult.Failure(validationError)
         }
 
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isSaving = true, error = null)
-            try {
-                val response =
-                    ApiClient.api.createTransaction(
-                        TransactionRequest(
-                            channelId = channelID,
-                            amount = amount,
-                            type = normalizedType,
-                            note = note.trim(),
-                        ),
-                    )
-                if (response.isSuccessful) {
-                    val created = response.body()
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            message = "Transaction created successfully",
-                            transactions = if (created != null) _state.value.transactions + created else _state.value.transactions,
-                        )
-                    // 🔥 Publish event so Dashboard and Analytics refresh automatically
-                    Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
-                    publishEvent(
-                        StateEvent.TransactionCreated(
-                            transactionId = created?.id ?: "",
-                            amount = amount,
-                            channelId = channelID,
-                        ),
-                    )
-                } else {
-                    Log.e("TransactionViewModel", "❌ Failed to create transaction: ${response.code()}")
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            error = "Failed to create transaction (${response.code()})",
-                        )
-                }
-            } catch (e: Exception) {
-                Log.e("TransactionViewModel", "❌ Exception during transaction creation", e)
-                _state.value =
-                    _state.value.copy(
-                        isSaving = false,
-                        error = "Cannot reach server: ${e.message ?: "Unknown error"}",
-                    )
+        _state.value = _state.value.copy(isSaving = true, error = null)
+        val result = performCreateTransaction(channelID, amount, type, note)
+        _state.value =
+            when (result) {
+                is TransactionCreationResult.Success ->
+                    _state.value.copy(isSaving = false, message = "Transaction created successfully")
+                is TransactionCreationResult.Failure ->
+                    _state.value.copy(isSaving = false, error = result.message)
             }
+        return result
+    }
+
+    private fun validateTransactionInput(
+        channelID: String,
+        amount: Double,
+        type: String,
+        note: String,
+    ): String? =
+        when {
+            channelID.isBlank() -> "Channel ID is required"
+            amount <= 0 -> "Amount must be greater than zero"
+            TransactionTypes.normalizeOrNull(type) == null ->
+                "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}"
+            note.isBlank() -> "Note is required"
+            else -> null
+        }
+
+    private suspend fun performCreateTransaction(
+        channelID: String,
+        amount: Double,
+        type: String,
+        note: String,
+    ): TransactionCreationResult {
+        val normalizedType =
+            TransactionTypes.normalizeOrNull(type)
+                ?: return TransactionCreationResult.Failure(
+                    "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}",
+                )
+        return try {
+            val response =
+                ApiClient.api.createTransaction(
+                    TransactionRequest(
+                        channelId = channelID,
+                        amount = amount,
+                        type = normalizedType,
+                        note = note.trim(),
+                    ),
+                )
+            if (response.isSuccessful) {
+                val created = response.body()
+                if (created != null) {
+                    _state.value = _state.value.copy(transactions = _state.value.transactions + created)
+                }
+                // 🔥 Publish event so Dashboard and Analytics refresh automatically
+                Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
+                publishEvent(
+                    StateEvent.TransactionCreated(
+                        transactionId = created?.id ?: "",
+                        amount = amount,
+                        channelId = channelID,
+                    ),
+                )
+                TransactionCreationResult.Success(created)
+            } else {
+                Log.e("TransactionViewModel", "❌ Failed to create transaction: ${response.code()}")
+                TransactionCreationResult.Failure("Failed to create transaction (${response.code()})")
+            }
+        } catch (e: Exception) {
+            Log.e("TransactionViewModel", "❌ Exception during transaction creation", e)
+            TransactionCreationResult.Failure("Cannot reach server: ${e.message ?: "Unknown error"}")
         }
     }
 
