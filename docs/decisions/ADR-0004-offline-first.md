@@ -3,10 +3,22 @@
 **Status:** In progress. Step 1 (schema + migration), the hotfix, Slice A1
 (Channel/Transaction repositories), and Slice A2 (outbox drain + sync worker) have
 landed. Channels and transactions now read/write through Room *and* push to / pull
-from the server. Slice A3 (SMS dedup-key wiring, SMS auto-create rewired local-first,
-sync-status UI) is next. See "Roadmap revision", "Hotfix", "Slice A1", and "Slice A2"
-below.
-**Date:** 2026-07-23 (Slice A2)
+from the server. The backend contract A2 shipped against unverified is now fully
+verified (see "Backend-contract verification" below): the client-UUID idempotency
+gap and the `ChannelDesc` question are both **closed** — fixed (idempotency) or
+confirmed already-safe (`ChannelDesc`), each backed by real tests (Postgres
+integration + HTTP-level) and a live curl-based test against a locally-running
+instance of the real backend binary, all **in the backend repo, on a local branch,
+not yet deployed to `api.dlabs.cc`**. The `DeletedAt`/soft-delete question is
+assessed (full blast-radius across every backend domain) and correctly re-scoped as
+its own follow-up rather than fixed inline. The delta-pull/cursor gap is confirmed
+absent and remains its own scoped backend task, not started — Part 2 (a real delta
+pull) stays blocked-on-backend. Slice A3 (SMS dedup-key wiring, SMS auto-create
+rewired local-first, sync-status UI) is next once the backend fix is deployed. See
+"Roadmap revision", "Hotfix", "Slice A1", "Slice A2", and
+"Backend-contract verification" below.
+**Date:** 2026-07-23 (Slice A2); backend-contract verification + fix + tests +
+live test, same day, follow-up session
 
 ## Context
 
@@ -697,7 +709,232 @@ Composable). All four findings above were fixed before commit.
 `ktlintFormat`/`ktlintCheck`/`test`/`assembleDebug` all green, including after the
 fixes.
 
-## Airplane-mode acceptance test (target state for Channel/Transaction — steps 1-2 and 6-7 are exercisable now that A2 has landed; steps 3-4 need Slice A3 (SMS, profile) and step 9's "no duplicates" check needs the backend-blocker confirmation noted under Slice A2 above, not yet attempted live)
+## Backend-contract verification (2026-07-23, follow-up session)
+
+A2 shipped with the backend contract explicitly unverified ("Backend-blocker
+status" above) because no backend repository was locally accessible from the
+`pesa_mind_android` working directory — every `~/Github/dlabs/*` directory was
+checked and none of them is the Go backend. **That conclusion was wrong**: the
+backend (Go/Gin/GORM, module `pesa-mind`) lives at `~/Github/Personal/pesa-mind`
+— outside `~/Github/dlabs/` entirely, hence missed by every prior grep. Now
+recorded in this session's agent memory (`ref-backend-repo-location`) so it isn't
+re-lost. In that repo, "Channel" is Android-only naming — the backend calls the
+same table/domain `ChannelDetails`, under the `category` package, exposed at
+`/api/v1/categories` (`cmd/api/main.go:89-94`), not a `channel` package.
+
+This section resolves the five specific unknowns the A2/A3 task brief named,
+each checked against source, not inferred from `ApiService.kt`:
+
+**Status of the three Part 1 items: 1 and 2 closed (fixed + tested + live-verified,
+not yet deployed), 3 closed (already safe, locked in with a test), 4 (`DeletedAt`)
+scoped as a follow-up, not fixed inline as instructed. Cursor/delta support (item 5
+below, needed for Part 2) confirmed absent — its own future backend task.**
+
+**1+2. Client-supplied `id` binding + upsert-on-conflict — confirmed broken,
+now fixed and verified with real tests (branch
+`fix/idempotent-channel-transaction-create`, commits `61802b2` + `ecacecf`, not
+deployed).** Neither `dto.CreateTransactionRequest`
+(`internal/interfaces/http/dto/transaction_dto.go`, pre-fix: lines 3-8) nor
+`dto.CreateChannelDetailsRequest` (`internal/interfaces/http/dto/category_dto.go`,
+pre-fix: lines 18-24) declared an `id` field. Gin/`encoding/json` binding silently
+drops JSON keys with no matching struct field (no `DisallowUnknownFields` anywhere
+in the repo — confirmed by grep), so the `id` Android has been sending since A2
+(`TransactionRequest.id` / `CreateChannelRequest.id` in `ApiModels.kt`) was read by
+nobody. Both `Service.Create` methods (`transaction/service.go:29-38`,
+`category/service.go:18-27`, pre-fix) constructed their model without ever touching
+`BaseModel.ID`, and `BaseModel.ID` (`utils/model.go:10`) carries
+`gorm:"...default:uuid_generate_v4()"`, so GORM always let Postgres mint a fresh
+UUID — every create, every time, idempotency key or not. Neither repository's
+`Create` (`transaction/gorm_repository.go:16-18`, `category/gorm_repository.go:18-20`,
+pre-fix) had an `ON CONFLICT` clause either — moot pre-fix, since the server never
+saw a client ID to collide on. **This combination is a worse failure mode than a
+500 on retry**: a timed-out POST that actually succeeded server-side, followed by a
+client retry, doesn't error — it silently creates a second row with a different
+server ID.
+
+Fix: `id` is now an optional, `uuid4`-validated field on both request DTOs; both
+handlers parse it and pass it through; both `Service.Create` methods take a new
+`id *uuid.UUID` param and set it on the model before insert when supplied; both
+`GormXxxRepository.Create` methods now use `.Clauses(clause.OnConflict{Columns:
+[]clause.Column{{Name: "id"}}, DoNothing: true})` and, when `RowsAffected == 0` (a
+genuine retry), re-fetch and return the row actually persisted from the first
+attempt instead of the retried call's stale local timestamps.
+
+Verification, in increasing order of realism:
+- `internal/domain/transaction/gorm_repository_test.go` — two new tests against a
+  real local Postgres (the `pesa-mind-db-1` docker-compose container, not a mock or
+  a different SQL dialect): `TestGormTransactionRepository_Create_IdempotentOnClientID`
+  (create twice with the same client id → one row) and
+  `_NoClientID_StillGetsFreshID` (the no-id path is unaffected). Skips gracefully if
+  no local DB is reachable — matches the repo's existing `db_test.go` convention.
+- `internal/interfaces/http/handlers/category_handler_test.go` — two new tests
+  (sqlite in-memory, no Docker needed) exercising the *full* HTTP path (JSON body →
+  binding → handler → service → repository):
+  `TestCategoryHandler_Create_IdempotentOnClientID` and
+  `TestCategoryHandler_Create_AcceptsArbitraryChannelDesc` (folds in finding #3
+  below). This is where a real, unrelated GORM behavior surfaced: `ChannelDetails`
+  has a non-nil `User *user.User` belongs-to association once the handler builds it,
+  and GORM's `Create` cascades an `INSERT ... ON CONFLICT DO NOTHING` into the
+  `users` table by default — confirmed by the test 500ing with "no such table:
+  users" before a `users` table was added to the test schema. Pre-existing behavior
+  (not introduced by this fix, not present in the diff, safe in production since a
+  real user row with that ID already exists there, but a real per-create overhead
+  worth someone eventually noting — not investigated further here).
+- **Live, on a locally-running instance of the actual compiled `cmd/api` binary**,
+  pointed at the same local Postgres, not a test harness: registered a real user,
+  logged in for a real JWT, then `curl -X POST /api/v1/categories` and
+  `/api/v1/transactions` twice each with the same client-generated `id` (simulating
+  exactly what `SyncWorker` does after a timed-out-but-actually-succeeded push).
+  Both endpoints: two 2xx responses, identical `created_at` in both responses
+  (confirming the retry returned the original persisted row, not a fresh insert),
+  and `SELECT count(*) ... WHERE id = '<client-id>'` against the DB directly
+  returned exactly `1` in both cases. Test rows and the test user were deleted
+  afterward; the local server process was stopped. This is the closest this session
+  could get to Part 3's "on-device" ask without a real Android device/emulator
+  (still unavailable, per Step 0's note) — it verifies the real backend mechanism
+  the SyncWorker depends on, using the exact request shape Android sends, against
+  the real compiled binary and the real DB engine, just not literally fired from
+  the Android app.
+
+**Contract-change discipline (additive, not breaking):** `git diff 52e3006 61802b2
+-- internal/interfaces/http/dto/` shows the *only* change is one new optional field
+(`ID *string`) added to each of the two create-request structs — no field renamed,
+removed, or retyped, and neither response DTO
+(`ChannelDetailsResponse`/`TransactionResponse`) changed at all. A client that omits
+`id` gets byte-identical behavior to before this fix (nil → server mints a fresh
+UUID, exactly as it always has). Confirmed the field name/location Android already
+uses matches exactly: `id` (JSON key), `ApiModels.kt:195` (`TransactionRequest.id`)
+and `:269` (`CreateChannelRequest.id`) — **Android needs no further change**, the
+field it's already been sending is now finally read. Checked for other consumers
+rather than assuming none exist: `~/Github/dlabs/pesa_mind_ios` is a real second
+consumer of both endpoints (`APIEndpoints.swift:73,91` → `POST transactions`/
+`POST categories`), confirmed via its `CreateTransactionRequest`/
+`CreateChannelRequest` Swift structs (`TransactionModels.swift`,
+`ChannelModels.swift`) — neither sends an `id` field today, so both get the
+pre-existing behavior unchanged, unaffected by this fix. (A `CORS_ORIGINS` entry
+for `https://pesamind.app` in `.env` hints at a web frontend too, but no
+`pesa_mind_frontend`-type repo was found locally to check directly — noting this
+rather than assuming there's no third consumer.)
+
+**3. `ChannelDesc` enum validation — confirmed safe, free text, now locked in by a
+test.** `ChannelDetails.ChannelDesc` (`category/model.go:16`) is
+`string \`gorm:"null"\``, and `CreateChannelDetailsRequest.ChannelDesc` only carries
+`binding:"required"` (non-empty, not a member of any enum). A `utils.ChannelDesc`
+closed-string-enum type *does* exist (`utils/model.go:61-70`, six known
+Uganda-market values) but nothing on the create path references it. No fix needed —
+verified live too: `curl`-created a channel with `channel_desc: "XYZ Micro-Lender
+Uganda Ltd SMS Alert"` (not one of the six enum values) against the locally-running
+server and got `201`. SMS auto-creating a channel for an unrecognized sender name
+will not 400 — A3 is not blocked by this.
+
+**4. `DeletedAt` — confirmed plain `*time.Time` across every `BaseModel`-derived
+domain, not fixed inline (correctly out of scope), full blast-radius assessed.**
+`BaseModel.DeletedAt` (`utils/model.go:13`) is `*time.Time \`gorm:"index"\`` — not
+`gorm.DeletedAt`. GORM's automatic soft-delete behavior (auto-`UPDATE deleted_at` on
+`.Delete()`, auto-`WHERE deleted_at IS NULL` scoping on every query) only activates
+for fields of type `gorm.DeletedAt` specifically; a plain `*time.Time` gets neither.
+Every domain built on `BaseModel` shares this — confirmed by grep across
+`transaction`, `category`, `user`, `automation`, `analytics`, `budget`. Two domains
+(`notification`, `automation`) already know this and compensate with an explicit
+`WHERE ... AND deleted_at IS NULL` in their own read queries; `transaction`/
+`category`'s `FindByID`/`FindByUserID`/etc. do not filter on `deleted_at` at all —
+harmless today only because a Channel/Transaction row with `deleted_at` set never
+exists (see below), not because the queries are correct.
+  - **Channel/Transaction deletes are real hard deletes.** `category/gorm_repository.go`
+    and `transaction/gorm_repository.go`'s `Delete` both call bare
+    `r.DB.Delete(&Model{}, "id = ?", id)`, which — because the field isn't
+    `gorm.DeletedAt` — executes a real SQL `DELETE FROM`, permanently removing the
+    row. Neither ever calls `BaseModel.SoftDelete()`.
+  - **New finding this pass: `transactions.channel_details_id` has an
+    `ON DELETE CASCADE` FK to `channel_details.id`** (confirmed via
+    `docker exec pesa-mind-db-1 psql ... \d transactions`) — so today, hard-deleting
+    a channel silently hard-deletes every transaction that references it too, via
+    the DB, not application code. Worth knowing before anyone builds a "safer
+    channel delete."
+  - **`user` is the one domain with genuinely correct soft-delete — but only
+    through one of its three delete-shaped methods.** `user.Service.Delete()`
+    (`user/service.go:179-196`) is correct: it calls `u.SoftDelete()` in memory then
+    `repo.Update(u)` → `r.DB.Save(user)`, a plain UPDATE that doesn't depend on
+    GORM's automatic soft-delete hook at all. But `GormUserRepository` also has
+    `Delete(id)` (hard delete) and a method literally named `SoftDelete(user)`
+    (`user/gorm_repository.go:242-248`) whose own doc comment claims "GORM's Delete
+    automatically performs soft delete if DeletedAt field exists" — **false**, per
+    the same reasoning above; calling that method would hard-delete despite its
+    name. Confirmed by grep that neither of these two `GormUserRepository` methods
+    (nor `HardDelete`) is called from anywhere — dead code, not a live bug, but a
+    real landmine for whoever reaches for it next, and living evidence the
+    `*time.Time`-vs-`gorm.DeletedAt` distinction is already a source of confusion in
+    this codebase, not just a theoretical risk.
+  - **Net effect on this ADR's design:** does **not** block Slice A2's current
+    full-list-diff pull — a row absent from `GET /categories`/`GET /transactions`
+    looks the same to the client whether the server hard- or soft-deleted it, so
+    "absent from pull → tombstone locally" still works exactly as shipped. It
+    **does** block a future real delta/cursor endpoint (item 5): a delta response
+    needs some way to report "this id was deleted since your last sync," and since
+    deletes are unrecoverable today there's no data source to report deletions
+    from. Whoever scopes that endpoint needs to resolve this first — either migrate
+    `DeletedAt` to `gorm.DeletedAt` (a real migration: schema change +
+    `Unscoped()` everywhere a tombstone must stay visible + a decision on the FK
+    cascade above) or add a dedicated tombstone/audit table. **Not attempted here**,
+    per this session's own instruction not to wing a `DeletedAt` migration inline.
+
+**5. Delta/cursor pull support — confirmed does not exist, its own scoped backend
+task.** `grep -rn "updated_since\|cursor\|server_time" internal/` (excluding tests)
+returns zero hits anywhere in the backend. `GET /categories` and `GET /transactions`
+(`cmd/api/main.go:89-99`) take no query parameters — confirmed at the
+route-registration level, not just `ApiService.kt`. Per this session's instruction,
+**Part 2 (delta pull) is not attempted** — building one client-side workaround, or
+even scoping the endpoint itself, is out of bounds for this pass. Full-list-plus-diff
+(as A2 shipped it) remains the only option until the backend adds: a new
+`updated_at`-indexed query path per domain, an `updated_since` query param, and (per
+finding #4) a real answer for how deletions get represented in that response.
+
+### Pre-existing breakage found in the backend repo (all confirmed present on
+`main`, none introduced by this fix — `git diff main -- <path>` empty for every
+file below before it was touched)
+
+`go build ./cmd/api/...` (the real server binary) and `go vet`/`go test` on every
+package this fix touches are all clean, before and after. Elsewhere in the repo,
+confirmed pre-existing and out of scope:
+- `internal/domain/model/model.go:12` imports a `savingsgoal` package that doesn't
+  exist in the module — breaks `go build ./...`/`go vet ./...` at the repo root.
+  Nothing imports this package (`grep` confirms zero importers) — dead code.
+- `internal/interfaces/http/routes.go` doesn't compile (`budget.Create`/`.List`/etc.
+  undefined) and isn't imported by `cmd/api/main.go` — dead code, real routes are
+  registered directly in `main.go`.
+- `internal/domain/budget/budget_test.go:11` — `undefined: Budget`, pre-existing
+  broken test, unrelated domain.
+- `cmd/seeder/` — `main` redeclared across two files, won't build.
+- `test/api_register_test.go`'s `TestAPIRegisterWithProfile` panics — its own
+  in-memory sqlite table for `users` is missing a `provider` column the real
+  repository now inserts. Unrelated domain (registration, not transaction/channel
+  create), file untouched by this session.
+- This session **fixed** (not just found) three test-compile breaks that were
+  blocking `go test` on the packages this fix actually touches, since leaving them
+  broken would have made "verify with a real test" impossible: `category_test.go`
+  referenced `user.ChannelType`/`ChannelTypeCash` (the real type lives in `utils`,
+  not `user`), `transaction_test.go`'s mock was missing `FindByUserIDAndType` (and
+  its one test was calling `Service.Create(nil, nil, ...)`, which would nil-pointer
+  panic independent of the mock, not just fail to compile — fixed to pass real
+  `user`/`category` structs), `dto_test.go` asserted a `req.UserID` field that
+  `CreateTransactionRequest` has never had (removed the incorrect assertion, added
+  a new test that correctly covers the new `id` field's binding instead).
+
+### Go-side gate (this repo has none today — set up ad hoc for this change,
+same discipline as `ktlintCheck` on the Android side)
+
+No `.golangci.yml`/linter config and no `golangci-lint` binary installed — a real,
+noted gap, not silently skipped. Ran, before every commit on this branch:
+`go build ./cmd/api/...` (the real binary — `go build ./...` at the repo root
+always fails on the unrelated `savingsgoal` import above, so this is the
+meaningful build target), `go vet` scoped to every package touched (clean),
+`gofmt -l` scoped to every package touched (clean, no `-w` needed), and
+`go test` scoped to every package touched (all green, including the two new
+Postgres-integration tests). Two commits on `fix/idempotent-channel-transaction-create`:
+`61802b2` (the fix itself) and `ecacecf` (the tests + pre-existing test-compile
+fixes above). **Neither commit is pushed or deployed.**
+
+## Airplane-mode acceptance test (target state for Channel/Transaction — steps 1-2 and 6-7 are exercisable now that A2 has landed; steps 3-4 need Slice A3 (SMS, profile). Step 9's "no duplicates" concern — the backend-blocker from Slice A2 above — is now backend-side closed: see "Backend-contract verification" for a live curl-based create-twice-same-id test against the real backend that found exactly one row both times. What's still not done is firing this test from the real Android app / a real device (none available this session) and the backend fix is still undeployed, so this remains unattempted **on-device** end-to-end)
 
 1. Enable airplane mode.
 2. Create a transaction manually — appears instantly in the list.
