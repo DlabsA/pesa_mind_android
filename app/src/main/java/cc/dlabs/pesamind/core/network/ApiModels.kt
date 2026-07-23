@@ -189,6 +189,10 @@ data class Account(
 )
 
 data class TransactionRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004 Slice A2) — the
+    // server's actual handling of this field is unverified; omitted (Gson drops nulls by
+    // default) for any caller that doesn't supply one. See SyncWorker.
+    val id: String? = null,
     val amount: Double = 0.0,
     val type: String = "",
     val note: String = "",
@@ -259,6 +263,10 @@ data class ChannelDetails(
 )
 
 data class CreateChannelRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004 Slice A2) — see
+    // TransactionRequest.id for the same caveat. Omitted for the existing SMS auto-create
+    // call site, which doesn't supply one.
+    val id: String? = null,
     val name: String,
     @SerializedName("channel_type")
     val channelType: String,

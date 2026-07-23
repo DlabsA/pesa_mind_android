@@ -16,16 +16,21 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
+import androidx.work.Configuration
 import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
+import cc.dlabs.pesamind.core.di.WorkerFactoryEntryPoint
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
+import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.storage.SyncMetadataManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import cc.dlabs.pesamind.features.settings.notifications.MessageMonitoringService
 import dagger.hilt.EntryPoints
@@ -36,7 +41,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
-class PesaMindApp : Application() {
+class PesaMindApp : Application(), Configuration.Provider {
+    // Configuration.Provider is a plain interface property, not `@Inject lateinit var`
+    // field injection — see WorkerFactoryEntryPoint's doc comment for why that distinction
+    // matters on this project's pinned Dagger/Kotlin versions.
+    override val workManagerConfiguration: Configuration
+        get() {
+            val workerFactory = EntryPoints.get(this, WorkerFactoryEntryPoint::class.java).workerFactory()
+            return Configuration.Builder().setWorkerFactory(workerFactory).build()
+        }
+
     override fun onCreate() {
         super.onCreate()
         TokenManager.init(this)
@@ -44,6 +58,7 @@ class PesaMindApp : Application() {
         ChannelManager.init(this)
         NotificationStorage.init(this)
         ThemeManager.init(this)
+        SyncMetadataManager.init(this)
         // Room-backed repositories (ADR-0004 Slice A1) — ChannelRepository/TransactionRepository
         // are the source of truth ChannelViewModel/TransactionViewModel read and write through.
         ChannelRepository.init(this)
@@ -60,6 +75,16 @@ class PesaMindApp : Application() {
                 PrefsToRoomMigrator.migrateIfNeeded(this@PesaMindApp, database)
             } catch (e: Exception) {
                 Log.e("PesaMindApp", "Prefs -> Room migration failed; will retry next launch", e)
+            }
+        }
+
+        // Outbox drain + pull worker (ADR-0004 Slice A2): periodic background cadence, plus
+        // an expedited run the moment connectivity comes back (this flow also seeds with the
+        // current state on collection, so a cold start that's already online triggers one too).
+        SyncScheduler.schedulePeriodic(this)
+        CoroutineScope(Dispatchers.IO).launch {
+            NetworkMonitor(this@PesaMindApp).isConnected.collect { connected ->
+                if (connected) SyncScheduler.triggerSyncNow(this@PesaMindApp)
             }
         }
     }

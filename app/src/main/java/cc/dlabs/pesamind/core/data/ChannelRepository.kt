@@ -3,8 +3,11 @@ package cc.dlabs.pesamind.core.data
 import android.content.Context
 import androidx.room.withTransaction
 import cc.dlabs.pesamind.core.database.CoalesceDecision
+import cc.dlabs.pesamind.core.database.ExistingRowSnapshot
 import cc.dlabs.pesamind.core.database.OutboxCoalescer
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
+import cc.dlabs.pesamind.core.database.ReconcileDecision
+import cc.dlabs.pesamind.core.database.ReconcileResolver
 import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.database.entity.ChannelEntity
 import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
@@ -12,6 +15,7 @@ import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.OutboxOperation
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.storage.AccountManager
 import dagger.hilt.EntryPoints
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -75,7 +79,7 @@ object ChannelRepository {
             ChannelEntity(
                 id = UUID.randomUUID().toString(),
                 serverId = null,
-                userId = "",
+                userId = currentUserId(),
                 name = name,
                 channelType = channelType,
                 description = description,
@@ -169,46 +173,59 @@ object ChannelRepository {
     suspend fun reconcileFromServer(details: ChannelDetails): ChannelDetails =
         database.withTransaction {
             val now = System.currentTimeMillis()
+            // findByServerId deliberately includes soft-deleted rows so ReconcileResolver
+            // can see (and refuse to touch) a tombstone instead of missing it and inserting
+            // a live duplicate for the same serverId — see ReconcileResolver's doc comment.
             val existing = channelDao.findByServerId(details.id)
-            if (existing != null) {
-                // Never overwrite an unsynced local edit, and never resurrect a row the user
-                // soft-deleted locally — findByServerId deliberately includes soft-deleted rows
-                // so this branch can see (and refuse to touch) a tombstone instead of missing
-                // it and inserting a live duplicate for the same serverId.
-                if (existing.dirty || existing.deletedAt != null) return@withTransaction existing.toDetails()
-                val updated =
-                    existing.copy(
-                        name = details.name,
-                        channelType = details.channelType,
-                        description = details.description,
-                        status = details.status,
-                        channelDesc = details.channelDesc,
-                        syncStatus = SyncStatus.SYNCED,
-                        updatedAt = now,
-                    )
-                channelDao.update(updated)
-                updated.toDetails()
-            } else {
-                val inserted =
-                    ChannelEntity(
-                        id = UUID.randomUUID().toString(),
-                        serverId = details.id,
-                        userId = details.userId,
-                        name = details.name,
-                        channelType = details.channelType,
-                        description = details.description,
-                        status = details.status,
-                        channelDesc = details.channelDesc,
-                        smsNotificationEnabled = details.smsNotificationEnabled,
-                        syncStatus = SyncStatus.SYNCED,
-                        dirty = false,
-                        createdAt = now,
-                        updatedAt = now,
-                        deletedAt = null,
-                    )
-                channelDao.upsert(inserted)
-                inserted.toDetails()
+            when (ReconcileResolver.resolve(existing?.let { ExistingRowSnapshot(it.dirty, it.deletedAt) })) {
+                ReconcileDecision.SkipDirtyOrDeleted -> existing!!.toDetails()
+                ReconcileDecision.UpdateExisting -> {
+                    val updated =
+                        existing!!.copy(
+                            name = details.name,
+                            channelType = details.channelType,
+                            description = details.description,
+                            status = details.status,
+                            channelDesc = details.channelDesc,
+                            syncStatus = SyncStatus.SYNCED,
+                            updatedAt = now,
+                        )
+                    channelDao.update(updated)
+                    updated.toDetails()
+                }
+                ReconcileDecision.InsertNew -> {
+                    val inserted =
+                        ChannelEntity(
+                            id = UUID.randomUUID().toString(),
+                            serverId = details.id,
+                            userId = details.userId,
+                            name = details.name,
+                            channelType = details.channelType,
+                            description = details.description,
+                            status = details.status,
+                            channelDesc = details.channelDesc,
+                            smsNotificationEnabled = details.smsNotificationEnabled,
+                            syncStatus = SyncStatus.SYNCED,
+                            dirty = false,
+                            createdAt = now,
+                            updatedAt = now,
+                            deletedAt = null,
+                        )
+                    channelDao.upsert(inserted)
+                    inserted.toDetails()
+                }
             }
+        }
+
+    /** Best-effort current user id for locally-created rows (ADR-0004 Slice A2 — closes the
+     * "userId = ''" gap A1 shipped with). Mirrors `TransactionViewModel.currentUsername()`'s
+     * swallow-to-empty pattern: a repository write must never fail just because identity
+     * lookup did. */
+    private suspend fun currentUserId(): String =
+        try {
+            AccountManager.getAccount().id
+        } catch (e: Exception) {
+            ""
         }
 
     private suspend fun enqueueOutbox(

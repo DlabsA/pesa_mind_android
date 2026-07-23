@@ -1,11 +1,12 @@
 # ADR-0004: Offline-first — Room-authoritative storage, durable sync, SMS ingestion & profile offline
 
-**Status:** In progress. Step 1 (schema + migration), the hotfix, and Slice A1
-(Channel/Transaction repositories) have landed. Channels and transactions now
-read/write through Room for the first time; nothing pushes to the server yet
-(Slice A2's sync worker — writes queue in the outbox and stay there). See
-"Roadmap revision", "Hotfix", and "Slice A1" below.
-**Date:** 2026-07-22
+**Status:** In progress. Step 1 (schema + migration), the hotfix, Slice A1
+(Channel/Transaction repositories), and Slice A2 (outbox drain + sync worker) have
+landed. Channels and transactions now read/write through Room *and* push to / pull
+from the server. Slice A3 (SMS dedup-key wiring, SMS auto-create rewired local-first,
+sync-status UI) is next. See "Roadmap revision", "Hotfix", "Slice A1", and "Slice A2"
+below.
+**Date:** 2026-07-23 (Slice A2)
 
 ## Context
 
@@ -271,10 +272,10 @@ proving the write→outbox→sync pattern before the next slice reuses it:
   immediately, independent of everything else below.
 - **Slice A** — the SMS capture path, offline end-to-end: `ChannelRepository` +
   `TransactionRepository` + outbox + sync worker + SMS rewire + sync-status UI.
-  Broken into three independently-green commits (A1 repositories, A2 outbox+sync
-  worker, A3 SMS rewire+UI) rather than one large commit, per the constraint that
-  writes queue after A1 but nothing drains them until A2 — not shippable mid-slice,
-  fine on a branch.
+  Broken into three independently-green commits (A1 repositories — landed, A2
+  outbox+sync worker — landed, A3 SMS rewire+UI — remaining) rather than one large
+  commit, per the constraint that writes queue after A1 but nothing drains them
+  until A2 — not shippable mid-slice, fine on a branch.
 - **Slice B** — profile + budgets offline-first, reusing Slice A's now-proven
   repository/outbox/sync pattern.
 - **Slice C** — refresh UX polish, dead-code removal (`TransactionManager`,
@@ -526,7 +527,177 @@ persists and the UI is reactive), but zero of it reaches the server yet.
 diff; every actionable finding above was fixed before commit. `ktlintFormat`/
 `ktlintCheck`/`test`/`assembleDebug` all green.
 
-## Airplane-mode acceptance test (target state — full test only meaningful once Steps 2-4 land; not yet exercisable from Step 1 alone)
+## Slice A2: outbox drain + sync worker
+
+**Ships push + pull for Channel/Transaction.** After A2, `SyncWorker` drains the
+outbox A1 started filling (periodic every 30 min + expedited on connectivity regain,
+both `NetworkType.CONNECTED`) and reconciles a full-list pull against Room. Budgets/
+profile stay out of scope (Slice B); SMS dedup-key generation and the SMS
+auto-create path staying network-first are still Slice A3 (see "Deliberate scope
+boundaries" below).
+
+### Backend-blocker status: unconfirmed, not silently skipped
+
+The task brief for this slice named three specific Go-backend blockers to check
+before attempting a live end-to-end sync test (`ChannelDesc` closed-enum validation,
+missing upsert-on-conflict for client-UUID creates, `DeletedAt *time.Time` vs
+`gorm.DeletedAt`). None of these have any record in this repo, this ADR, or this
+session's memory, and no backend repository is locally accessible to check against
+directly — grepped this repo and adjacent `~/Github/dlabs/*` directories, found
+nothing. **Their status could not be verified this session.** Per the brief's own
+fallback, this slice was built against the *documented* backend contract
+(`ApiService.kt` as it exists, read directly — not assumed) rather than blocked on
+them, and no live end-to-end sync test was attempted as a result. This is a real
+gap in verification, not an oversight: the "Airplane-mode acceptance test" below
+remains unexercised beyond Room-level behavior until either those blockers are
+confirmed resolved or a live test environment is available.
+
+### Push
+
+`SyncWorker.pushOutbox()` drains channel outbox rows before transaction rows (a
+transaction create needs its channel's `serverId` to populate
+`channel_details_id`, which only exists once the channel's own row has synced).
+Per row: re-reads the *current* outbox row fresh (not a stale loop snapshot — see
+"Findings fixed" below for why that distinction matters), marks it `SYNCING`
+(so `OutboxCoalescer`'s `LeaveInFlight` rule protects it from a concurrent
+repository write), sends the network call with the entity's client UUID as `id`
+(the idempotency key — added as a new nullable-with-default field to
+`TransactionRequest`/`CreateChannelRequest`, additive-only, verified against the
+one existing `CreateChannelRequest` call site), then re-reads the entity's
+`updatedAt` and compares it to the value captured just before dispatch. A mismatch
+means a write landed mid-flight; `dirty` stays `true` and the row is requeued
+(CREATE → UPDATE, since the row now exists server-side) instead of being silently
+cleared. This decision — the exact re-check `OutboxCoalescer`'s `LeaveInFlight`
+doc comment already required of this slice — is a new pure function,
+`PushCompletionResolver`, not inlined, so it has direct unit coverage.
+
+4xx → outbox row `FAILED`, entity `syncStatus = FAILED`, error persisted, **no
+automatic retry**. 5xx/`IOException` → outbox row back to `PENDING` with bumped
+`attempts`, and the whole worker run returns `Result.retry()` so WorkManager
+backs off and retries later (4xx does *not* trigger this — confirmed only
+`TRANSIENT_FAILURE` clears the "clean" flag `doWork()` checks). A successful
+DELETE hard-deletes the local row — mandate #3 ("nothing hard-deleted until the
+server confirms") means this *is* that confirmation.
+
+### Pull
+
+`api.getChannels()`/`api.getTransactions()` — full-list, not delta. Confirmed by
+reading `ApiService.kt` directly: both GET endpoints take zero query parameters,
+so there is no server-supplied delta cursor to fetch against. Per the task
+brief's own instruction, this was **not** worked around by fabricating a
+client-clock-based delta filter — pull stays a full-list fetch + client-side
+diff, exactly as this ADR's original "Sync pull" decision (Step 1) already
+predicted. `SyncMetadataManager.lastFullPullAt` is bookkeeping only (advanced
+after a fully successful pull, for a future "last synced" UI indicator) — never
+sent as a request parameter.
+
+Each pulled row reconciles via `ChannelRepository`/`TransactionRepository.
+reconcileFromServer` (existing since A1). A row present in a prior sync
+(has `serverId`), not dirty, and absent from the current pull is treated as a
+server-side deletion and soft-deleted locally — except for a row *this same
+run's push phase* just confirmed with a 2xx (see Finding 2 below for why that
+exclusion exists).
+
+### `reconcileFromServer`'s "ships untested" gap: closed, not carried forward
+
+A1 shipped `reconcileFromServer` with zero test coverage — mocking Room's
+`withTransaction` suspend extension from Mockito was a documented blocker. Rather
+than retry that blocker or add Robolectric for an in-memory Room instance (the
+two options the task brief offered), the actual conflict-check that was inline
+inside the `withTransaction` block (`existing.dirty || existing.deletedAt !=
+null` → skip) was extracted into a new pure function, `ReconcileResolver`, with
+its own JVM tests. `ChannelRepository`/`TransactionRepository.reconcileFromServer`
+now delegate to it instead of inlining the check — same behavior, now testable
+without touching Room at all. The DAO-glue that remains (look up by `serverId`,
+branch on the decision) is the same trust tier `OutboxCoalescer`'s call sites
+already have.
+
+### `userId = ""` gap: fixed
+
+`ChannelRepository.createChannel` now reads `AccountManager.getAccount().id` via
+a new `currentUserId()` helper (swallowing to `""` on failure, mirroring
+`TransactionViewModel.currentUsername()`'s existing pattern) instead of hardcoding
+an empty string.
+
+### Findings fixed (`offline-sync-reviewer` gate, before commit)
+
+- **(confidence 88) A `SYNCING` outbox row orphaned by process death never synced
+  again.** The drain only ever read `getByStatus(PENDING)`; nothing reaped a stale
+  `SYNCING` row left behind by a run that died between claiming it and resolving
+  it (app killed mid-push). That row — and the entity behind it — would never be
+  retried again, and if the POST had actually reached the server before the
+  kill, this was split-brain: server has the row, client never learns its
+  `serverId` or clears `dirty`. Fixed: `reclaimStaleSyncingRows()` resets any
+  `SYNCING` row back to `PENDING` at the start of each push phase — safe because
+  a fresh `SyncWorker` instance is constructed per run, so anything still
+  `SYNCING` when a new run starts can only be a leftover from a run that never
+  finished resolving it.
+- **(confidence 70) A transaction blocked on a permanently-failed (4xx) channel
+  was stuck `PENDING` forever with no visible signal.** The skip-until-channel-
+  synced branch didn't distinguish "channel not synced yet" from "channel synced
+  and will never sync" (4xx is terminal, never auto-retried). Fixed:
+  `pushTransactionEntry` now checks the blocking channel's `syncStatus`— if
+  `FAILED`, the transaction is marked `FAILED` too (with an error naming the
+  blocking channel) instead of being silently re-skipped every run.
+- **(confidence 65) Same-run push-then-pull could soft-delete a row this run
+  just synced, permanently.** `doWork()` pushes then pulls in one run. If a
+  freshly-created channel's push succeeded (2xx, `serverId` assigned) but the
+  same run's `getChannels()` call raced a replication-lagged backend that
+  hadn't yet observed it, the row would look server-deleted (`serverId` not in
+  the pull) and get soft-deleted locally — and since `ReconcileResolver` refuses
+  to touch a tombstoned row, a later pull that *did* see the row could never
+  un-delete it. The backend's actual replication/consistency behavior is
+  unverified (see "Backend-blocker status" above), so this couldn't be ruled out
+  by checking the backend directly. Fixed: `SyncWorker` now tracks
+  `justSyncedChannelServerIds`/`justSyncedTransactionServerIds` (populated
+  whenever this run's own push phase clears `dirty` on a row) and excludes them
+  from the same run's server-side-deletion check, regardless of what the
+  backend's actual consistency behavior turns out to be.
+- **(confidence 52) The `SYNCING`-claim write could drop a concurrently-coalesced
+  operation.** The original loop captured a snapshot of pending outbox rows once,
+  then claimed each one by writing back that same stale snapshot. A repository
+  write that coalesced the row (e.g. UPDATE→DELETE) in the window between the
+  snapshot and the claim would be overwritten by the claim, silently reverting
+  the row to the stale pre-coalesce operation — concretely, a user's offline
+  delete of an already-synced channel could be lost, leaving the channel alive
+  on the server forever. Fixed: the claim step now re-reads the *current* outbox
+  row via `outboxDao.findFor(...)` immediately before claiming it (and no-ops if
+  it's no longer `PENDING`), so the operation actually pushed is always the
+  latest coalesced one.
+
+### Deliberate scope boundaries (not gaps rediscovered — named on purpose)
+
+- No update/delete endpoint exists for transactions (`ApiService` has none) —
+  the worker only ever pushes transaction CREATEs; any other transaction outbox
+  operation (unreachable from any current repository call site) fails loudly
+  rather than crashing.
+- SMS dedup-key generation (`smsSourceKey`) still isn't wired into
+  `SMSMessageProcessor` — Slice A3.
+- `ChannelManager.isSmsAllowedForSender`'s auto-create path still calls
+  `ApiClient.api.createChannel()` directly (network-first, fails offline) —
+  rewiring it local-first is Slice A3's "SMS rewire," not this slice.
+- The `Tombstone` entity/table from Step 1's schema remains completely unused —
+  server-side deletions are applied by soft-deleting the Channel/TransactionEntity
+  row directly. Confirmed via grep that nothing writes to `tombstoneDao()`
+  anywhere. Flagging for whoever picks this up next to either wire it to a real
+  purpose or remove it — not fixed here, budget-conscious per this slice's own
+  scope.
+- Two different WorkManager unique-work names (`pesamind_sync_periodic`,
+  `pesamind_sync_one_shot`) can in principle run `SyncWorker.doWork()`
+  concurrently (WorkManager's `KEEP` policy only dedupes *within* one unique
+  name). The push/pull logic doesn't wrap outbox claims in a database-level
+  transaction, so two concurrent runs racing the same outbox row is a real,
+  un-fixed edge case — not caught by this slice's review pass, noted here as a
+  follow-up rather than silently left undocumented.
+
+### Gates run
+`offline-sync-reviewer` reviewed the diff (per the task brief's own instruction —
+one gate for this slice, not three, since the diff doesn't touch a ViewModel or
+Composable). All four findings above were fixed before commit.
+`ktlintFormat`/`ktlintCheck`/`test`/`assembleDebug` all green, including after the
+fixes.
+
+## Airplane-mode acceptance test (target state for Channel/Transaction — steps 1-2 and 6-7 are exercisable now that A2 has landed; steps 3-4 need Slice A3 (SMS, profile) and step 9's "no duplicates" check needs the backend-blocker confirmation noted under Slice A2 above, not yet attempted live)
 
 1. Enable airplane mode.
 2. Create a transaction manually — appears instantly in the list.

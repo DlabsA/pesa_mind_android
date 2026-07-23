@@ -2,7 +2,10 @@ package cc.dlabs.pesamind.core.data
 
 import android.content.Context
 import androidx.room.withTransaction
+import cc.dlabs.pesamind.core.database.ExistingRowSnapshot
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
+import cc.dlabs.pesamind.core.database.ReconcileDecision
+import cc.dlabs.pesamind.core.database.ReconcileResolver
 import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
@@ -116,46 +119,48 @@ object TransactionRepository {
     ): TransactionDetails =
         database.withTransaction {
             val now = System.currentTimeMillis()
+            // findByServerId deliberately includes soft-deleted rows so ReconcileResolver can
+            // see (and refuse to touch) a tombstone instead of missing it and inserting a live
+            // duplicate for the same serverId — see ReconcileResolver's doc comment.
             val existing = transactionDao.findByServerId(details.id)
-            if (existing != null) {
-                // Never overwrite an unsynced local edit, and never resurrect a row the user
-                // soft-deleted locally — findByServerId deliberately includes soft-deleted rows
-                // so this branch can see (and refuse to touch) a tombstone instead of missing
-                // it and inserting a live duplicate for the same serverId.
-                if (existing.dirty || existing.deletedAt != null) return@withTransaction existing.toDetails()
-                val updated =
-                    existing.copy(
-                        channelId = resolvedChannelId ?: existing.channelId,
-                        channelDetailsName = details.channelDetailsName,
-                        amount = details.amount,
-                        type = details.type,
-                        note = details.note,
-                        username = details.username,
-                        syncStatus = SyncStatus.SYNCED,
-                        updatedAt = now,
-                    )
-                transactionDao.update(updated)
-                updated.toDetails()
-            } else {
-                val inserted =
-                    TransactionEntity(
-                        id = UUID.randomUUID().toString(),
-                        serverId = details.id,
-                        channelId = resolvedChannelId,
-                        channelDetailsName = details.channelDetailsName,
-                        amount = details.amount,
-                        type = details.type,
-                        note = details.note,
-                        username = details.username,
-                        smsSourceKey = null,
-                        syncStatus = SyncStatus.SYNCED,
-                        dirty = false,
-                        createdAt = now,
-                        updatedAt = now,
-                        deletedAt = null,
-                    )
-                transactionDao.upsert(inserted)
-                inserted.toDetails()
+            when (ReconcileResolver.resolve(existing?.let { ExistingRowSnapshot(it.dirty, it.deletedAt) })) {
+                ReconcileDecision.SkipDirtyOrDeleted -> existing!!.toDetails()
+                ReconcileDecision.UpdateExisting -> {
+                    val updated =
+                        existing!!.copy(
+                            channelId = resolvedChannelId ?: existing.channelId,
+                            channelDetailsName = details.channelDetailsName,
+                            amount = details.amount,
+                            type = details.type,
+                            note = details.note,
+                            username = details.username,
+                            syncStatus = SyncStatus.SYNCED,
+                            updatedAt = now,
+                        )
+                    transactionDao.update(updated)
+                    updated.toDetails()
+                }
+                ReconcileDecision.InsertNew -> {
+                    val inserted =
+                        TransactionEntity(
+                            id = UUID.randomUUID().toString(),
+                            serverId = details.id,
+                            channelId = resolvedChannelId,
+                            channelDetailsName = details.channelDetailsName,
+                            amount = details.amount,
+                            type = details.type,
+                            note = details.note,
+                            username = details.username,
+                            smsSourceKey = null,
+                            syncStatus = SyncStatus.SYNCED,
+                            dirty = false,
+                            createdAt = now,
+                            updatedAt = now,
+                            deletedAt = null,
+                        )
+                    transactionDao.upsert(inserted)
+                    inserted.toDetails()
+                }
             }
         }
 }

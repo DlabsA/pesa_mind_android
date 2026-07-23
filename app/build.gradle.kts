@@ -193,6 +193,11 @@ dependencies {
     kapt("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
+    // WorkManager + Hilt integration (offline-first sync worker — ADR-0004 Slice A2)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
+
     // Testing
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
