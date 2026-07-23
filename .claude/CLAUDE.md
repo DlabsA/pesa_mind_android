@@ -71,6 +71,27 @@ Before writing any new composable, util function, or manager method:
 - If you can't measure a budget (no profiler/device in this session), say so explicitly
   instead of claiming it's met.
 
+## Testing
+
+- **Never use `kotlinx.coroutines.test.runTest` to construct a ViewModel/manager whose
+  `init` path (or any method under test) can fall through to a real `ApiClient` call,
+  unless that call is mocked/faked.** `runTest` auto-detects a `Dispatchers.Main` backed
+  by a `TestDispatcher` (set via `Dispatchers.setMain(...)`) and drains its scheduler as
+  part of finishing — which runs any coroutine queued on `viewModelScope` (e.g. an
+  `init { load() }` block) to completion, firing a real HTTP request against the
+  production API from a "unit" test. Confirmed the hard way in
+  `TransactionViewModelValidationTest.kt` (`ADR-0004` hotfix, 2026-07-22): an earlier
+  version of that file used `runTest` and reliably hit `https://api.dlabs.cc/api/v1/`
+  from every test run.
+  - Use plain `kotlinx.coroutines.runBlocking` instead — it has its own event loop and
+    never touches a separately-constructed `TestDispatcher`'s scheduler, so a queued
+    `viewModelScope` coroutine is left permanently pending (never executed) rather than
+    drained.
+  - This applies to every ViewModel/manager in this codebase today, since none of them
+    have an injectable `ApiService` seam yet (`ApiClient.api` is an eagerly-built `val`
+    on a plain `object`, not mockable without a production-code change) — treat this as
+    a standing landmine for any new JVM test, not a one-off fix.
+
 ## Folder / naming conventions
 
 - Screens: `<Feature>Screen.kt`, PascalCase, no exceptions (e.g. not `Setmonthlybudgetscreen.kt`).

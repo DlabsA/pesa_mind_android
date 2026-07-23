@@ -4,10 +4,9 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
-import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
-import cc.dlabs.pesamind.core.network.models.TransactionRequest
-import cc.dlabs.pesamind.core.storage.TransactionManager
+import cc.dlabs.pesamind.core.storage.AccountManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,15 +30,30 @@ sealed class TransactionCreationResult {
     data class Failure(val message: String) : TransactionCreationResult()
 }
 
+/**
+ * Room-backed (ADR-0004 Slice A1) — reads/writes go through [TransactionRepository], never
+ * `ApiClient`/`TransactionManager` directly. `TransactionManager`'s DataStore cache was never
+ * actually live in production (see ADR-0004's Step 0 verification: its `init()` is never
+ * called from `PesaMindApp.onCreate()`), so this isn't just a rewire — it's the first time
+ * this cache has ever functioned. [state]'s `transactions` list is kept live by the
+ * [TransactionRepository.observeTransactions] collector below; [performCreateTransaction]
+ * doesn't need to splice its own result in by hand.
+ */
 class TransactionViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(TransactionState(isLoading = true))
     val state: StateFlow<TransactionState> = _state.asStateFlow()
 
     init {
-        loadTransactions()
+        viewModelScope.launch {
+            try {
+                TransactionRepository.observeTransactions().collect { transactions ->
+                    _state.value = _state.value.copy(transactions = transactions, isLoading = false)
+                }
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoading = false, error = "Failed to load transactions: ${e.message}")
+            }
+        }
     }
-
-    fun refresh() = loadTransactions()
 
     override fun onStateEvent(event: StateEvent) {
         when (event) {
@@ -55,49 +69,18 @@ class TransactionViewModel : UnifiedViewModel() {
         }
     }
 
-    /**
-     * Load transactions: first from local cache, then sync with backend
-     */
+    /** One-shot re-read, kept for existing pull-to-refresh call sites. Local data is already
+     * live via [TransactionRepository.observeTransactions] — this is a Room read, not a
+     * network call; there is no sync worker to trigger yet (ADR-0004 Slice A2). */
     fun loadTransactions() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val cachedTransactions = TransactionManager.getTransactions()
-                if (cachedTransactions.isNotEmpty()) {
-                    _state.value = _state.value.copy(transactions = cachedTransactions)
-
-                    // Only sync automatically when cache is older than policy window.
-                    if (!TransactionManager.isCacheStale()) {
-                        _state.value = _state.value.copy(isLoading = false, error = null)
-                        return@launch
-                    }
-                }
-                val response = ApiClient.api.getTransactions()
-                if (response.isSuccessful) {
-                    val transactions = response.body().orEmpty()
-                    TransactionManager.saveTransactions(transactions)
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            transactions = transactions,
-                            error = null,
-                        )
-                } else {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            error = "Failed to load transactions (${response.code()})",
-                        )
-                }
-            } catch (e: Exception) {
-                _state.value =
-                    _state.value.copy(
-                        isLoading = false,
-                        error = "Error loading transactions: ${e.message}",
-                    )
-            }
+            val transactions = TransactionRepository.getAllTransactions()
+            _state.value = _state.value.copy(isLoading = false, transactions = transactions)
         }
     }
+
+    fun refresh() = loadTransactions()
 
     fun createTransaction(
         channelID: String,
@@ -166,39 +149,36 @@ class TransactionViewModel : UnifiedViewModel() {
                     "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}",
                 )
         return try {
-            val response =
-                ApiClient.api.createTransaction(
-                    TransactionRequest(
-                        channelId = channelID,
-                        amount = amount,
-                        type = normalizedType,
-                        note = note.trim(),
-                    ),
+            val created =
+                TransactionRepository.createTransaction(
+                    channelId = channelID,
+                    amount = amount,
+                    type = normalizedType,
+                    note = note.trim(),
+                    username = currentUsername(),
                 )
-            if (response.isSuccessful) {
-                val created = response.body()
-                if (created != null) {
-                    _state.value = _state.value.copy(transactions = _state.value.transactions + created)
-                }
-                // 🔥 Publish event so Dashboard and Analytics refresh automatically
-                Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
-                publishEvent(
-                    StateEvent.TransactionCreated(
-                        transactionId = created?.id ?: "",
-                        amount = amount,
-                        channelId = channelID,
-                    ),
-                )
-                TransactionCreationResult.Success(created)
-            } else {
-                Log.e("TransactionViewModel", "❌ Failed to create transaction: ${response.code()}")
-                TransactionCreationResult.Failure("Failed to create transaction (${response.code()})")
-            }
+            // 🔥 Publish event so Dashboard and Analytics refresh automatically
+            Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
+            publishEvent(
+                StateEvent.TransactionCreated(
+                    transactionId = created.id,
+                    amount = amount,
+                    channelId = channelID,
+                ),
+            )
+            TransactionCreationResult.Success(created)
         } catch (e: Exception) {
-            Log.e("TransactionViewModel", "❌ Exception during transaction creation", e)
-            TransactionCreationResult.Failure("Cannot reach server: ${e.message ?: "Unknown error"}")
+            Log.e("TransactionViewModel", "❌ Exception saving transaction locally", e)
+            TransactionCreationResult.Failure("Could not save transaction: ${e.message ?: "Unknown error"}")
         }
     }
+
+    private suspend fun currentUsername(): String =
+        try {
+            AccountManager.getAccount().username
+        } catch (e: Exception) {
+            ""
+        }
 
     /**
      * Clear error and message states (called when user navigates away)

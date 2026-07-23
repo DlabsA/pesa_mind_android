@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
@@ -17,6 +18,17 @@ import kotlinx.coroutines.flow.first
 
 private val Context.channelDataStore by preferencesDataStore("pesamind_channels")
 
+/**
+ * Vestigial as of ADR-0004 Slice A1: `ChannelViewModel` now reads/writes exclusively through
+ * [ChannelRepository] (Room), so every DataStore-blob method below is dead from that side —
+ * left `@Deprecated` rather than deleted pending Slice C's cleanup pass, per
+ * `.claude/CLAUDE.md`'s "confirm with the user before deleting" rule. [isSmsAllowedForSender]
+ * is the one method still genuinely called (from SMS ingestion, `SMSMessageProcessor` — Slice
+ * A3's territory, not touched by A1 otherwise); its channel lookup/persistence were redirected
+ * to [ChannelRepository] here so it doesn't see an increasingly stale channel list now that
+ * nothing writes to this object's DataStore blob anymore. Its own network auto-create call is
+ * unchanged — full "auto-create via Room, zero network" is Slice A3's job, not this fix's.
+ */
 object ChannelManager {
     private val CHANNELS_KEY = stringPreferencesKey("cached_channels")
     private val SMS_NOTIFICATION_FLAGS = stringPreferencesKey("sms_notification_flags")
@@ -34,6 +46,7 @@ object ChannelManager {
      * Save channels locally with SMS notification flags
      * For non-CASH channels, default SMS notifications to enabled
      */
+    @Deprecated("Dead since ADR-0004 Slice A1 — ChannelViewModel writes through ChannelRepository (Room) now.")
     suspend fun saveChannels(channels: List<ChannelDetails>) {
         if (!isInitialized()) return
         appContext.channelDataStore.edit { prefs ->
@@ -59,6 +72,7 @@ object ChannelManager {
     /**
      * Get all cached channels with their SMS notification settings
      */
+    @Deprecated("Dead since ADR-0004 Slice A1 — reads go through ChannelRepository (Room) now.")
     suspend fun getChannels(): List<ChannelDetails> {
         if (!isInitialized()) return emptyList()
         try {
@@ -95,6 +109,7 @@ object ChannelManager {
     /**
      * Update SMS notification flag for a specific channel (non-CASH only)
      */
+    @Deprecated("Dead since ADR-0004 Slice A1 — ChannelViewModel.toggleSmsNotification writes through ChannelRepository (Room) now.")
     suspend fun updateChannelSmsNotification(
         channelId: String,
         enabled: Boolean,
@@ -120,6 +135,7 @@ object ChannelManager {
     /**
      * Get SMS notification flag for a specific channel
      */
+    @Deprecated("Dead since ADR-0004 Slice A1 — ChannelEntity.smsNotificationEnabled (Room) is the source of truth now.")
     suspend fun isSmsNotificationEnabled(channelId: String): Boolean {
         if (!isInitialized()) return false
         try {
@@ -160,12 +176,10 @@ object ChannelManager {
                 else -> null // Return null if no match
             }
 
-        // Get existing channels (cached)
-        val channels = getChannels()
-        val matchingChannel =
-            channels.find {
-                it.channelDesc == channelTypeMatched
-            }
+        // Room is the channel source of truth now (ADR-0004 Slice A1) — the old
+        // getChannels()/saveChannels() DataStore round-trip here would see an increasingly
+        // stale list, since ChannelViewModel no longer writes through it at all.
+        val matchingChannel = channelTypeMatched?.let { ChannelRepository.findByChannelDesc(it) }
 
         // If found, return it
         if (matchingChannel != null) {
@@ -179,32 +193,31 @@ object ChannelManager {
             return null
         }
 
-        val newChannel =
-            try {
-                val request =
-                    CreateChannelRequest(
-                        name = "Auto‑created $channelDesc",
-                        description = receivingSimNumber,
-                        channelType = channelType,
-                        channelDesc = channelDesc,
-                        status = true,
-                    )
-                val response = ApiClient.api.createChannel(request)
-                if (response.isSuccessful) {
-                    response.body()?.also {
-                        // Refresh local cache
-                        val updatedChannels = channels + it
-                        saveChannels(updatedChannels)
-                        return ChannelInfo(it, true)
-                    }
-                } else {
+        return try {
+            val request =
+                CreateChannelRequest(
+                    name = "Auto‑created $channelDesc",
+                    description = receivingSimNumber,
+                    channelType = channelType,
+                    channelDesc = channelDesc,
+                    status = true,
+                )
+            val response = ApiClient.api.createChannel(request)
+            val createdBody = response.body()
+            if (response.isSuccessful && createdBody != null) {
+                // Reconcile into Room so this channel is visible to future Room-based
+                // lookups (both this method's and ChannelViewModel's).
+                ChannelInfo(ChannelRepository.reconcileFromServer(createdBody), true)
+            } else {
+                if (!response.isSuccessful) {
                     Log.e("ChannelManager", "Error creating channel for sender $senderID: ${response.errorBody()?.string()}")
                 }
-            } catch (e: Exception) {
-                Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)
+                null
             }
-
-        return newChannel?.let { ChannelInfo(it as ChannelDetails, true) }
+        } catch (e: Exception) {
+            Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)
+            null
+        }
     }
 
     private fun determineChannelTypeAndDesc(senderID: String): Pair<String?, String?> {
@@ -221,6 +234,7 @@ object ChannelManager {
     /**
      * Get last sync time
      */
+    @Deprecated("Dead since ADR-0004 Slice A1 — nothing writes LAST_SYNC anymore.")
     suspend fun getLastSyncTime(): Long {
         if (!isInitialized()) return 0
         try {
@@ -231,6 +245,8 @@ object ChannelManager {
         }
     }
 
+    @Deprecated("Dead since ADR-0004 Slice A1 — Room has no staleness concept; it's always current.")
+    @Suppress("DEPRECATION")
     suspend fun isCacheStale(): Boolean {
         return SyncPolicy.isStale(getLastSyncTime())
     }
@@ -238,6 +254,7 @@ object ChannelManager {
     /**
      * Clear all cached channels
      */
+    @Deprecated("Dead since ADR-0004 Slice A1 — nothing reads this DataStore blob anymore.")
     suspend fun clearChannels() {
         if (!isInitialized()) return
         appContext.channelDataStore.edit {

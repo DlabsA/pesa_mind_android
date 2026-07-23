@@ -1,3 +1,7 @@
+@file:Suppress("DEPRECATION") // TransactionManager is dead everywhere else post-Slice-A1, but
+// this one-time historical import still legitimately needs to read whatever it last held
+// before Room existed.
+
 package cc.dlabs.pesamind.core.database.migration
 
 import android.content.Context

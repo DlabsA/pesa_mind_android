@@ -16,6 +16,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
+import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
@@ -42,6 +44,10 @@ class PesaMindApp : Application() {
         ChannelManager.init(this)
         NotificationStorage.init(this)
         ThemeManager.init(this)
+        // Room-backed repositories (ADR-0004 Slice A1) — ChannelRepository/TransactionRepository
+        // are the source of truth ChannelViewModel/TransactionViewModel read and write through.
+        ChannelRepository.init(this)
+        TransactionRepository.init(this)
 
         // One-time prefs-blob -> Room import (idempotent, safe to fire on every launch).
         // See docs/decisions/ADR-0004-offline-first.md. Caught, not propagated: this runs

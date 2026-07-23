@@ -1,11 +1,10 @@
 # ADR-0004: Offline-first — Room-authoritative storage, durable sync, SMS ingestion & profile offline
 
-**Status:** In progress. Step 1 (schema + migration) landed, but was inert — Room was
-populated once by the migrator and never read again. This session: (1) shipped a
-standalone hotfix so SMS ingestion stops lying about success while Room is still
-inert, (2) re-sequenced the remaining roadmap from six large infrastructure-first
-steps into vertical slices that each ship a working offline capability end-to-end.
-See "Roadmap revision" and "Hotfix" below.
+**Status:** In progress. Step 1 (schema + migration), the hotfix, and Slice A1
+(Channel/Transaction repositories) have landed. Channels and transactions now
+read/write through Room for the first time; nothing pushes to the server yet
+(Slice A2's sync worker — writes queue in the outbox and stay there). See
+"Roadmap revision", "Hotfix", and "Slice A1" below.
 **Date:** 2026-07-22
 
 ## Context
@@ -375,6 +374,157 @@ wrote the message into `_state`, which would have silently broken
 `AddTransactionScreen`'s validation-error UI (blank note, non-positive amount,
 etc. would fail with no visible feedback). Fixed by setting `_state` on that
 branch before returning.
+
+## Slice A1: Room-backed Channel/Transaction repositories
+
+**Not shippable alone.** After A1, `createChannel`/`updateChannel`/`deleteChannel`/
+`setSmsNotificationEnabled`/`createTransaction` all write to Room + a coalesced
+outbox entry in one transaction, and nothing drains the outbox — no network push
+exists until Slice A2. Fine on a branch; the app is fully usable offline (data
+persists and the UI is reactive), but zero of it reaches the server yet.
+
+### New files
+- `core/database/OutboxCoalescer.kt` — pure decision function (`CoalesceDecision`:
+  `WriteOutbox(operation)`/`HardDeleteNoOutbox`/`LeaveInFlight`) implementing the
+  four coalescing rules (CREATE+UPDATE→CREATE, CREATE+DELETE→hard-delete+no-outbox,
+  UPDATE+DELETE→DELETE, any-op-while-SYNCING→leave untouched). Zero Room/Android
+  dependency, 13 JVM tests (`OutboxCoalescerTest`) written and passing *before* any
+  repository call site used it, per the task's own ordering.
+- `core/data/ChannelRepository.kt` / `core/data/TransactionRepository.kt` — plain
+  singleton `object`s + `init(context)`, mirroring `ChannelManager`/`TokenManager`'s
+  existing pattern rather than Hilt constructor injection, because
+  `ChannelViewModel`/`TransactionViewModel` are plain `ViewModel()`s reached via
+  `viewModel()` in Compose, not `hiltViewModel()` — converting every call site to
+  Hilt-injected ViewModels was judged a wider change than this slice's scope. Room
+  access itself still goes through the Hilt-provided `PesaMindDatabase` via the
+  existing `DatabaseEntryPoint`, the same pattern `PrefsToRoomMigrator` established
+  in Step 1. `android-reviewer` confirmed this is consistent with root CLAUDE.md's
+  "follow the existing pattern in a given file rather than introducing DI
+  inconsistently," not a violation.
+- Repository-layer justification (`.claude/CLAUDE.md`: no repository for a single
+  feature in isolation, only for real cross-feature reuse or multi-source merging):
+  `android-reviewer` reviewed this specifically and confirmed it clears the bar —
+  `ChannelRepository` has two genuine consumers (`ChannelViewModel` and the SMS
+  auto-creation lookup in `ChannelManager.isSmsAllowedForSender`, both live code in
+  this commit, not aspirational), and `reconcileFromServer`'s dirty/soft-delete
+  conflict logic is real merge substance, not CRUD passthrough. Caveat honestly
+  noted: neither repository imports `ApiClient` yet — the "network + cache merge"
+  the rule names is still split across `ChannelManager`/`ApiClient` today and lands
+  fully in Slice A2. The outbox + conflict-policy logic already present is enough
+  to justify the layer now, not the complete merge.
+
+### Deviations from the original plan (each surfaced by a review agent, all fixed)
+
+- **Transaction list stays `Flow<List<TransactionDetails>>`, not Paging 3**, despite
+  the ADR's original "transaction list uses the existing `PagingSource`" line.
+  `TransactionListScreen` computes income/expense/saving totals and does
+  client-side search/filter over the *entire* list, not just loaded pages — a real
+  Paging 3 migration would need a second full-list flow just for totals anyway,
+  which is a materially bigger, riskier screen rewrite than "channels/transactions
+  read/write locally." Asked the user directly rather than guessing; confirmed to
+  defer Paging 3 until the list is actually large enough to need it.
+- **Filtered channel views were getting silently clobbered by the live Room
+  collector** — `compose-perf` and `android-reviewer` independently caught this.
+  `ChannelViewModel`'s `init` subscribes to `ChannelRepository.observeChannels()`
+  for the ViewModel's whole lifetime; a one-shot `loadChannelsByType`/
+  `loadChannelsByStatus` write into `_state.channels` was getting overwritten back
+  to the full list the instant *anything* wrote to the channels table — which
+  happens concurrently and often, since SMS auto-creation
+  (`ChannelManager.isSmsAllowedForSender` → `ChannelRepository.reconcileFromServer`)
+  writes to that same table from a background service, entirely independent of
+  what's on screen. Fixed by tracking the active filter
+  (`activeTypeFilter`/`activeStatusFilter`) and having the collector re-apply it on
+  every emission, instead of a one-shot query racing an always-on collector.
+- **`reconcileFromServer` could resurrect a soft-deleted row as a duplicate** —
+  `offline-sync-reviewer` caught that `findByServerId`'s query filtered
+  `deletedAt IS NULL`, so a channel/transaction the user deleted locally (but whose
+  DELETE hasn't reached the server yet, since A2 doesn't exist) was invisible to
+  the lookup — a subsequent `reconcileFromServer` call (reachable today via
+  `isSmsAllowedForSender`'s auto-create path) would insert a fresh live row for the
+  same `serverId`, resurrecting what the user deleted. Fixed by removing the
+  `deletedAt IS NULL` filter from `findByServerId` (its only consumer needs to see
+  tombstones) and changing the "leave untouched" condition in both repositories'
+  `reconcileFromServer` from `existing.dirty` to `existing.dirty ||
+  existing.deletedAt != null`.
+- **SMS-created transactions would land with `smsSourceKey = null`, making the dedup
+  unique index inert** — `offline-sync-reviewer` noted that A1 is the commit that
+  actually routes `SMSMessageProcessor`'s writes into Room (the hotfix already
+  wired it to `createTransactionAwaited`), so the duplication window that Slice
+  A3's dedup key generation is meant to close opens now, not later. Added a
+  dedup-safety check in `TransactionRepository.createTransaction` — when a caller
+  supplies a non-null `smsSourceKey`, an existing row with that key is returned
+  as-is (no-op) instead of inserting a duplicate — but deliberately did NOT wire
+  `SMSMessageProcessor` to generate and pass a real key in this commit; that's
+  still Slice A3's job per the original scoping, and doing it here would be scope
+  creep into A3's commit. **Accepted, time-boxed risk:** between A1 landing and A3
+  landing, an SMS reprocessed for any reason (redelivery, service restart) can
+  still create a duplicate transaction, because nothing calls
+  `createTransaction`/`createTransactionAwaited` with a real key yet. Closes as
+  soon as A3 ships.
+- **Live collectors had no error handling** — `android-reviewer` noted that if
+  `ChannelRepository.observeChannels()`/`TransactionRepository.observeTransactions()`
+  ever threw mid-collection, the collector coroutine would die silently and the
+  screen would freeze on stale data with no visible error — worse than the old
+  network code's UX, which at least surfaced a failure. Wrapped both `init`
+  collectors in try/catch, setting `state.error` on failure.
+- **`getAllChannels()`/`getAllTransactions()` were `observeXxx().first()`** —
+  `android-reviewer` nit: this spins up and immediately cancels a fresh Flow
+  subscription just for one snapshot. Replaced with dedicated one-shot DAO queries
+  (`ChannelDao.getAllActive()`/`TransactionDao.getAllActive()`).
+
+### Known, accepted gaps (tracked, not fixed here)
+
+- **`ChannelRepository`/`TransactionRepository.reconcileFromServer` ship untested**
+  — `android-reviewer` flagged this (`TransactionRepository`'s is also uncalled in
+  A1, written now per this task's own instruction so Slice A2's full pull doesn't
+  have to retrofit the conflict-policy primitive later). Both repositories'
+  `database` field was changed from `private` to `internal lateinit var`
+  specifically so a JVM test could inject a mocked `PesaMindDatabase`/DAO (no
+  device/emulator was available in this session to run a real Room
+  in-memory-database `androidTest`), and a `sync-test-author` task was dispatched
+  to write mock-based JVM tests for the conflict policy (dirty-row-preserved,
+  soft-deleted-row-not-resurrected, clean-row-updated, new-row-inserted, plus the
+  SMS-dedup-safety no-op). That task did not complete in this session — mocking
+  Room's `withTransaction` suspend extension from a plain Mockito test is a real
+  obstacle, and rather than block Slice A1 on it indefinitely, shipping A1 with
+  this gap explicitly open rather than silently claiming coverage that doesn't
+  exist. The `internal` visibility seam stays in place for whoever picks this up
+  next (either resolve the `withTransaction` mocking, or add Robolectric so a real
+  in-memory Room database can be used instead of mocks — likely the more robust
+  fix, and something Slice A2's sync worker will need anyway for its own DAO-level
+  tests).
+- **Any op arriving while the outbox row is `SYNCING` (`LeaveInFlight`) leaves the
+  entity soft-deleted/edited but the outbox row untouched** — `offline-sync-reviewer`
+  confirmed this is correctly wired (not a bug), but flagged it as the single
+  load-bearing assumption Slice A2 must honor: A2's sync worker MUST re-check
+  `dirty` before clearing it on a successful push, or a newer edit made mid-flight
+  is silently lost instead of triggering a follow-up push. `OutboxCoalescer`'s own
+  doc comment states this explicitly. Nothing to fix in A1; a landmine documented
+  for A2's reviewer.
+- **`TransactionViewModel.onStateEvent(UserLoggedOut)` clears `transactions` in
+  state, but the live collector will repopulate it from Room on the next write** —
+  `compose-perf` flagged this as the same "live collector fights a one-shot write"
+  defect class as the channel-filter bug, but for logout rather than filtering.
+  Not fixed here: whether logout should wipe local Room data at all is a broader
+  auth-hardening question (adjacent to the already-flagged `TokenManager`
+  plaintext-secrets gap), out of scope for a repository-wiring slice.
+- **`ChannelRepository.createChannel`'s `userId = ""` and
+  `TransactionViewModel.currentUsername()`'s exception-swallowing to `""`** —
+  `android-reviewer` flagged that locally-created rows carry no real owner
+  identity, which A2's outbox push may need to backfill from the auth session
+  rather than assume is already correct. Noted as a TODO tied to A2, not fixed
+  here.
+- **`TransactionViewModel` remains under `core/utils/`**, violating the target
+  contract's folder rule (no feature-specific ViewModels under `core/`) — flagged
+  again by `android-reviewer`, pre-existing drift this slice didn't introduce.
+  Relocating it touches enough call sites (home, transactions list, SMS) that it
+  doesn't belong in this slice; tracked for Slice C's cleanup pass alongside the
+  same finding already recorded in the Hotfix section above.
+
+### Gates run
+`offline-sync-reviewer`, `android-reviewer`, and `compose-perf` all reviewed the
+diff; every actionable finding above was fixed before commit. `ktlintFormat`/
+`ktlintCheck`/`test`/`assembleDebug` all green.
 
 ## Airplane-mode acceptance test (target state — full test only meaningful once Steps 2-4 land; not yet exercisable from Step 1 alone)
 

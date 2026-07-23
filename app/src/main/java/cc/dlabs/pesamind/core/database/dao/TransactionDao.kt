@@ -26,6 +26,16 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE smsSourceKey = :smsSourceKey LIMIT 1")
     suspend fun findBySmsSourceKey(smsSourceKey: String): TransactionEntity?
 
+    /** Deliberately includes soft-deleted rows (no `deletedAt IS NULL` filter) — pull
+     * reconciliation ([cc.dlabs.pesamind.core.data.TransactionRepository.reconcileFromServer])
+     * must see a tombstoned row here to avoid resurrecting it as a duplicate live row. */
+    @Query("SELECT * FROM transactions WHERE serverId = :serverId LIMIT 1")
+    suspend fun findByServerId(serverId: String): TransactionEntity?
+
+    /** One-shot full-list read for `TransactionViewModel.loadTransactions()`. */
+    @Query("SELECT * FROM transactions WHERE deletedAt IS NULL ORDER BY createdAt DESC")
+    suspend fun getAllActive(): List<TransactionEntity>
+
     /** Every row known locally, including soft-deleted — the full-pull diff (Step 3) needs this. */
     @Query("SELECT * FROM transactions")
     suspend fun getAllIncludingDeleted(): List<TransactionEntity>

@@ -34,6 +34,29 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE syncStatus = :status")
     suspend fun getByStatus(status: SyncStatus): List<ChannelEntity>
 
+    /** Channel-type filter for `loadChannelsByType` — was network-only before Slice A1. */
+    @Query("SELECT * FROM channels WHERE channelType = :type AND deletedAt IS NULL ORDER BY name ASC")
+    suspend fun getByChannelType(type: String): List<ChannelEntity>
+
+    /** Active/inactive filter for `loadChannelsByStatus` — was network-only before Slice A1.
+     * Named to avoid confusion with [getByStatus], which filters on [SyncStatus]. */
+    @Query("SELECT * FROM channels WHERE status = :active AND deletedAt IS NULL ORDER BY name ASC")
+    suspend fun getByActiveStatus(active: Boolean): List<ChannelEntity>
+
+    /** Used by ChannelManager.isSmsAllowedForSender's channel-desc lookup (see ChannelRepository). */
+    @Query("SELECT * FROM channels WHERE channelDesc = :channelDesc AND deletedAt IS NULL LIMIT 1")
+    suspend fun findByChannelDesc(channelDesc: String): ChannelEntity?
+
+    /** Deliberately includes soft-deleted rows (no `deletedAt IS NULL` filter) — pull
+     * reconciliation ([cc.dlabs.pesamind.core.data.ChannelRepository.reconcileFromServer]) must
+     * see a tombstoned row here to avoid resurrecting it as a duplicate live row. */
+    @Query("SELECT * FROM channels WHERE serverId = :serverId LIMIT 1")
+    suspend fun findByServerId(serverId: String): ChannelEntity?
+
+    /** One-shot full-list read for `ChannelViewModel.loadChannels()`. */
+    @Query("SELECT * FROM channels WHERE deletedAt IS NULL ORDER BY name ASC")
+    suspend fun getAllActive(): List<ChannelEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ChannelEntity)
 
