@@ -1,30 +1,33 @@
 # ADR-0004: Offline-first — Room-authoritative storage, durable sync, SMS ingestion & profile offline
 
-**Status:** In progress. Step 1 (schema + migration), the hotfix, Slice A1
-(Channel/Transaction repositories), Slice A2 (outbox drain + sync worker), and the
-duplicate-channel/duplicate-transaction fix (case-insensitive channel resolution +
-TID/smsSourceKey transaction dedup) have landed. Channels and transactions now
-read/write through Room *and* push to / pull from the server. The backend contract
-A2 shipped against unverified is now fully verified (see "Backend-contract
-verification" below): the client-UUID idempotency gap and the `ChannelDesc`
-question are both **closed** — fixed (idempotency) or confirmed already-safe
-(`ChannelDesc`), each backed by real tests (Postgres integration + HTTP-level) and
-a live curl-based test against a locally-running instance of the real backend
-binary, all **in the backend repo, on a local branch, not yet deployed to
-`api.dlabs.cc`**. The `DeletedAt`/soft-delete question is assessed (full
+**Status:** Slice A (the SMS capture path, offline end-to-end) is **fully landed**:
+Step 1 (schema + migration), the hotfix, Slice A1 (Channel/Transaction
+repositories), Slice A2 (outbox drain + sync worker), the duplicate-channel/
+duplicate-transaction fix (case-insensitive channel resolution + TID/smsSourceKey
+transaction dedup), and now Slice A3 (SMS auto-create rewired local-first + a
+sync-status UI badge) have all landed. Channels and transactions read/write through
+Room, push to / pull from the server via `SyncWorker`, and channel auto-creation
+from an incoming SMS is fully offline-capable — the last network-first write path
+in the SMS ingestion pipeline is gone. The backend contract A2 shipped against
+unverified is fully verified (see "Backend-contract verification" below): the
+client-UUID idempotency gap and the `ChannelDesc` question are both **closed** —
+fixed (idempotency) or confirmed already-safe (`ChannelDesc`), each backed by real
+tests (Postgres integration + HTTP-level) and a live curl-based test against a
+locally-running instance of the real backend binary, all **in the backend repo, on
+a local branch, not yet deployed to `api.dlabs.cc`** — this remaining
+undeployed-backend-fix risk is the one gap Slice A3 explicitly does not close (see
+"Slice A3"'s accepted gaps). The `DeletedAt`/soft-delete question is assessed (full
 blast-radius across every backend domain) and correctly re-scoped as its own
 follow-up rather than fixed inline. The delta-pull/cursor gap is confirmed absent
 and remains its own scoped backend task, not started — Part 2 (a real delta pull)
-stays blocked-on-backend. **Slice A3's SMS dedup-key wiring has now landed in full**
-(case-insensitive channel resolution + TID-based transaction dedup — see
-"Duplicate channels + duplicate transactions" below); SMS auto-create is still
-network-first (not yet rewired local-first) and sync-status UI is still not done —
-both remain Slice A3's open remainder. See "Roadmap revision", "Hotfix", "Slice A1",
-"Slice A2", "Backend-contract verification", and "Duplicate channels + duplicate
-transactions" below.
+stays blocked-on-backend. Slice B (budgets/profile offline) and Slice C (dead-code
+removal, `TransactionViewModel` relocation, Paging 3 evaluation) are the remaining
+follow-up slices, not started. See "Roadmap revision", "Hotfix", "Slice A1", "Slice
+A2", "Backend-contract verification", "Duplicate channels + duplicate
+transactions", and "Slice A3" below.
 **Date:** 2026-07-23 (Slice A2); backend-contract verification + fix + tests +
 live test, same day, follow-up session; duplicate-channel/duplicate-transaction fix,
-2026-07-24, follow-up session; committed 2026-07-25
+2026-07-24, follow-up session; committed 2026-07-25; Slice A3, 2026-07-25
 
 ## Context
 
@@ -1235,3 +1238,127 @@ open, now with more precision than before this pass:
   first-recorded transaction) remains unimplemented, exactly as scoped — flagged as a
   possible follow-up once the schema/dedup mechanism has real production data behind it,
   not attempted here.
+
+## Slice A3: SMS auto-create local-first + sync-status UI
+
+**Status: landed.** Closes Slice A's last two open items: `ChannelManager.
+isSmsAllowedForSender`'s auto-create path was still network-first (a confidence-48,
+accepted-but-open gap from the "Duplicate channels + duplicate transactions" fix
+above), and nothing surfaced `syncStatus` to the user anywhere in the UI. Shipped as
+two independent commits, each with its own review gate, per this task's own
+instruction not to bundle them together or with the pre-existing dedup fix above
+(which was reviewed, verified green, and committed on its own first, updating this
+ADR's Status line to reflect it before any A3 work began).
+
+### Piece 1 — SMS auto-create local-first
+
+`ChannelManager.isSmsAllowedForSender`'s auto-create branch previously built a
+`CreateChannelRequest` and called `ApiClient.api.createChannel()` directly — the one
+remaining network-first write path in the whole SMS ingestion pipeline, and the
+reason the confidence-48 gap existed at all (no client idempotency id on that call,
+and a failure there was only ever caught-and-logged, never queued). Rewired to call
+`ChannelRepository.createChannel(...)` instead — the same Room + outbox write path
+`ChannelViewModel` has used since Slice A1 — so channel auto-creation from an
+incoming SMS now works fully offline and its eventual push is handled by
+`SyncWorker` exactly like any other outbox entry (client UUID sent as the create
+idempotency key, per Slice A2).
+
+This closes the confidence-48 gap by removing the network round-trip it was found
+in, not by patching around it: two SMS from a brand-new provider processed
+concurrently now serialize on `ChannelRepository.createChannel`'s own
+`database.withTransaction`, so exactly one outbox `CREATE` row is ever written for
+that provider — the duplicate-POST race is closed before the network is involved at
+all, rather than being closed at the server (which is still pending an undeployed
+backend fix for the general retry-timeout idempotency risk shared by every A2
+create — see "Backend-contract verification" above; that broader risk isn't
+specific to this call site and isn't what confidence-48 named).
+
+The rewire had to preserve two invariants from the dedup fix above without
+regressing either:
+- **normalizedSenderKey dedup-on-insert** — `createChannel`'s own atomic
+  check → `insertIgnore` → re-query-on-conflict pattern (unchanged, reused as-is)
+  still gives exactly one row per provider even under a concurrent auto-create race.
+- **Tombstone-vs-live lookup split** — `ChannelCreateOutcome.AlreadyExists` (the
+  outcome when a row for this provider already exists, live or soft-deleted) is
+  re-checked via the live-only `ChannelRepository.findByNormalizedSenderKey` before
+  being handed back as an SMS destination, exactly mirroring what the old
+  `reconcileFromServer`-then-re-check path did. `ChannelCreateOutcome.Created` skips
+  this re-check safely, since a just-inserted row is always live by construction
+  (`deletedAt = null`) — confirmed by `offline-sync-reviewer`, not assumed.
+
+**Gates run:** `offline-sync-reviewer` reviewed the diff and found nothing
+actionable — confirmed the tombstone-vs-live split is preserved, the outbox write
+stays atomic with the row insert, and no new race is introduced by moving the write
+in front of the network. `android-reviewer` found one confidence-58 doc-accuracy
+issue: the class-level KDoc pointed readers at "`isSmsAllowedForSender`'s doc
+comment" for the local-first rationale, but that function had no doc comment (an
+unrelated KDoc block was actually attached to the adjacent `ChannelInfo` data
+class). Fixed by moving a real KDoc onto `isSmsAllowedForSender` itself.
+`ktlintFormat`/`ktlintCheck`/`test`/`assembleDebug` green before commit.
+
+### Piece 2 — sync-status UI
+
+Added a `@Transient syncStatus: SyncStatus = SyncStatus.SYNCED` field to both
+`TransactionDetails` and `ChannelDetails` (`ApiModels.kt`) — mirroring
+`ChannelDetails.smsNotificationEnabled`'s existing local-only-field pattern exactly
+(never sent to or read from the server; Gson silently drops `@Transient` fields on
+both sides), populated from the entity in both repositories' `toDetails()` mapping
+functions. This is the smallest change that gets `syncStatus` from Room into the
+existing `StateFlow<UiState>` screens already observe — no new field on `UiState`
+itself, no parallel `mutableStateOf`.
+
+Checked `core/ui/` before writing anything new, per the reuse-first rule — no
+existing badge/status-pill composable there (the closest thing, `ChannelCard`'s
+inline "Active/Inactive" chip, is feature-local and semantically different: channel
+enabled/disabled state, not sync state). Added `SyncStatusBadge` (`core/ui/`):
+renders nothing for `SYNCED` (the common case — a fully-synced row's card is
+visually unchanged from before this commit) and a small icon+label pill for
+`PENDING`/`SYNCING`/`FAILED`. `FAILED` gets the error color + a "cloud off" icon,
+visually distinct from `PENDING`/`SYNCING` (neutral/tertiary + queue/sync icons) —
+per this task's own requirement not to collapse a terminal, never-auto-retried 4xx
+into the same generic "not synced" look as a row that just hasn't caught up yet.
+Wired into `TransactionCard` (`TransactionListScreen.kt`, next to the channel name)
+and `ChannelCard` (`ChannelScreen.kt`, next to the existing status chip).
+
+**Gates run, both findings fixed before commit:**
+- `android-reviewer` (confidence 60): `ChannelCard` bracketed the badge between two
+  fixed `Spacer(Modifier.width(8.dp))` calls, so a fully-synced channel (the badge
+  rendering nothing) ended up with a 16dp gap before the status chip instead of the
+  original 8dp — and the inline comment claiming the card was "laid out exactly as
+  before" was simply wrong, unlike `TransactionCard`'s equivalent comment, which was
+  accurate because it used a single `Row` with `Arrangement.spacedBy` instead.
+  Fixed by giving `ChannelCard` the same treatment: the badge and the status chip
+  now share one `spacedBy(8.dp)` `Row`, so a synced row keeps exactly one 8dp gap
+  (`spacedBy` only adds space between children that actually exist).
+- `compose-perf` (structural risk, not a budget violation — no profiler available
+  this session): `SyncStatusBadge` destructured a `Triple<ImageVector, String,
+  Color>` per non-`SYNCED` recomposition; `Triple`'s generic type parameters box the
+  inline-value-class `Color` into a plain `Any`, a small but avoidable allocation on
+  every visible non-synced row. Fixed by assigning `icon`/`label`/`color` via three
+  independent `when` expressions instead of one destructured tuple — same logic,
+  zero tuple/boxing allocation. Confirmed clean on every other axis checked: stable
+  inputs (a plain enum and immutable DTO fields), `LazyColumn` keys untouched on
+  both screens, no I/O/effects introduced, the early-return-for-`SYNCED` pattern
+  itself is a genuine optimization, not a smell.
+
+`ktlintFormat`/`ktlintCheck`/`test`/`assembleDebug` green before commit, including
+after both fixes. `graphify update .` run after landing the new `core/ui/`
+composable, per the reuse-first rule's own "after any new module" instruction.
+
+### Known, accepted gaps (not fixed here, out of this slice's scope)
+
+- **The general retry-timeout idempotency risk** (a timed-out-but-actually-succeeded
+  outbox POST, retried by `SyncWorker`, could still duplicate server-side until the
+  backend's idempotent-upsert fix — see "Backend-contract verification" — is
+  deployed to `api.dlabs.cc`) applies to channel auto-create the same as every other
+  A2 create. Piece 1 closes the *concurrent-double-POST-with-no-id* case
+  (confidence-48) specifically, not this broader, already-tracked, backend-deploy-
+  blocked risk.
+- **`SyncStatusBadge` has no tap/retry affordance.** A `FAILED` row is visible but
+  not actionable from the badge itself — no "retry now" or "see error" interaction.
+  The task scoped this as "at minimum a visible indicator," not a full retry UX;
+  flagged here as a natural next step once real FAILED rows are observed in
+  production, not attempted in this pass.
+- **Budgets/profile (Slice B) and dead-code removal /
+  `TransactionViewModel` relocation / Paging 3 evaluation (Slice C)** remain
+  explicitly out of scope, unchanged from the roadmap above.
