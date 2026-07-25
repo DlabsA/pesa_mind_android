@@ -1,24 +1,30 @@
 # ADR-0004: Offline-first — Room-authoritative storage, durable sync, SMS ingestion & profile offline
 
 **Status:** In progress. Step 1 (schema + migration), the hotfix, Slice A1
-(Channel/Transaction repositories), and Slice A2 (outbox drain + sync worker) have
-landed. Channels and transactions now read/write through Room *and* push to / pull
-from the server. The backend contract A2 shipped against unverified is now fully
-verified (see "Backend-contract verification" below): the client-UUID idempotency
-gap and the `ChannelDesc` question are both **closed** — fixed (idempotency) or
-confirmed already-safe (`ChannelDesc`), each backed by real tests (Postgres
-integration + HTTP-level) and a live curl-based test against a locally-running
-instance of the real backend binary, all **in the backend repo, on a local branch,
-not yet deployed to `api.dlabs.cc`**. The `DeletedAt`/soft-delete question is
-assessed (full blast-radius across every backend domain) and correctly re-scoped as
-its own follow-up rather than fixed inline. The delta-pull/cursor gap is confirmed
-absent and remains its own scoped backend task, not started — Part 2 (a real delta
-pull) stays blocked-on-backend. Slice A3 (SMS dedup-key wiring, SMS auto-create
-rewired local-first, sync-status UI) is next once the backend fix is deployed. See
-"Roadmap revision", "Hotfix", "Slice A1", "Slice A2", and
-"Backend-contract verification" below.
+(Channel/Transaction repositories), Slice A2 (outbox drain + sync worker), and the
+duplicate-channel/duplicate-transaction fix (case-insensitive channel resolution +
+TID/smsSourceKey transaction dedup) have landed. Channels and transactions now
+read/write through Room *and* push to / pull from the server. The backend contract
+A2 shipped against unverified is now fully verified (see "Backend-contract
+verification" below): the client-UUID idempotency gap and the `ChannelDesc`
+question are both **closed** — fixed (idempotency) or confirmed already-safe
+(`ChannelDesc`), each backed by real tests (Postgres integration + HTTP-level) and
+a live curl-based test against a locally-running instance of the real backend
+binary, all **in the backend repo, on a local branch, not yet deployed to
+`api.dlabs.cc`**. The `DeletedAt`/soft-delete question is assessed (full
+blast-radius across every backend domain) and correctly re-scoped as its own
+follow-up rather than fixed inline. The delta-pull/cursor gap is confirmed absent
+and remains its own scoped backend task, not started — Part 2 (a real delta pull)
+stays blocked-on-backend. **Slice A3's SMS dedup-key wiring has now landed in full**
+(case-insensitive channel resolution + TID-based transaction dedup — see
+"Duplicate channels + duplicate transactions" below); SMS auto-create is still
+network-first (not yet rewired local-first) and sync-status UI is still not done —
+both remain Slice A3's open remainder. See "Roadmap revision", "Hotfix", "Slice A1",
+"Slice A2", "Backend-contract verification", and "Duplicate channels + duplicate
+transactions" below.
 **Date:** 2026-07-23 (Slice A2); backend-contract verification + fix + tests +
-live test, same day, follow-up session
+live test, same day, follow-up session; duplicate-channel/duplicate-transaction fix,
+2026-07-24, follow-up session; committed 2026-07-25
 
 ## Context
 
@@ -968,3 +974,264 @@ fixes above). **Neither commit is pushed or deployed.**
   rule — pre-existing drift, not introduced by the hotfix, and relocating it
   touches enough call sites (home, transactions list, SMS) that it doesn't belong
   in a standalone hotfix. Tracked as part of Slice C's cleanup.
+
+## Duplicate channels + duplicate transactions: case-insensitive resolution + TID dedup
+
+**Status: landed.** Two related bugs reported by the user: (1) SMS-triggered channel
+auto-creation could create a duplicate channel for the same real sender ("case-sensitive
+sender matching" was the initial hypothesis); (2) some providers (confirmed: Airtel
+Uganda) send two separate SMS for one real transaction sharing a `TID`, which the
+pre-existing dedup key didn't catch since the two message bodies differ. Fixed
+together, atomically (one schema migration, one review pass), per the task's own
+instruction not to split them.
+
+### Phase 0 — measured before any change, via `data-path-tracer`
+
+The channel-resolution bug was **worse than case-sensitive** — a genuine key mismatch,
+not just a casing mismatch. `ChannelManager.isSmsAllowedForSender`'s lookup branch keyed
+off `ChannelDescMobileMoney.AIRTELMONEY`/`.MTNMOBILEMONEY` ("Airtel Money"/"MTN Mobile
+Money") for mobile money but `ChannelTypes.BANK` (a channel *type* string, "Bank" — not a
+description at all) for **both** bank senders, while the auto-create branch
+(`determineChannelTypeAndDesc`) created channels using yet a **third**, different
+constant set (`MessageSender.AIRTEL_MONEY` = "airtelmoney", `MessageSender.STANBIC_BANK`
+= "stanbicbank", etc.). Three different constant sources for what should have been one
+canonical key meant the local Room lookup could **never** succeed for a channel this
+same method had just auto-created — every incoming SMS silently fell through to a
+direct `ApiClient.api.createChannel()` network call every time, forever, making the
+"local-first" channel lookup a network-only path in practice that failed silently
+offline (caught and logged, never surfaced to the user).
+
+Transaction dedup was **not implemented at all**, contrary to what a first reading of
+the schema suggests: `TransactionEntity.smsSourceKey` has carried a real unique index
+since Slice A1, and `TransactionRepository.createTransaction` already had a working
+no-op-on-match check against it — but nothing above that layer (`TransactionViewModel`,
+`SMSMessageProcessor`) ever had a parameter to pass a real key through, so every call
+site left it `null`, and SQLite allows unlimited `NULL`s in a unique index. The
+protection existed in the schema and was completely inert in practice, exactly as
+Slice A1's own commit message predicted ("no caller passes a real key yet ... currently
+inert in practice").
+
+**Real SMS sample data:** none found anywhere in this repo — checked `app/src/main/**`,
+`app/src/test/**`, and every root/`docs/*.md` file. The only in-repo evidence of
+Airtel's `TID` field's *existence* is the pre-existing amount-parsing regex
+`SENT\.TID.*?UGX` in `SMSMessageProcessor.kt` — it confirms `TID` and `UGX` co-occur in
+Airtel expense messages, but says nothing about the TID value's exact delimiter, length,
+or character set (numeric-only vs alphanumeric). Zero MTN sample text of any kind exists
+in this repo. **Duplicate counts:** not reachable — no device/emulator, no exported
+production database, no bundled/fixture SMS data anywhere in this session's environment.
+Reported here plainly rather than fabricated, per the task's own instruction.
+
+### Phase 1 — case-insensitive channel resolution
+
+- `ChannelManager.isSmsAllowedForSender`/`determineChannelTypeAndDesc` now derive
+  `(channelType, channelDesc)` from **one shared function** for every known sender
+  (MTN, Airtel, Stanbic, Centenary) — the lookup and the auto-create branch can no
+  longer drift apart, closing the root cause directly, independent of casing.
+- `ChannelEntity.normalizedSenderKey: String?` (new, nullable) — a trim+lowercase fold
+  of `channelDesc`, unique-indexed, populated only for non-CASH (`channelType != "Cash"`)
+  channels. CASH channels legitimately share `channelDesc = "Cash"` across many rows and
+  must never be forced unique — this is why the column is a separate nullable field
+  rather than a uniqueness constraint on `channelDesc` itself.
+- **Uniqueness scope decision:** unique *across* soft-deletes, mirroring this ADR's own
+  `smsSourceKey` precedent (dedup that must survive a tombstone) rather than its
+  `serverId`/`(month, year)` precedent (uniqueness that's dropped because a table-wide
+  constraint can't distinguish live from tombstoned rows). Justification: resurrecting
+  a second live channel for a provider whose channel the user already deleted is
+  exactly the duplicate-channel bug this column exists to prevent, so a tombstone match
+  is deliberately treated as "leave it deleted," not "make a new one" — confirmed by
+  both review passes as the correctly-applied precedent (not misapplied).
+- **`isProviderChannelType` is derived internally** (`channelType != "Cash"`) rather than
+  a caller-supplied flag — an earlier version of this fix took an explicit
+  `isProviderChannel: Boolean` parameter on `createChannel`/`reconcileFromServer`, and
+  `offline-sync-reviewer` caught (confidence 70) that both `SyncWorker`'s full-pull
+  reconciliation (`SyncWorker.kt:501`) and `PrefsToRoomMigrator`'s one-time DataStore
+  import simply never passed `true` — meaning **every already-synced or migrated
+  provider channel kept `normalizedSenderKey = null` forever**, silently making the
+  entire dedup fix inert for the population of users this task exists to help most:
+  anyone with pre-existing data, not just fresh installs. Deriving the flag internally
+  from `channelType` closes this for `SyncWorker`'s ongoing full-pull path automatically
+  (no `SyncWorker.kt` change needed).
+- **Deliberately NOT applied to `PrefsToRoomMigrator`'s one-time bulk import.**
+  `ChannelDetails.toEntity` still hardcodes `normalizedSenderKey = null`. Reason: the
+  migrator inserts via a single bulk `channelDao.upsertAll(...)` call
+  (`OnConflictStrategy.REPLACE`), not the per-row `insertIgnore`-with-safe-fallback every
+  other write path in this fix uses. If a migration batch already contains two real
+  duplicate channels for the same provider — plausible, not hypothetical, given the
+  confirmed severity of the pre-fix bug (see Phase 0) — populating this column there
+  would make `REPLACE` **silently delete one of them mid-migration**, violating this
+  task's own explicit constraint ("must not silently delete already-synced rows without
+  a user-facing or logged confirmation step"). Left null; safely backfilling already-
+  migrated rows (with real duplicate-collision/merge handling, and a user-facing or
+  logged confirmation step) is Phase 3's job, not this pass's.
+- **Tombstone-vs-live lookup split**, added after both `android-reviewer` and
+  `offline-sync-reviewer` independently found the same bug (confidence 62 / 58): the
+  first version of this fix's `findByNormalizedSenderKey` included soft-deleted rows
+  (needed for insert-time conflict resolution) and `ChannelManager` used its result
+  unconditionally as an active SMS destination — so a channel the user had deleted
+  could silently receive a *new* transaction, which then hit `SyncWorker`'s channel-
+  before-transaction push ordering and the backend's real hard-delete-with-
+  `ON DELETE CASCADE` (see "Backend-contract verification" above), losing the
+  transaction entirely. Fixed by splitting the DAO query in two:
+  `findLiveByNormalizedSenderKey` (`deletedAt IS NULL`) for "does an active channel
+  exist" decisions, and the original `findByNormalizedSenderKey` (tombstone-inclusive)
+  kept for insert-time conflict resolution only. `ChannelManager.isSmsAllowedForSender`
+  also re-checks liveness *after* the network-create-and-reconcile branch, since
+  `reconcileFromServer`'s own conflict guard can still resolve to an existing tombstoned
+  row instead of the just-created server channel.
+- **`reconcileFromServer`'s normalizedSenderKey check moved into the `InsertNew` branch
+  only**, not applied before the `serverId` lookup as an earlier version of this fix
+  had it. Two reasons, found while implementing the fix above: (1) checking it first
+  meant a row that already has this key set would find *itself* on every later pull and
+  short-circuit before ever reaching `UpdateExisting`'s actual field refresh, freezing
+  that row's name/description/status against real server-side edits forever; (2)
+  backfilling the key onto an already-*existing* row inside `UpdateExisting` was also
+  considered and rejected — `channelDao.update` has no `onConflict` strategy (Room
+  defaults `@Update` to `ABORT`), so if two already-locally-known duplicate rows both
+  got backfilled across separate pull cycles, the second `update()` would throw a
+  `SQLiteConstraintException` instead of resolving gracefully. Only `InsertNew` uses the
+  atomic `insertIgnore`-or-discard path actually built to handle that collision safely.
+- `ChannelRepository.createChannel`/`reconcileFromServer` both switched from an
+  unconditional insert to atomic check → `insertIgnore` → re-query-on-conflict, all
+  inside one `database.withTransaction { }` — the real race-closing mechanism is the
+  DB-level unique index plus the insert's own return value (`-1L` on conflict), not the
+  pre-check, which is a fast-path optimization only.
+- **`ChannelRepository.createChannel`'s return type changed** from a bare
+  `ChannelDetails` to a new `ChannelCreateOutcome` (`Created`/`AlreadyExists`) sealed
+  class. `android-reviewer` found (confidence 58) that the first version of this fix
+  let a user manually create a *second* channel for an already-tracked bank/mobile-money
+  provider silently dedupe against the existing one while `ChannelViewModel` still
+  reported "Channel created successfully" and published a `ChannelCreated` event for a
+  row that was never inserted — discarding the user's custom name/description with a
+  false-success message. `ChannelViewModel.createChannel` now branches on the outcome
+  and shows an accurate "A channel for this provider already exists: …" message instead.
+- **Known, accepted gap — no "revive" path for a deleted-then-recreated provider.** If
+  a user deletes a provider channel and a later create/reconcile attempt conflicts with
+  that tombstone, the current code returns the dead row as-is (matching this ADR's
+  existing `ReconcileResolver.SkipDirtyOrDeleted` precedent) rather than un-deleting it.
+  A real "revive" (clear `deletedAt`, re-queue an outbox update) was considered and
+  rejected for this pass: `OutboxCoalescer`'s own doc comment confirms a `DELETE` outbox
+  row stays `DELETE` regardless of a later `UPDATE` attempt ("nothing in this repository
+  layer re-mutates a soft-deleted row"), so a real fix needs a new coalescing rule,
+  careful reasoning about whether the delete already reached the server, and is a real
+  product question (should deleting a provider channel be permanent, or just a reset?)
+  — not something to wing inline here. Flagged, not fixed.
+- **Known, accepted gap — SMS auto-create's network channel-creation call still has no
+  client idempotency id.** `offline-sync-reviewer` found (confidence 48, sub-threshold)
+  that `ChannelManager.isSmsAllowedForSender`'s `CreateChannelRequest` never sets `id`,
+  so two SMS from a brand-new provider processed concurrently can each independently
+  miss the local lookup and both `POST` — the *local* race is still closed (one wins via
+  `insertIgnore`), but the orphaned second server-side channel will reappear as a
+  duplicate on a later full pull. The real fix is removing this network round-trip
+  entirely (SMS auto-create rewired local-first) — that's still Slice A3's open
+  remainder, not this pass's.
+
+### Phase 2 — TID extraction + atomic transaction dedup
+
+- `TransactionEntity.providerTransactionId: String?` (new, nullable), unique-indexed on
+  the **composite** `(channelId, providerTransactionId)`, not globally. Justification
+  (per the task's own instruction to default to the safer scope unless cross-provider
+  uniqueness is confirmed): no real MTN sample exists anywhere to confirm TIDs are
+  unique across every supported provider, so scoping by channel (one channel per real
+  provider, thanks to Phase 1) is the conservative default.
+- **Airtel TID extractor**: `Regex("\\bTID\\b[:\\s]+(\\w{4,})", RegexOption.IGNORE_CASE)`
+  in `SMSMessageProcessor.extractAirtelTid`. Built from the only real evidence available
+  (the pre-existing `SENT\.TID.*?UGX` amount regex, confirming `TID`/`UGX` co-occurrence
+  but not the exact delimiter) — **explicitly not verified against a real Airtel
+  sample**. Tightened (word boundaries around `TID`, a 4-character minimum on the
+  captured value) after both review passes flagged the same risk: a false, constant
+  extraction would **silently and permanently discard every subsequent genuinely
+  different transaction** on that channel, a materially worse failure mode than simply
+  failing to extract (which safely falls back to `smsSourceKey`-only dedup). Flagged for
+  confirmation once real discarded-duplicate log lines are observed in production (see
+  the logging below).
+- **No MTN TID extractor** — per the task's explicit "confirm MTN's format... don't
+  guess" instruction, and Phase 0 confirming zero real MTN samples exist in this repo
+  (checked twice, independently, in this session). MTN messages fall back to the
+  `smsSourceKey`-only path.
+- **`smsSourceKey` fallback now actually computed** for every sender (previously always
+  `null`, so the pre-existing unique index was permanently inert — see Phase 0):
+  `"$normalizedSender:$timestamp:${content.trim().hashCode()}"` in
+  `SMSMessageProcessor.processMessage`. Protects against exact redelivery/reprocessing
+  (e.g. a service restart reprocessing a queued broadcast) even when no TID is
+  extractable — it does **not**, and by design cannot, catch Airtel's two-different-
+  bodies-for-one-transaction pattern, since its inputs differ between the two messages;
+  that gap is exactly what `providerTransactionId` exists to close instead.
+- `TransactionRepository.createTransaction` switched to the identical atomic pattern as
+  Phase 1's channel writes: check (fast-path only) → `insertIgnore` → re-query-on-
+  conflict, now returning a new `TransactionInsertOutcome` (`Inserted`/
+  `DuplicateDiscarded`) instead of a bare `TransactionDetails`. This is the mechanism
+  the task's own test spec required be provably atomic (two coroutines racing an insert
+  for the same TID before either completes) — the real correctness guarantee is the
+  insert's own return value, not a SELECT performed beforehand.
+- Threaded through `TransactionViewModel` (`createTransactionAwaited`/
+  `performCreateTransaction` gained `smsSourceKey`/`providerTransactionId` params;
+  `TransactionCreationResult.Success` gained `wasDuplicate: Boolean = false`) and
+  `SMSMessageProcessor` (computes both keys; on `wasDuplicate = true`, logs the TID/key
+  plus **both raw message bodies** — this message's content and the already-recorded
+  transaction's `note`, which for every MTN/Airtel parse branch is always the full raw
+  SMS — instead of silently dropping the duplicate, per the task's own requirement).
+  `StateEvent.TransactionCreated` is only published on a genuine `Inserted` outcome, not
+  a discarded duplicate.
+
+### Tests (`sync-test-author`)
+
+`ChannelSenderKeyDedupTest.kt` and `TransactionProviderIdDedupTest.kt`
+(`app/src/test/java/cc/dlabs/pesamind/core/data/`), 8 tests total, backed by a **real
+in-memory Room database** via Robolectric (`org.robolectric:robolectric` +
+`androidx.test:core` added as new `testImplementation`-only dependencies — no
+production dependency changed) rather than mocks, since the whole point of several of
+these tests is proving genuine SQLite unique-constraint behavior under real concurrent
+transactions, which a mocked DAO would trivially "pass" without exercising. Covers all
+four required scenarios: case-variant channel resolution converging on one row (both
+orderings, plus a concurrent-creates variant); two SMS bodies sharing one TID yielding
+exactly one transaction row, asserted via the real `TransactionInsertOutcome`/raw
+`insertIgnore` return value, not a count query; a no-TID message still deduping via the
+`smsSourceKey` fallback; and two coroutines racing an insert for the same TID on
+`Dispatchers.IO` before either completes, asserting exactly one row survives — the test
+that actually proves the race is closed, not just that sequential dedup works.
+
+### Gates run
+
+1. `ktlintFormat` → `ktlintCheck` → `test` → `assembleDebug`, all green — run after the
+   initial implementation, after `sync-test-author`'s test suite landed, and again after
+   every review-driven fix below (final run: 113 tasks, all green).
+2. `offline-sync-reviewer` on the diff — found 3 real findings (the migrated-channel
+   `normalizedSenderKey` gap above, confidence 70; the tombstone-lookup misattachment
+   gap above, confidence 58; the unverified/unbounded Airtel TID regex, confidence 55;
+   plus a confidence-48 sub-threshold idempotency gap folded into the accepted-gaps
+   list above). All addressed as described in Phase 1/2 above, or explicitly
+   accepted-and-documented where a full fix required out-of-scope work (a new
+   `OutboxCoalescer` rule, or removing the SMS network-create round-trip entirely).
+3. `android-reviewer` on the diff (touches `TransactionViewModel.kt`/
+   `ChannelViewModel.kt`) — found 2 real findings (the same tombstone-lookup gap,
+   confidence 62, independently; the false-success manual-channel-dedup message,
+   confidence 58) plus confirmed the same unverified-TID-regex risk (confidence 55).
+   Also explicitly cleared: no UiState/StateFlow violation from `wasDuplicate`, no
+   Composable/color-literal changes (none touched), `AddTransactionScreen`'s manual
+   path behaves identically to before this diff, and the standing `runTest`-vs-
+   `runBlocking` testing rule was followed correctly by the new tests.
+4. No Composable/screen file changed in this diff (confirmed via `git diff --stat`) —
+   there is no new UI to click through; the closest thing to an end-to-end check is the
+   Robolectric-backed real-Room-database test suite above. Not claiming a UI
+   verification that wasn't done, per this repo's own instruction to say so explicitly
+   when a budget/behavior can't be measured directly.
+
+### Phase 3 (historical duplicate cleanup): confirmed not started, scoped separately
+
+Explicitly out of scope for this pass, per the task's own constraint. Concretely still
+open, now with more precision than before this pass:
+- **Already-migrated channels** (`PrefsToRoomMigrator`, pre-Room DataStore-blob origin)
+  keep `normalizedSenderKey = null` forever until a real Phase 3 backfill runs — see
+  "Deliberately NOT applied to `PrefsToRoomMigrator`'s one-time bulk import" above for
+  why this pass couldn't safely do it inline (bulk `REPLACE` risk). A real Phase 3 needs
+  to: detect existing duplicate channels sharing a normalized `channelDesc`, decide a
+  merge/keep-one policy (which row survives; do existing transactions' `channelId`s get
+  re-pointed), and get an explicit user-facing or logged confirmation before deleting
+  anything — not a silent bulk operation.
+- **Already-persisted duplicate transactions** (two rows for one real Airtel
+  transaction, created before this fix shipped) are completely untouched by this pass —
+  no code here reads, merges, or dedupes already-persisted transaction rows.
+- Field-enrichment-on-duplicate (merging balance/fee from a second matching SMS into the
+  first-recorded transaction) remains unimplemented, exactly as scoped — flagged as a
+  possible follow-up once the schema/dedup mechanism has real production data behind it,
+  not attempted here.

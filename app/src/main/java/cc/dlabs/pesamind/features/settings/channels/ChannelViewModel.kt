@@ -3,6 +3,7 @@ package cc.dlabs.pesamind.features.settings.channels
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
 import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,16 +146,33 @@ class ChannelViewModel : UnifiedViewModel() {
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
-            val created =
-                ChannelRepository.createChannel(
-                    name = name.trim(),
-                    description = description.trim(),
-                    channelType = normalizedType,
-                    channelDesc = normalizedChannelDesc ?: "Cash",
-                    status = status,
-                )
-            publishEvent(StateEvent.ChannelCreated(channelId = created.id, channelName = created.name))
-            _state.value = _state.value.copy(isSaving = false, message = "Channel created successfully")
+            when (
+                val outcome =
+                    ChannelRepository.createChannel(
+                        name = name.trim(),
+                        description = description.trim(),
+                        channelType = normalizedType,
+                        channelDesc = normalizedChannelDesc ?: "Cash",
+                        status = status,
+                    )
+            ) {
+                is ChannelCreateOutcome.Created -> {
+                    publishEvent(
+                        StateEvent.ChannelCreated(channelId = outcome.channel.id, channelName = outcome.channel.name),
+                    )
+                    _state.value = _state.value.copy(isSaving = false, message = "Channel created successfully")
+                }
+                is ChannelCreateOutcome.AlreadyExists -> {
+                    // Deduped against an existing channel for this same provider — nothing was
+                    // inserted, so this must not be reported as a fresh success (it previously
+                    // was, silently discarding the user's custom name/description).
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            message = "A channel for this provider already exists: ${outcome.existing.name}",
+                        )
+                }
+            }
         }
     }
 

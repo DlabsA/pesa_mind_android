@@ -43,9 +43,30 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE status = :active AND deletedAt IS NULL ORDER BY name ASC")
     suspend fun getByActiveStatus(active: Boolean): List<ChannelEntity>
 
-    /** Used by ChannelManager.isSmsAllowedForSender's channel-desc lookup (see ChannelRepository). */
-    @Query("SELECT * FROM channels WHERE channelDesc = :channelDesc AND deletedAt IS NULL LIMIT 1")
-    suspend fun findByChannelDesc(channelDesc: String): ChannelEntity?
+    /**
+     * Case-insensitive provider/bank channel lookup, **live channels only**. This is the query
+     * `ChannelManager.isSmsAllowedForSender` uses to decide "does an active channel already
+     * exist for this sender" before attaching a transaction to it — a soft-deleted row must
+     * never be silently treated as the active channel here (that would attach new SMS
+     * transactions to a channel the user believes is gone). For the insert-time race guard that
+     * must also see tombstones, use [findByNormalizedSenderKey] instead.
+     */
+    @Query("SELECT * FROM channels WHERE normalizedSenderKey = :normalizedSenderKey AND deletedAt IS NULL LIMIT 1")
+    suspend fun findLiveByNormalizedSenderKey(normalizedSenderKey: String): ChannelEntity?
+
+    /**
+     * Case-insensitive provider/bank channel lookup, **including soft-deleted rows** —
+     * `normalizedSenderKey` is a pre-normalized (trim+lowercase) column, so this is a plain
+     * indexed equality match, not a `LIKE`/`COLLATE` scan. Includes tombstones deliberately: the
+     * column is unique-indexed *across* soft-deletes (mirrors `smsSourceKey`'s reasoning, not
+     * `serverId`'s), so an insert attempt can conflict with an already-deleted row and this is
+     * the query used to find that conflicting row again afterward (see
+     * [cc.dlabs.pesamind.core.data.ChannelRepository]'s revive-on-conflict handling). For
+     * deciding "does an active channel already exist," use [findLiveByNormalizedSenderKey]
+     * instead — this one is for insert-time conflict resolution only.
+     */
+    @Query("SELECT * FROM channels WHERE normalizedSenderKey = :normalizedSenderKey LIMIT 1")
+    suspend fun findByNormalizedSenderKey(normalizedSenderKey: String): ChannelEntity?
 
     /** Deliberately includes soft-deleted rows (no `deletedAt IS NULL` filter) — pull
      * reconciliation ([cc.dlabs.pesamind.core.data.ChannelRepository.reconcileFromServer]) must
@@ -62,6 +83,15 @@ interface ChannelDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<ChannelEntity>)
+
+    /**
+     * Race-safe insert for provider/bank channel creation — returns the new rowid, or `-1L` if
+     * the insert was discarded because `normalizedSenderKey` already exists (a concurrent
+     * insert won the race). Callers must branch on this return value, not a SELECT performed
+     * before calling this — see [cc.dlabs.pesamind.core.data.ChannelRepository].
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnore(entity: ChannelEntity): Long
 
     @Update
     suspend fun update(entity: ChannelEntity)

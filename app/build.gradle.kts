@@ -202,6 +202,13 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.coroutines.test)
+
+    // Robolectric (JVM-runnable real Android runtime, notably a real Context for
+    // Room.inMemoryDatabaseBuilder) — needed to exercise real SQLite unique-index/transaction
+    // behavior for the channel-dedup/TID-dedup fix without a device/emulator. See
+    // app/src/test/java/cc/dlabs/pesamind/core/data/*DedupTest.kt.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }
 
 kapt {

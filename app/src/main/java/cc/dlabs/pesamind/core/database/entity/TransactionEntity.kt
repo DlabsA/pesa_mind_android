@@ -16,7 +16,17 @@ import cc.dlabs.pesamind.core.database.SyncStatus
  *
  * [smsSourceKey] is the SMS-ingestion dedup key (see SMSMessageProcessor) — null for
  * manually-entered transactions, unique-indexed (nullable-safe: SQLite allows multiple
- * NULLs in a unique index) so reprocessing the same SMS is a no-op, not a duplicate.
+ * NULLs in a unique index) so reprocessing the same exact SMS is a no-op, not a duplicate.
+ *
+ * [providerTransactionId] is a provider-supplied transaction reference extracted from the
+ * SMS body (e.g. Airtel's `TID`) — distinct from [smsSourceKey] because some providers
+ * (confirmed: Airtel Uganda) send two *different* SMS bodies for one real transaction, so a
+ * content-derived [smsSourceKey] alone can't catch that pair, only a shared provider TID
+ * can. Unique-indexed on `(channelId, providerTransactionId)` rather than globally, since
+ * provider TIDs are not confirmed unique across every supported provider — scoping by
+ * channel (one channel per real sender/provider, see [ChannelEntity.normalizedSenderKey])
+ * is the safer default until cross-provider uniqueness is verified. Null for manually
+ * entered transactions and for any SMS a TID can't be extracted from.
  */
 @Entity(
     tableName = "transactions",
@@ -34,6 +44,7 @@ import cc.dlabs.pesamind.core.database.SyncStatus
         Index(value = ["syncStatus"]),
         Index(value = ["updatedAt"]),
         Index(value = ["smsSourceKey"], unique = true),
+        Index(value = ["channelId", "providerTransactionId"], unique = true),
     ],
 )
 data class TransactionEntity(
@@ -47,6 +58,7 @@ data class TransactionEntity(
     val note: String,
     val username: String,
     val smsSourceKey: String?,
+    val providerTransactionId: String?,
     val syncStatus: SyncStatus,
     val dirty: Boolean,
     val createdAt: Long,

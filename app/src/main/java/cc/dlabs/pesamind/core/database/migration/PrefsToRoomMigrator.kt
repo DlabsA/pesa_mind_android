@@ -188,6 +188,17 @@ internal fun ChannelDetails.toEntity(now: Long) =
         description = description,
         status = status,
         channelDesc = channelDesc,
+        // Deliberately NOT derived here, unlike ChannelRepository.createChannel/
+        // reconcileFromServer: this entity is inserted via a single bulk `upsertAll` call
+        // (OnConflictStrategy.REPLACE, not the per-row insertIgnore-with-safe-fallback this
+        // migration's siblings use). If this migration batch already contains two real
+        // duplicate channels for the same provider — a plausible, non-hypothetical state for
+        // an existing user, given the exact bug this fix closes let SMS auto-create silently
+        // hit the network on every message pre-fix — populating this column here would make
+        // REPLACE silently delete one of them mid-migration, violating this pass's own "must
+        // not silently delete already-synced rows without a user-facing/logged confirmation
+        // step" constraint. Left null; backfilling migrated rows safely is Phase 3's job.
+        normalizedSenderKey = null,
         smsNotificationEnabled = smsNotificationEnabled,
         syncStatus = SyncStatus.SYNCED,
         dirty = false,
@@ -209,6 +220,9 @@ internal fun TransactionDetails.toEntity(
     note = note,
     username = username,
     smsSourceKey = null,
+    // Not derivable retroactively from an already-migrated row (no original raw SMS body is
+    // available at this point) — same Phase 3 scoping note as normalizedSenderKey above.
+    providerTransactionId = null,
     syncStatus = SyncStatus.SYNCED,
     dirty = false,
     createdAt = now,

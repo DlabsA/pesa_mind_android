@@ -19,6 +19,25 @@ import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 /**
+ * Outcome of [TransactionRepository.createTransaction] — distinguishes a genuine new row from
+ * one discarded by the atomic dedup check, so callers that need to know (e.g.
+ * `SMSMessageProcessor`, to log a discarded duplicate's raw SMS body) can branch on the real
+ * `INSERT ... ON CONFLICT IGNORE` outcome rather than a SELECT performed before the insert,
+ * which a concurrent caller could race.
+ */
+sealed class TransactionInsertOutcome {
+    data class Inserted(val transaction: TransactionDetails) : TransactionInsertOutcome()
+
+    data class DuplicateDiscarded(val existing: TransactionDetails) : TransactionInsertOutcome()
+}
+
+internal fun TransactionInsertOutcome.details(): TransactionDetails =
+    when (this) {
+        is TransactionInsertOutcome.Inserted -> transaction
+        is TransactionInsertOutcome.DuplicateDiscarded -> existing
+    }
+
+/**
  * Room-backed source of truth for transactions (ADR-0004 Slice A1) — replaces
  * `TransactionManager`'s DataStore blob (which was never actually live in production; see
  * ADR-0004's Step 0 verification) for every `TransactionViewModel` call site. Same repository
@@ -49,12 +68,15 @@ object TransactionRepository {
      * display name is resolved here from Room rather than passed in, so the local row shows a
      * real channel name immediately without waiting on any sync.
      *
-     * [smsSourceKey] dedups against `TransactionEntity.smsSourceKey`'s unique index (see its
-     * doc comment) when a caller supplies one — reprocessing the same SMS is a no-op, returning
-     * the already-created row instead of inserting a duplicate. No caller passes a real key
-     * yet (SMS dedup key generation is ADR-0004 Slice A3's job), so this is currently inert in
-     * practice, not exercised — but it's the repository's job to hold the invariant the moment
-     * A3 starts supplying keys, not something to retrofit then.
+     * [smsSourceKey] and [providerTransactionId] both dedup against unique indices on
+     * [TransactionEntity] (see its doc comment for why two separate keys exist) — but the
+     * *correctness* mechanism is the atomic `INSERT ... ON CONFLICT IGNORE` below, not the
+     * `find*` pre-checks: those are a fast-path optimization only (skip building a throwaway
+     * entity when a hit is likely), since two concurrent calls for the same TID could otherwise
+     * both pass the same pre-check before either has inserted. The [TransactionInsertOutcome]
+     * return value reflects the real insert result, letting a caller (e.g.
+     * `SMSMessageProcessor`) tell a genuine new row from a discarded duplicate without a
+     * separate, racable verify step of its own.
      */
     suspend fun createTransaction(
         channelId: String,
@@ -63,12 +85,13 @@ object TransactionRepository {
         note: String,
         username: String,
         smsSourceKey: String? = null,
-    ): TransactionDetails {
+        providerTransactionId: String? = null,
+    ): TransactionInsertOutcome {
         val now = System.currentTimeMillis()
         return database.withTransaction {
-            if (smsSourceKey != null) {
-                transactionDao.findBySmsSourceKey(smsSourceKey)?.let { return@withTransaction it.toDetails() }
-            }
+            existingDuplicate(channelId, smsSourceKey, providerTransactionId)
+                ?.let { return@withTransaction TransactionInsertOutcome.DuplicateDiscarded(it.toDetails()) }
+
             val channelName = database.channelDao().getById(channelId)?.name.orEmpty()
             val entity =
                 TransactionEntity(
@@ -81,13 +104,22 @@ object TransactionRepository {
                     note = note,
                     username = username,
                     smsSourceKey = smsSourceKey,
+                    providerTransactionId = providerTransactionId,
                     syncStatus = SyncStatus.PENDING,
                     dirty = true,
                     createdAt = now,
                     updatedAt = now,
                     deletedAt = null,
                 )
-            transactionDao.upsert(entity)
+            val rowId = transactionDao.insertIgnore(entity)
+            if (rowId == -1L) {
+                // Lost a race against a concurrent insert sharing this smsSourceKey or
+                // (channelId, providerTransactionId) — surface the row that actually won.
+                val winner =
+                    existingDuplicate(channelId, smsSourceKey, providerTransactionId)
+                        ?: error("insertIgnore reported a conflict but no matching row was found")
+                return@withTransaction TransactionInsertOutcome.DuplicateDiscarded(winner.toDetails())
+            }
             outboxDao.upsert(
                 OutboxEntry(
                     id = UUID.randomUUID().toString(),
@@ -101,8 +133,18 @@ object TransactionRepository {
                     updatedAt = now,
                 ),
             )
-            entity.toDetails()
+            TransactionInsertOutcome.Inserted(entity.toDetails())
         }
+    }
+
+    private suspend fun existingDuplicate(
+        channelId: String,
+        smsSourceKey: String?,
+        providerTransactionId: String?,
+    ): TransactionEntity? {
+        smsSourceKey?.let { transactionDao.findBySmsSourceKey(it) }?.let { return it }
+        providerTransactionId?.let { transactionDao.findByChannelAndProviderTransactionId(channelId, it) }?.let { return it }
+        return null
     }
 
     /**
@@ -152,6 +194,7 @@ object TransactionRepository {
                             note = details.note,
                             username = details.username,
                             smsSourceKey = null,
+                            providerTransactionId = null,
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
                             createdAt = now,

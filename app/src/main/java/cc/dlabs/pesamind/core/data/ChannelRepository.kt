@@ -19,7 +19,20 @@ import cc.dlabs.pesamind.core.storage.AccountManager
 import dagger.hilt.EntryPoints
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.Locale
 import java.util.UUID
+
+/**
+ * Outcome of [ChannelRepository.createChannel] — distinguishes a genuine new row from one
+ * discarded by the atomic `normalizedSenderKey` dedup check, so a caller like
+ * `ChannelViewModel` can tell the user their request was deduped against an existing channel
+ * instead of reporting a false "created successfully" for a request that inserted nothing.
+ */
+sealed class ChannelCreateOutcome {
+    data class Created(val channel: ChannelDetails) : ChannelCreateOutcome()
+
+    data class AlreadyExists(val existing: ChannelDetails) : ChannelCreateOutcome()
+}
 
 /**
  * Room-backed source of truth for channels (ADR-0004 Slice A1) — replaces `ChannelManager`'s
@@ -30,7 +43,7 @@ import java.util.UUID
  * reuse or multi-source merging") because Room here is a genuine multi-source merge point:
  * local cache + a durable outbox + a future sync worker (Slice A2), consumed by more than one
  * feature — `ChannelViewModel` AND the SMS auto-creation lookup in
- * `ChannelManager.isSmsAllowedForSender` (kept in sync via [findByChannelDesc]/
+ * `ChannelManager.isSmsAllowedForSender` (kept in sync via [findByNormalizedSenderKey]/
  * [reconcileFromServer] below, since that's the one remaining `ChannelManager` caller and it
  * would otherwise see an increasingly stale channel list now that `ChannelViewModel` no longer
  * writes through `ChannelManager` at all).
@@ -48,6 +61,26 @@ object ChannelRepository {
     internal lateinit var database: PesaMindDatabase
     private val channelDao get() = database.channelDao()
     private val outboxDao get() = database.outboxDao()
+
+    /**
+     * The one `channelType` value that legitimately allows many rows sharing the same
+     * `channelDesc` ("Cash") — every other value represents a real-world provider/bank sender
+     * that must get a non-null [ChannelEntity.normalizedSenderKey]. Derived internally from
+     * [ChannelDetails.channelType]/the raw `channelType` param rather than a caller-supplied
+     * flag: an earlier version of this fix took an explicit `isProviderChannel` parameter, and
+     * both `SyncWorker`'s full-pull reconciliation and `PrefsToRoomMigrator`'s one-time import
+     * simply never passed `true` — meaning every already-synced or migrated provider channel
+     * (i.e. every existing user's data, not just fresh installs) kept `normalizedSenderKey =
+     * null` forever, silently making the whole dedup fix inert for the exact users it targets
+     * most. Deriving it here instead means every caller gets the guarantee automatically.
+     *
+     * Deliberately NOT applied to `PrefsToRoomMigrator`'s bulk one-time import — see that call
+     * site's own comment for why a bulk `REPLACE`-strategy insert makes this column unsafe to
+     * populate there without real duplicate-collision handling (Phase 3, not this pass).
+     */
+    private const val CASH_CHANNEL_TYPE = "Cash"
+
+    private fun isProviderChannelType(channelType: String): Boolean = channelType != CASH_CHANNEL_TYPE
 
     fun init(context: Context) {
         database = EntryPoints.get(context.applicationContext, DatabaseEntryPoint::class.java).database()
@@ -67,36 +100,61 @@ object ChannelRepository {
 
     suspend fun getByActiveStatus(active: Boolean): List<ChannelDetails> = channelDao.getByActiveStatus(active).map { it.toDetails() }
 
+    /**
+     * Every non-CASH [channelType] gets a non-null [ChannelEntity.normalizedSenderKey] and the
+     * atomic dedup-on-insert guarantee that comes with it (see [ChannelEntity]'s doc comment) —
+     * CASH channels share a single `channelDesc` ("Cash") across many legitimate rows and must
+     * never be forced unique. Non-provider callers get exactly the old unconditional-insert
+     * behavior (a fresh UUID primary key never collides).
+     */
     suspend fun createChannel(
         name: String,
         description: String,
         channelType: String,
         channelDesc: String,
         status: Boolean,
-    ): ChannelDetails {
+    ): ChannelCreateOutcome {
         val now = System.currentTimeMillis()
-        val entity =
-            ChannelEntity(
-                id = UUID.randomUUID().toString(),
-                serverId = null,
-                userId = currentUserId(),
-                name = name,
-                channelType = channelType,
-                description = description,
-                status = status,
-                channelDesc = channelDesc,
-                smsNotificationEnabled = true,
-                syncStatus = SyncStatus.PENDING,
-                dirty = true,
-                createdAt = now,
-                updatedAt = now,
-                deletedAt = null,
-            )
-        database.withTransaction {
-            channelDao.upsert(entity)
+        val normalizedKey = if (isProviderChannelType(channelType)) normalizeSenderKey(channelDesc) else null
+        val userId = currentUserId()
+        return database.withTransaction {
+            if (normalizedKey != null) {
+                channelDao.findByNormalizedSenderKey(normalizedKey)?.let {
+                    // Found a pre-existing row under this provider's normalizedSenderKey — live
+                    // or (rarely, see ChannelEntity's doc comment) soft-deleted. Either way,
+                    // nothing is inserted, so the caller must be told "already exists," not
+                    // "created" — see ChannelViewModel's handling of AlreadyExists.
+                    return@withTransaction ChannelCreateOutcome.AlreadyExists(it.toDetails())
+                }
+            }
+            val entity =
+                ChannelEntity(
+                    id = UUID.randomUUID().toString(),
+                    serverId = null,
+                    userId = userId,
+                    name = name,
+                    channelType = channelType,
+                    description = description,
+                    status = status,
+                    channelDesc = channelDesc,
+                    normalizedSenderKey = normalizedKey,
+                    smsNotificationEnabled = true,
+                    syncStatus = SyncStatus.PENDING,
+                    dirty = true,
+                    createdAt = now,
+                    updatedAt = now,
+                    deletedAt = null,
+                )
+            val rowId = channelDao.insertIgnore(entity)
+            if (rowId == -1L) {
+                // Lost a race against a concurrent insert for the same provider — return the
+                // row that actually won instead of a second, discarded one.
+                val winner = channelDao.findByNormalizedSenderKey(normalizedKey!!)!!
+                return@withTransaction ChannelCreateOutcome.AlreadyExists(winner.toDetails())
+            }
             outboxDao.upsert(newOutboxEntry(OutboxEntityType.CHANNEL, entity.id, OutboxOperation.CREATE, now))
+            ChannelCreateOutcome.Created(entity.toDetails())
         }
-        return entity.toDetails()
     }
 
     suspend fun updateChannel(
@@ -161,14 +219,48 @@ object ChannelRepository {
             updated.toDetails()
         }
 
-    /** Used by [cc.dlabs.pesamind.core.storage.ChannelManager.isSmsAllowedForSender] — see class doc. */
-    suspend fun findByChannelDesc(channelDesc: String): ChannelDetails? = channelDao.findByChannelDesc(channelDesc)?.toDetails()
+    /**
+     * Case-insensitive, local-only, **live-channels-only** lookup for provider/bank channels
+     * (mobile money, bank), keyed on the normalized form [ChannelEntity.normalizedSenderKey]
+     * stores. Used by [cc.dlabs.pesamind.core.storage.ChannelManager.isSmsAllowedForSender] to
+     * decide whether an active channel already exists for a sender before attaching a
+     * transaction to it — deliberately excludes soft-deleted rows (unlike the DAO-level
+     * [ChannelDao.findByNormalizedSenderKey] used internally by [createChannel]/
+     * [reconcileFromServer]'s conflict resolution), so a channel the user deleted is never
+     * silently treated as active. Always succeeds for a *live* provider channel this
+     * repository itself created, regardless of the exact casing the caller's [channelDesc]
+     * happens to be in.
+     */
+    suspend fun findByNormalizedSenderKey(channelDesc: String): ChannelDetails? =
+        channelDao.findLiveByNormalizedSenderKey(normalizeSenderKey(channelDesc))?.toDetails()
+
+    /** Trim+lowercase fold used for [ChannelEntity.normalizedSenderKey] — see its doc comment. */
+    fun normalizeSenderKey(channelDesc: String): String = channelDesc.trim().lowercase(Locale.ROOT)
 
     /**
      * Pull-reconciliation primitive (ADR-0004 invariant: "one live row per serverId, never
      * overwrite a dirty=true row from a server payload"). Used today by
      * `ChannelManager.isSmsAllowedForSender`'s auto-create path so a server-created channel
-     * becomes visible to future Room-based lookups; Slice A2's full pull reuses this per row.
+     * becomes visible to future Room-based lookups; `SyncWorker`'s full pull reuses this per row
+     * too — [isProviderChannelType] is derived from `details.channelType` here (see its doc
+     * comment for why that must be automatic, not caller-supplied), so both callers get the
+     * same dedup guarantee without either needing to know or pass a flag.
+     *
+     * The [ChannelEntity.normalizedSenderKey] conflict check applies only in the [InsertNew]
+     * branch below, not [UpdateExisting] — deliberately. An earlier version of this method
+     * checked it *before* the `serverId` lookup, which meant a row that already has this exact
+     * key set (from a previous reconcile) would find *itself* on every later pull and
+     * short-circuit before ever reaching `UpdateExisting`'s actual field refresh, permanently
+     * freezing that row's name/description/status against future server-side edits. Backfilling
+     * the key onto an *existing* row's `UpdateExisting` update was also considered and rejected:
+     * `channelDao.update` has no `onConflict` strategy (Room defaults `@Update` to `ABORT`), so
+     * if two already-locally-known duplicate rows (a real, plausible state for existing users —
+     * see ADR-0004) both get backfilled across separate pull cycles, the second `update()` would
+     * throw a `SQLiteConstraintException` instead of resolving gracefully. Only [InsertNew] uses
+     * the atomic insertIgnore-or-discard path that's actually built to handle that collision
+     * safely; a genuinely new server row can independently reach the network-create step (this
+     * method's caller may have already missed the local lookup once), so the transaction-scoped
+     * check immediately before inserting is what closes that race, not the caller's earlier miss.
      */
     suspend fun reconcileFromServer(details: ChannelDetails): ChannelDetails =
         database.withTransaction {
@@ -187,6 +279,8 @@ object ChannelRepository {
                             description = details.description,
                             status = details.status,
                             channelDesc = details.channelDesc,
+                            // Not backfilled here — see this method's doc comment for why an
+                            // already-known row's normalizedSenderKey is left exactly as-is.
                             syncStatus = SyncStatus.SYNCED,
                             updatedAt = now,
                         )
@@ -194,6 +288,17 @@ object ChannelRepository {
                     updated.toDetails()
                 }
                 ReconcileDecision.InsertNew -> {
+                    val normalizedKey =
+                        if (isProviderChannelType(details.channelType)) normalizeSenderKey(details.channelDesc) else null
+                    if (normalizedKey != null) {
+                        channelDao.findByNormalizedSenderKey(normalizedKey)?.let {
+                            // A different serverId, same real provider — a pre-existing local
+                            // duplicate (plausible for existing users, see ADR-0004) or a
+                            // concurrent SMS auto-create that already won. Either way, this
+                            // pulled row must not become a second local row for one provider.
+                            return@withTransaction it.toDetails()
+                        }
+                    }
                     val inserted =
                         ChannelEntity(
                             id = UUID.randomUUID().toString(),
@@ -204,6 +309,7 @@ object ChannelRepository {
                             description = details.description,
                             status = details.status,
                             channelDesc = details.channelDesc,
+                            normalizedSenderKey = normalizedKey,
                             smsNotificationEnabled = details.smsNotificationEnabled,
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
@@ -211,8 +317,13 @@ object ChannelRepository {
                             updatedAt = now,
                             deletedAt = null,
                         )
-                    channelDao.upsert(inserted)
-                    inserted.toDetails()
+                    val rowId = channelDao.insertIgnore(inserted)
+                    if (rowId == -1L) {
+                        // Lost a race against a concurrent insert for the same provider.
+                        channelDao.findByNormalizedSenderKey(normalizedKey!!)!!.toDetails()
+                    } else {
+                        inserted.toDetails()
+                    }
                 }
             }
         }

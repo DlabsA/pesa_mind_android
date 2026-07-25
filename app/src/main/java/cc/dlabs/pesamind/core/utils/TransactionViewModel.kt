@@ -4,7 +4,9 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.data.TransactionInsertOutcome
 import cc.dlabs.pesamind.core.data.TransactionRepository
+import cc.dlabs.pesamind.core.data.details
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,8 +26,11 @@ data class TransactionState(
 sealed class TransactionCreationResult {
     // transaction is nullable because a 2xx response with an empty/unparseable body still
     // counts as success (matches pre-refactor behavior) — the caller just has nothing to
-    // append to its local list or attach a real id to.
-    data class Success(val transaction: TransactionDetails?) : TransactionCreationResult()
+    // append to its local list or attach a real id to. wasDuplicate is true when the atomic
+    // dedup check (smsSourceKey / providerTransactionId) discarded this as a repeat of an
+    // already-created row rather than inserting a new one — SMSMessageProcessor uses this to
+    // log a discarded duplicate instead of treating it as a fresh transaction.
+    data class Success(val transaction: TransactionDetails?, val wasDuplicate: Boolean = false) : TransactionCreationResult()
 
     data class Failure(val message: String) : TransactionCreationResult()
 }
@@ -97,12 +102,19 @@ class TransactionViewModel : UnifiedViewModel() {
      * delegates here on its own coroutine and discards the result, since it only needs the
      * `_state` side effect. This is the single place that owns the isSaving/message/error
      * transitions for a transaction creation.
+     *
+     * [smsSourceKey]/[providerTransactionId] are null for every UI-driven call
+     * ([AddTransactionScreen] has no SMS to derive them from) and populated only by
+     * [SMSMessageProcessor] — see [TransactionRepository.createTransaction]'s doc comment for
+     * what they dedup against.
      */
     suspend fun createTransactionAwaited(
         channelID: String,
         amount: Double,
         type: String,
         note: String,
+        smsSourceKey: String? = null,
+        providerTransactionId: String? = null,
     ): TransactionCreationResult {
         val validationError = validateTransactionInput(channelID, amount, type, note)
         if (validationError != null) {
@@ -111,7 +123,7 @@ class TransactionViewModel : UnifiedViewModel() {
         }
 
         _state.value = _state.value.copy(isSaving = true, error = null)
-        val result = performCreateTransaction(channelID, amount, type, note)
+        val result = performCreateTransaction(channelID, amount, type, note, smsSourceKey, providerTransactionId)
         _state.value =
             when (result) {
                 is TransactionCreationResult.Success ->
@@ -142,6 +154,8 @@ class TransactionViewModel : UnifiedViewModel() {
         amount: Double,
         type: String,
         note: String,
+        smsSourceKey: String? = null,
+        providerTransactionId: String? = null,
     ): TransactionCreationResult {
         val normalizedType =
             TransactionTypes.normalizeOrNull(type)
@@ -149,24 +163,30 @@ class TransactionViewModel : UnifiedViewModel() {
                     "Invalid transaction type. Use: ${TransactionTypes.valid.joinToString()}",
                 )
         return try {
-            val created =
+            val outcome =
                 TransactionRepository.createTransaction(
                     channelId = channelID,
                     amount = amount,
                     type = normalizedType,
                     note = note.trim(),
                     username = currentUsername(),
+                    smsSourceKey = smsSourceKey,
+                    providerTransactionId = providerTransactionId,
                 )
-            // 🔥 Publish event so Dashboard and Analytics refresh automatically
-            Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
-            publishEvent(
-                StateEvent.TransactionCreated(
-                    transactionId = created.id,
-                    amount = amount,
-                    channelId = channelID,
-                ),
-            )
-            TransactionCreationResult.Success(created)
+            if (outcome is TransactionInsertOutcome.Inserted) {
+                // 🔥 Publish event so Dashboard and Analytics refresh automatically — a
+                // discarded duplicate must not re-publish a create event for a row nothing new
+                // actually happened to.
+                Log.d("TransactionViewModel", "📢 Publishing TransactionCreated event...")
+                publishEvent(
+                    StateEvent.TransactionCreated(
+                        transactionId = outcome.transaction.id,
+                        amount = amount,
+                        channelId = channelID,
+                    ),
+                )
+            }
+            TransactionCreationResult.Success(outcome.details(), wasDuplicate = outcome is TransactionInsertOutcome.DuplicateDiscarded)
         } catch (e: Exception) {
             Log.e("TransactionViewModel", "❌ Exception saving transaction locally", e)
             TransactionCreationResult.Failure("Could not save transaction: ${e.message ?: "Unknown error"}")
