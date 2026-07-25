@@ -5,10 +5,9 @@ import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
 import cc.dlabs.pesamind.core.data.ChannelRepository
-import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
-import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.features.settings.channels.ChannelDescBank
 import cc.dlabs.pesamind.features.settings.channels.ChannelDescMobileMoney
 import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
@@ -24,11 +23,11 @@ private val Context.channelDataStore by preferencesDataStore("pesamind_channels"
  * [ChannelRepository] (Room), so every DataStore-blob method below is dead from that side —
  * left `@Deprecated` rather than deleted pending Slice C's cleanup pass, per
  * `.claude/CLAUDE.md`'s "confirm with the user before deleting" rule. [isSmsAllowedForSender]
- * is the one method still genuinely called (from SMS ingestion, `SMSMessageProcessor` — Slice
- * A3's territory, not touched by A1 otherwise); its channel lookup/persistence were redirected
- * to [ChannelRepository] here so it doesn't see an increasingly stale channel list now that
- * nothing writes to this object's DataStore blob anymore. Its own network auto-create call is
- * unchanged — full "auto-create via Room, zero network" is Slice A3's job, not this fix's.
+ * is the one method still genuinely called (from SMS ingestion, `SMSMessageProcessor`); its
+ * channel lookup/persistence were redirected to [ChannelRepository] here so it doesn't see an
+ * increasingly stale channel list now that nothing writes to this object's DataStore blob
+ * anymore. As of Slice A3, its auto-create branch is fully local-first too — see
+ * [isSmsAllowedForSender]'s doc comment.
  */
 object ChannelManager {
     private val CHANNELS_KEY = stringPreferencesKey("cached_channels")
@@ -156,11 +155,16 @@ object ChannelManager {
         }
     }
 
-    /**
-     * Check if any channel with this sender ID has SMS notifications enabled
-     */
     data class ChannelInfo(val channel: ChannelDetails, val enabled: Boolean)
 
+    /**
+     * Check if any channel with this sender ID has SMS notifications enabled — auto-creating
+     * one first if none exists yet for a recognized sender. As of Slice A3, the auto-create
+     * branch is fully local-first: it goes through [ChannelRepository.createChannel] (Room +
+     * outbox), the same write path every other channel mutation already uses, instead of calling
+     * `ApiClient.api.createChannel()` directly. See the inline comments below for the full
+     * reasoning.
+     */
     suspend fun isSmsAllowedForSender(
         receivingSimNumber: String,
         simInfo: Int,
@@ -191,44 +195,46 @@ object ChannelManager {
             return ChannelInfo(matchingChannel, true)
         }
 
+        // Local-first as of Slice A3: goes through ChannelRepository.createChannel (Room +
+        // outbox), same write path as every other channel mutation since Slice A1, instead of
+        // calling ApiClient.api.createChannel() directly. This closes the confidence-48 gap
+        // flagged in "Duplicate channels + duplicate transactions" (no client idempotency id on
+        // the SMS auto-create network call) by removing that network round-trip entirely — the
+        // eventual push happens via SyncWorker, which already sends the entity's client UUID as
+        // the create idempotency key for every outbox row. It also means channel auto-creation
+        // from an incoming SMS now works fully offline, where the old network-first version
+        // failed silently (caught below, logged, returned null — SMS ingestion always degrades
+        // to "notifications disabled" rather than crashing).
         return try {
-            val request =
-                CreateChannelRequest(
-                    name = "Auto‑created $channelDesc",
-                    description = receivingSimNumber,
-                    channelType = channelType,
-                    channelDesc = channelDesc,
-                    status = true,
-                )
-            val response = ApiClient.api.createChannel(request)
-            val createdBody = response.body()
-            if (response.isSuccessful && createdBody != null) {
-                // Reconcile into Room so this channel is visible to future Room-based
-                // lookups (both this method's and ChannelViewModel's) — internally re-checks
-                // normalizedSenderKey inside the same transaction and atomically discards a
-                // duplicate insert if a concurrently-processed message already won.
-                ChannelRepository.reconcileFromServer(createdBody)
-                // reconcileFromServer's conflict guard can resolve to an existing row that is
-                // itself soft-deleted (normalizedSenderKey stays unique *across* soft-deletes,
-                // see ChannelEntity's doc comment) rather than the server row just created —
-                // re-checking liveness here (live-only lookup, not the tombstone-inclusive one
-                // reconcileFromServer used internally) is what stops a new SMS transaction from
-                // being silently attached to a channel the user already deleted.
-                val live = ChannelRepository.findByNormalizedSenderKey(channelDesc)
-                if (live == null) {
-                    Log.w(
-                        "ChannelManager",
-                        "Reconciled channel for sender $senderID resolved to a deleted row — blocking SMS auto-attach",
+            when (
+                val outcome =
+                    ChannelRepository.createChannel(
+                        name = "Auto‑created $channelDesc",
+                        description = receivingSimNumber,
+                        channelType = channelType,
+                        channelDesc = channelDesc,
+                        status = true,
                     )
-                    null
-                } else {
-                    ChannelInfo(live, true)
+            ) {
+                is ChannelCreateOutcome.Created -> ChannelInfo(outcome.channel, true)
+                is ChannelCreateOutcome.AlreadyExists -> {
+                    // createChannel's own atomic dedup-on-insert can resolve AlreadyExists to a
+                    // row that is itself soft-deleted (normalizedSenderKey stays unique *across*
+                    // soft-deletes, see ChannelEntity's doc comment) — re-checking liveness here
+                    // (the live-only lookup, not the tombstone-inclusive one createChannel used
+                    // internally) is what stops a new SMS transaction from being silently
+                    // attached to a channel the user already deleted.
+                    val live = ChannelRepository.findByNormalizedSenderKey(channelDesc)
+                    if (live == null) {
+                        Log.w(
+                            "ChannelManager",
+                            "Auto-create for sender $senderID resolved to a deleted row — blocking SMS auto-attach",
+                        )
+                        null
+                    } else {
+                        ChannelInfo(live, true)
+                    }
                 }
-            } else {
-                if (!response.isSuccessful) {
-                    Log.e("ChannelManager", "Error creating channel for sender $senderID: ${response.errorBody()?.string()}")
-                }
-                null
             }
         } catch (e: Exception) {
             Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)
