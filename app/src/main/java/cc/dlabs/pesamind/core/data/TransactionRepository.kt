@@ -216,4 +216,5 @@ internal fun TransactionEntity.toDetails() =
         note = note,
         channelDetailsName = channelDetailsName,
         username = username,
+        syncStatus = syncStatus,
     )

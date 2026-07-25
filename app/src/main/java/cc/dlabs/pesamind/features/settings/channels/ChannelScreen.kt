@@ -115,6 +115,7 @@ import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.SkeletonCard
+import cc.dlabs.pesamind.core.ui.SyncStatusBadge
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 
@@ -756,28 +757,39 @@ fun ChannelCard(
 
                     Spacer(Modifier.width(8.dp))
 
-                    Surface(shape = CircleShape, color = statusChipBg) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(6.dp)
-                                        .alpha(if (item.status) pulseAlpha else 0.55f)
-                                        .background(statusDotColor, CircleShape),
-                            )
-                            Text(
-                                text = if (item.status) "Active" else "Inactive",
-                                style =
-                                    MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        letterSpacing = 0.2.sp,
-                                    ),
-                                color = statusDotColor,
-                            )
+                    // Sync-status badge (ADR-0004 Slice A3) + status chip share one
+                    // `spacedBy` Row — SyncStatusBadge renders nothing once synced, and
+                    // `spacedBy` only adds space *between* children that actually exist, so a
+                    // fully-synced channel's card keeps the original single 8dp gap here
+                    // instead of accumulating a second fixed Spacer's worth of dead space.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        SyncStatusBadge(status = item.syncStatus)
+                        Surface(shape = CircleShape, color = statusChipBg) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .size(6.dp)
+                                            .alpha(if (item.status) pulseAlpha else 0.55f)
+                                            .background(statusDotColor, CircleShape),
+                                )
+                                Text(
+                                    text = if (item.status) "Active" else "Inactive",
+                                    style =
+                                        MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.2.sp,
+                                        ),
+                                    color = statusDotColor,
+                                )
+                            }
                         }
                     }
 

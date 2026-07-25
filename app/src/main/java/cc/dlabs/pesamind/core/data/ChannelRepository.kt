@@ -403,4 +403,5 @@ internal fun ChannelEntity.toDetails() =
         status = status,
         channelDesc = channelDesc,
         smsNotificationEnabled = smsNotificationEnabled,
+        syncStatus = syncStatus,
     )

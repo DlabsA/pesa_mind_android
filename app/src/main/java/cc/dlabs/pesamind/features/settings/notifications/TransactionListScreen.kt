@@ -46,6 +46,7 @@ import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.ShimmerBox
 import cc.dlabs.pesamind.core.ui.SkeletonCard
+import cc.dlabs.pesamind.core.ui.SyncStatusBadge
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -625,17 +626,22 @@ private fun TransactionCard(
 
             // ── Main content ───────────────────────────────────────────────
             Column(modifier = Modifier.weight(1f)) {
-                // Channel name
-                Text(
-                    text = tx.channelDetailsName.ifBlank { "Transaction" },
-                    style =
-                        MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // Channel name + sync-status badge (ADR-0004 Slice A3 — renders nothing once
+                // synced, so a fully-synced transaction's card is unchanged from before this)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = tx.channelDetailsName.ifBlank { "Transaction" },
+                        style =
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    SyncStatusBadge(status = tx.syncStatus)
+                }
 
                 Spacer(Modifier.height(2.dp))
 

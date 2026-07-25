@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.core.network.models
 
+import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.network.analytics.Health
 import com.google.gson.annotations.SerializedName
 
@@ -208,6 +209,10 @@ data class TransactionDetails(
     @SerializedName("channel_details_name")
     val channelDetailsName: String = "",
     val username: String = "",
+    // Local-only field (ADR-0004 Slice A3 sync-status UI): mirrors ChannelDetails.smsNotificationEnabled's
+    // @Transient pattern — never sent to or read from the server, populated from TransactionEntity.syncStatus.
+    @Transient
+    val syncStatus: SyncStatus = SyncStatus.SYNCED,
 )
 
 data class AnalyticsResponse(
@@ -260,6 +265,10 @@ data class ChannelDetails(
     // Local-only field: SMS notification flag (not sent to backend)
     @Transient
     val smsNotificationEnabled: Boolean = true,
+    // Local-only field (ADR-0004 Slice A3 sync-status UI): not sent to or read from the server,
+    // populated from ChannelEntity.syncStatus.
+    @Transient
+    val syncStatus: SyncStatus = SyncStatus.SYNCED,
 )
 
 data class CreateChannelRequest(
