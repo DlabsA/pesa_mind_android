@@ -20,7 +20,6 @@ object AuthManager {
      * Clears tokens and emits a logout event that UI can subscribe to.
      */
     suspend fun logout() {
-        Log.w(TAG, "🔓 Logout triggered - clearing tokens and notifying UI")
         // Clear all stored authentication data
         TokenManager.clearTokens()
         TokenManager.clearLock()

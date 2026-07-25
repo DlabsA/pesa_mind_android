@@ -62,6 +62,13 @@ object TokenManager {
         }
     }
 
+    suspend fun clearRefreshToken() {
+        if (!isInitialized()) return
+        appContext.dataStore.edit {
+            it.remove(REFRESH_KEY)
+        }
+    }
+
     suspend fun isLoggedIn(): Boolean = getToken() != null
 
     suspend fun getLockState(): LockState =

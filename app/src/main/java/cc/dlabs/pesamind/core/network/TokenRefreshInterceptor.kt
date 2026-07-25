@@ -87,7 +87,6 @@ class TokenRefreshInterceptor : Interceptor {
             } else {
                 // Refresh failed - logout and clear everything
                 isRefreshing = false
-                Log.e(TAG, "✗ Token refresh failed, logging out")
                 handleLogout()
                 response
             }
@@ -123,7 +122,8 @@ class TokenRefreshInterceptor : Interceptor {
 
                 if (refreshTokenValue.isNullOrEmpty()) {
                     // No refresh token available, cannot refresh
-                    Log.e(TAG, "No refresh token available")
+                    Log.e(TAG, "No refresh token available - clearing it")
+                    TokenManager.clearRefreshToken()
                     false
                 } else {
                     Log.d(TAG, "Sending refresh token request...")
@@ -142,14 +142,16 @@ class TokenRefreshInterceptor : Interceptor {
                         Log.d(TAG, "✓ New tokens saved successfully")
                         true
                     } else {
-                        // Refresh failed
-                        Log.e(TAG, "Refresh failed with code: ${response.code()}")
+                        // Refresh failed - clear the invalid refresh token
+                        Log.e(TAG, "Refresh failed with code: ${response.code()} - clearing invalid refresh token")
+                        TokenManager.clearRefreshToken()
                         false
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing token: ${e.message}", e)
+                Log.e(TAG, "Error refreshing token: ${e.message} - clearing invalid refresh token", e)
                 e.printStackTrace()
+                TokenManager.clearRefreshToken()
                 false
             }
         }

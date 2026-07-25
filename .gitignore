@@ -22,3 +22,4 @@ keystore.properties
 
 # session-local marker for the graphify Stop-hook sync heuristic
 .claude/hooks/.last-graphify-sync
+*.log
