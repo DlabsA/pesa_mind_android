@@ -1,18 +1,17 @@
 package cc.dlabs.pesamind.features.budgets
 
-import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.data.MonthlyBudgetRepository
+import cc.dlabs.pesamind.core.data.YearlyBudgetRepository
 import cc.dlabs.pesamind.core.network.ApiClient.api
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.AccountManager
-import cc.dlabs.pesamind.core.storage.BudgetManager
 import cc.dlabs.pesamind.core.storage.StreakSessionCache
 import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,7 +43,10 @@ data class BudgetUiState(
     val error: String? = null,
     val isDarkMode: Boolean = false,
     val isOffline: Boolean = false,
-    // Computed from data
+    // Computed from data — with Room as the real local cache (ADR-0006), isFromCache now
+    // means "the current month's budget hasn't been confirmed by the server yet" (the backing
+    // entity is dirty), not "we fell back to a cache because the network failed" — there is no
+    // more fetched-vs-cached distinction once Room is the only read path.
     val isFromCache: Boolean = false,
     val lastUpdated: Long? = null,
     val streakCount: Int = 0,
@@ -64,8 +66,6 @@ data class BudgetUiState(
     val hasNextMonthBudget: Boolean get() = nextMonthBudget != null
 
     val isLoading: Boolean get() = isLoadingYearly || isLoadingMonthly
-
-    // ── New computed properties ────────────────────────────────────────────
 
     val greetingText: String
         get() {
@@ -90,38 +90,74 @@ data class BudgetUiState(
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
+/**
+ * Room-backed (ADR-0006) — reads go through [YearlyBudgetRepository]/[MonthlyBudgetRepository]
+ * Flows, never `ApiClient`/`BudgetManager` directly. `BudgetManager`'s DataStore cache was
+ * never actually live in production (its `init()` was never called from
+ * `PesaMindApp.onCreate()` — see debt-burndown A9), so this isn't just a rewire — it's the
+ * first time budgets have had a working local cache at all.
+ *
+ * Deliberately does NOT subscribe to `StateEvent.SyncCompleted` the way `DashboardViewModel`/
+ * `AnalyticsViewModel` do (ADR-0006's own outline assumed it would need to) — those two are
+ * still 100% server-computed and need an explicit "go refetch" trigger; budgets are now
+ * genuinely local-first, so the Room write `SyncWorker` performs on a successful pull *is* the
+ * trigger — [observeBudgets]'s Flow collectors pick it up automatically, no event needed.
+ *
+ * [fetchStreak]/`api.getDashboard()` stay network-backed, unchanged — gamification streak is
+ * out of this fix's scope.
+ */
 @HiltViewModel
 class BudgetViewModel
     @Inject
     constructor(
         private val networkMonitor: NetworkMonitor,
     ) : UnifiedViewModel() {
-        companion object {
-            private const val TAG = "BudgetViewModel"
-        }
-
         private val _state = MutableStateFlow(BudgetUiState())
         val state: StateFlow<BudgetUiState> = _state.asStateFlow()
-        private var pendingSync = false
 
         init {
             loadUserProfile()
             observeConnectivity()
-            loadDashboard(forceRefresh = false)
+            observeBudgets()
+            viewModelScope.launch { fetchStreak() }
         }
 
         private fun observeConnectivity() {
             viewModelScope.launch {
                 networkMonitor.isConnected.collect { connected ->
-                    if (!connected) {
-                        _state.update { it.copy(isOffline = true) }
-                        return@collect
-                    }
+                    _state.update { it.copy(isOffline = !connected) }
+                }
+            }
+        }
 
-                    _state.update { it.copy(isOffline = false) }
-                    if (pendingSync) {
-                        loadDashboard(forceRefresh = true)
+        /** Sole writer of yearlyBudget/currentMonthlyBudget/nextMonthBudget — see this class's
+         * doc comment for why no `StateEvent.SyncCompleted` handling is needed alongside it. */
+        private fun observeBudgets() {
+            val year = _state.value.displayYear.toLong()
+            val month = _state.value.displayMonth
+            val nextMonth = _state.value.nextMonthIndex
+            val nextYear = _state.value.nextMonthYear.toLong()
+
+            viewModelScope.launch {
+                YearlyBudgetRepository.observeYearlyBudgetSnapshot(year).collect { snapshot ->
+                    _state.update { it.copy(yearlyBudget = snapshot?.details, isLoadingYearly = false) }
+                }
+            }
+            viewModelScope.launch {
+                MonthlyBudgetRepository.observeMonthlyBudgetSnapshot(month, year).collect { snapshot ->
+                    _state.update {
+                        it.copy(
+                            currentMonthlyBudget = snapshot?.details,
+                            isLoadingMonthly = false,
+                            isFromCache = snapshot?.dirty ?: false,
+                            lastUpdated = snapshot?.updatedAt ?: it.lastUpdated,
+                        )
                     }
+                }
+            }
+            viewModelScope.launch {
+                MonthlyBudgetRepository.observeMonthlyBudgetSnapshot(nextMonth, nextYear).collect { snapshot ->
+                    _state.update { it.copy(nextMonthBudget = snapshot?.details) }
                 }
             }
         }
@@ -157,233 +193,31 @@ class BudgetViewModel
             _state.update { it.copy(isDarkMode = !it.isDarkMode) }
         }
 
-        // ── Load dashboard ────────────────────────────────────────────────────────
+        // ── Refresh ───────────────────────────────────────────────────────────────
 
-        fun loadDashboard(forceRefresh: Boolean = false) {
+        /** One-shot Room re-read, kept for the pull-to-refresh UI action — mirrors
+         * `ChannelViewModel`/`TransactionViewModel.refresh()`'s "redundant alongside a live
+         * Flow, kept for the affordance" role rather than doing a network fetch: [observeBudgets]
+         * already keeps [state] current. */
+        fun refresh() {
             viewModelScope.launch {
-                val now = Calendar.getInstance()
-                val month = now.get(Calendar.MONTH) + 1
-                val year = now.get(Calendar.YEAR).toLong()
-
-                // Show cached data immediately while fetching fresh
-                val hasCache =
-                    if (!forceRefresh) {
-                        loadFromCache(month, year.toInt())
-                    } else {
-                        false
-                    }
-
-                val cacheIsFresh =
-                    if (!forceRefresh && hasCache) {
-                        val monthlyFresh = !BudgetManager.isMonthlyBudgetsCacheStale()
-                        val yearlyFresh = !BudgetManager.isYearlyBudgetsCacheStale()
-                        monthlyFresh && yearlyFresh
-                    } else {
-                        false
-                    }
-
-                if (!forceRefresh && cacheIsFresh) {
-                    pendingSync = false
-                    _state.update { it.copy(isOffline = !networkMonitor.isConnectedNow) }
-                    return@launch
-                }
-
-                val canFetchNetwork = networkMonitor.isConnectedNow
-                if (!canFetchNetwork) {
-                    pendingSync = hasCache
-                    _state.update {
-                        it.copy(
-                            isLoadingYearly = false,
-                            isLoadingMonthly = false,
-                            isRefreshing = false,
-                            isOffline = true,
-                        )
-                    }
-                    return@launch
-                }
-
-                _state.update {
-                    it.copy(
-                        isLoadingYearly = true,
-                        isLoadingMonthly = true,
-                        isRefreshing = forceRefresh,
-                        error = null,
-                    )
-                }
-
+                _state.update { it.copy(isRefreshing = true) }
                 try {
-                    val yearlyDeferred = async { fetchYearlyBudget(year.toInt()) }
-                    val monthlyDeferred = async { fetchMonthlyBudget(month, year) }
-                    val nextMonthDeferred =
-                        async {
-                            val nextM = if (month == 12) 1 else month + 1
-                            val nextY = if (month == 12) year + 1 else year
-                            fetchMonthlyBudget(nextM, nextY, isNext = true)
-                        }
-                    val streakDeferred = async { fetchStreak() }
-
-                    yearlyDeferred.await()
-                    monthlyDeferred.await()
-                    nextMonthDeferred.await()
-                    streakDeferred.await()
+                    val year = _state.value.displayYear.toLong()
+                    val month = _state.value.displayMonth
+                    val nextMonth = _state.value.nextMonthIndex
+                    val nextYear = _state.value.nextMonthYear.toLong()
+                    val yearly = YearlyBudgetRepository.getYearlyBudget(year)
+                    val monthly = MonthlyBudgetRepository.getMonthlyBudget(month, year)
+                    val next = MonthlyBudgetRepository.getMonthlyBudget(nextMonth, nextYear)
+                    _state.update { it.copy(yearlyBudget = yearly, currentMonthlyBudget = monthly, nextMonthBudget = next) }
                 } finally {
-                    pendingSync = false
                     _state.update { it.copy(isRefreshing = false) }
                 }
             }
         }
 
-        fun refresh() = loadDashboard(forceRefresh = true)
-
-        // ── Cache load ────────────────────────────────────────────────────────────
-
-        private suspend fun loadFromCache(
-            month: Int,
-            year: Int,
-        ): Boolean {
-            val cachedYearly =
-                BudgetManager.getYearlyBudgets()
-                    .find { it.year == year.toLong() }
-            val cachedMonthly = BudgetManager.getMonthlyBudgetByMonthYear(month, year.toLong())
-            val nextM = if (month == 12) 1 else month + 1
-            val nextY = if (month == 12) year + 1 else year
-            val cachedNext = BudgetManager.getMonthlyBudgetByMonthYear(nextM, nextY.toLong())
-
-            if (cachedYearly != null || cachedMonthly != null) {
-                _state.update {
-                    it.copy(
-                        yearlyBudget = cachedYearly ?: it.yearlyBudget,
-                        currentMonthlyBudget = cachedMonthly ?: it.currentMonthlyBudget,
-                        nextMonthBudget = cachedNext,
-                        isFromCache = true,
-                        isOffline = !networkMonitor.isConnectedNow,
-                    )
-                }
-                return true
-            }
-
-            return false
-        }
-
-        // ── Network fetches ───────────────────────────────────────────────────────
-
-        private suspend fun fetchYearlyBudget(year: Int) {
-            try {
-                val response = api.getYearlyBudgets()
-                when {
-                    response.isSuccessful -> {
-                        val match = response.body()?.find { it.year == year.toLong() }
-                        BudgetManager.saveYearlyBudgets(response.body() ?: emptyList())
-                        _state.update {
-                            it.copy(
-                                yearlyBudget = match,
-                                isLoadingYearly = false,
-                                isFromCache = false,
-                                isOffline = false,
-                            )
-                        }
-                    }
-                    response.code() == 404 -> {
-                        // Resource doesn't exist - not an error, just no data yet
-                        Log.d(TAG, "No yearly budget available for year $year (404)")
-                        _state.update {
-                            it.copy(
-                                yearlyBudget = null,
-                                isLoadingYearly = false,
-                                isOffline = false,
-                                // Don't set error - this is normal
-                            )
-                        }
-                    }
-                    else -> {
-                        // Other HTTP errors (401 is handled by TokenRefreshInterceptor)
-                        _state.update {
-                            it.copy(
-                                isLoadingYearly = false,
-                                error = "Failed to load yearly budget (${response.code()})",
-                                isOffline = false,
-                            )
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                pendingSync = true
-                _state.update {
-                    it.copy(
-                        isLoadingYearly = false,
-                        error = "Could not load yearly budget: ${e.message}",
-                        isOffline = true,
-                    )
-                }
-            }
-        }
-
-        private suspend fun fetchMonthlyBudget(
-            month: Int,
-            year: Long,
-            isNext: Boolean = false,
-        ) {
-            try {
-                val response = api.getMonthlyBudgetByMonthYear(month, year)
-                when {
-                    response.isSuccessful -> {
-                        val budget = response.body()
-                        if (budget != null) {
-                            BudgetManager.saveCurrentMonthlyBudget(budget)
-                            _state.update {
-                                if (isNext) {
-                                    it.copy(nextMonthBudget = budget, isLoadingMonthly = false, isOffline = false)
-                                } else {
-                                    it.copy(
-                                        currentMonthlyBudget = budget,
-                                        isLoadingMonthly = false,
-                                        isFromCache = false,
-                                        isOffline = false,
-                                    )
-                                }
-                            }
-                        } else {
-                            _state.update { it.copy(isLoadingMonthly = false, isOffline = false) }
-                        }
-                    }
-                    response.code() == 404 -> {
-                        // Budget doesn't exist yet - not an error, normal state
-                        Log.d(TAG, "No budget available for $month/$year (404)")
-                        _state.update {
-                            if (isNext) {
-                                it.copy(nextMonthBudget = null, isLoadingMonthly = false, isOffline = false)
-                            } else {
-                                it.copy(
-                                    currentMonthlyBudget = null,
-                                    isLoadingMonthly = false,
-                                    isOffline = false,
-                                    // Don't set error - this is normal
-                                )
-                            }
-                        }
-                    }
-                    else -> {
-                        // Other HTTP errors (401 is handled by TokenRefreshInterceptor)
-                        _state.update {
-                            it.copy(
-                                isLoadingMonthly = false,
-                                error = if (!isNext) "Failed to load monthly budget (${response.code()})" else it.error,
-                                isOffline = false,
-                            )
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (!isNext) pendingSync = true
-                _state.update {
-                    it.copy(
-                        isLoadingMonthly = false,
-                        error = if (!isNext) "Could not load monthly budget: ${e.message}" else it.error,
-                        isOffline = true,
-                    )
-                }
-            }
-        }
+        // ── Streak (unchanged — server/gamification-backed, out of A9's scope) ──────
 
         private suspend fun fetchStreak() {
             val cachedStreak = StreakSessionCache.get()

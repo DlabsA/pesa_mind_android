@@ -79,6 +79,18 @@ class AnalyticsViewModel
                     }
                 }
 
+                // SyncWorker just finished a push+pull cycle — the accurate correction after
+                // TransactionCreated's immediate (possibly-stale) refresh above. refresh()
+                // already has no isConnectedNow guard to bypass (unlike Dashboard's).
+                is StateEvent.SyncCompleted -> {
+                    viewModelScope.launch {
+                        try {
+                            refresh()
+                        } catch (e: Exception) {
+                        }
+                    }
+                }
+
                 // Respond to logout
                 is StateEvent.UserLoggedOut -> {
                     StreakSessionCache.clear()

@@ -73,4 +73,12 @@ sealed class StateEvent {
     ) : StateEvent()
 
     data object SyncRequested : StateEvent()
+
+    /**
+     * Published by [cc.dlabs.pesamind.core.sync.SyncWorker] after a push+pull cycle
+     * finishes — success or partial (some rows may have transiently failed and will
+     * retry on a later run, but whatever DID sync in this run is real). This is the
+     * completion signal [SyncRequested] was meant to be but that nothing ever publishes.
+     */
+    data object SyncCompleted : StateEvent()
 }
