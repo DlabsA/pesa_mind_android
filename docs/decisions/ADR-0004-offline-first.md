@@ -13,10 +13,13 @@ unverified is fully verified (see "Backend-contract verification" below): the
 client-UUID idempotency gap and the `ChannelDesc` question are both **closed** —
 fixed (idempotency) or confirmed already-safe (`ChannelDesc`), each backed by real
 tests (Postgres integration + HTTP-level) and a live curl-based test against a
-locally-running instance of the real backend binary, all **in the backend repo, on
-a local branch, not yet deployed to `api.dlabs.cc`** — this remaining
-undeployed-backend-fix risk is the one gap Slice A3 explicitly does not close (see
-"Slice A3"'s accepted gaps). The `DeletedAt`/soft-delete question is assessed (full
+locally-running instance of the real backend binary, and **as of 2026-07-25,
+confirmed merged to `main` and deployed live on `api.dlabs.cc`** (backend PR #13,
+commit `16a5ba9` — confirmed on `origin/main` via `git fetch`; production is live
+at `87774af`, a direct descendant merging the unrelated PR #14 streak-lock fix,
+so `16a5ba9`'s idempotency fix ships in that same deploy) — the
+undeployed-backend-fix risk Slice A3's accepted gaps flagged is now closed, not
+just backend-side-fixed. The `DeletedAt`/soft-delete question is assessed (full
 blast-radius across every backend domain) and correctly re-scoped as its own
 follow-up rather than fixed inline. The delta-pull/cursor gap is confirmed absent
 and remains its own scoped backend task, not started — Part 2 (a real delta pull)
@@ -735,14 +738,22 @@ This section resolves the five specific unknowns the A2/A3 task brief named,
 each checked against source, not inferred from `ApiService.kt`:
 
 **Status of the three Part 1 items: 1 and 2 closed (fixed + tested + live-verified,
-not yet deployed), 3 closed (already safe, locked in with a test), 4 (`DeletedAt`)
-scoped as a follow-up, not fixed inline as instructed. Cursor/delta support (item 5
-below, needed for Part 2) confirmed absent — its own future backend task.**
+merged and deployed as of 2026-07-25 — see update below), 3 closed (already safe,
+locked in with a test), 4 (`DeletedAt`) scoped as a follow-up, not fixed inline as
+instructed. Cursor/delta support (item 5 below, needed for Part 2) confirmed
+absent — its own future backend task.**
+
+**Update, 2026-07-25:** merged to `main` via PR #13 (commit `16a5ba9`) and
+confirmed deployed live on `api.dlabs.cc` (production is at `87774af`, a
+descendant of `16a5ba9`). The "not deployed" caveat throughout this section is
+historical — kept as-is below for an accurate record of what was verified and
+when, not corrected line-by-line.
 
 **1+2. Client-supplied `id` binding + upsert-on-conflict — confirmed broken,
 now fixed and verified with real tests (branch
 `fix/idempotent-channel-transaction-create`, commits `61802b2` + `ecacecf`, not
-deployed).** Neither `dto.CreateTransactionRequest`
+deployed at the time this section was written — see "Update" above).** Neither
+`dto.CreateTransactionRequest`
 (`internal/interfaces/http/dto/transaction_dto.go`, pre-fix: lines 3-8) nor
 `dto.CreateChannelDetailsRequest` (`internal/interfaces/http/dto/category_dto.go`,
 pre-fix: lines 18-24) declared an `id` field. Gin/`encoding/json` binding silently
@@ -941,7 +952,10 @@ meaningful build target), `go vet` scoped to every package touched (clean),
 `go test` scoped to every package touched (all green, including the two new
 Postgres-integration tests). Two commits on `fix/idempotent-channel-transaction-create`:
 `61802b2` (the fix itself) and `ecacecf` (the tests + pre-existing test-compile
-fixes above). **Neither commit is pushed or deployed.**
+fixes above). Neither commit was pushed or deployed at the time this was
+written — since merged via PR #13 (`16a5ba9`) and confirmed deployed live on
+`api.dlabs.cc` as of 2026-07-25 (see the "Update" note earlier in this
+section).
 
 ## Airplane-mode acceptance test (target state for Channel/Transaction — steps 1-2 and 6-7 are exercisable now that A2 has landed; steps 3-4 need Slice A3 (SMS, profile). Step 9's "no duplicates" concern — the backend-blocker from Slice A2 above — is now backend-side closed: see "Backend-contract verification" for a live curl-based create-twice-same-id test against the real backend that found exactly one row both times. What's still not done is firing this test from the real Android app / a real device (none available this session) and the backend fix is still undeployed, so this remains unattempted **on-device** end-to-end)
 
@@ -1268,10 +1282,11 @@ in, not by patching around it: two SMS from a brand-new provider processed
 concurrently now serialize on `ChannelRepository.createChannel`'s own
 `database.withTransaction`, so exactly one outbox `CREATE` row is ever written for
 that provider — the duplicate-POST race is closed before the network is involved at
-all, rather than being closed at the server (which is still pending an undeployed
+all, rather than being closed at the server (which was pending an undeployed
 backend fix for the general retry-timeout idempotency risk shared by every A2
-create — see "Backend-contract verification" above; that broader risk isn't
-specific to this call site and isn't what confidence-48 named).
+create at the time this was written — see "Backend-contract verification" above,
+now deployed as of 2026-07-25; that broader risk isn't specific to this call site
+and isn't what confidence-48 named).
 
 The rewire had to preserve two invariants from the dedup fix above without
 regressing either:
@@ -1349,11 +1364,12 @@ composable, per the reuse-first rule's own "after any new module" instruction.
 
 - **The general retry-timeout idempotency risk** (a timed-out-but-actually-succeeded
   outbox POST, retried by `SyncWorker`, could still duplicate server-side until the
-  backend's idempotent-upsert fix — see "Backend-contract verification" — is
-  deployed to `api.dlabs.cc`) applies to channel auto-create the same as every other
-  A2 create. Piece 1 closes the *concurrent-double-POST-with-no-id* case
-  (confidence-48) specifically, not this broader, already-tracked, backend-deploy-
-  blocked risk.
+  backend's idempotent-upsert fix — see "Backend-contract verification" — was
+  deployed to `api.dlabs.cc`) applied to channel auto-create the same as every
+  other A2 create. Piece 1 closes the *concurrent-double-POST-with-no-id* case
+  (confidence-48) specifically, not this broader risk — which itself is now closed
+  too, per the 2026-07-25 backend deploy confirmation above (PR #13, `16a5ba9`,
+  live at `87774af`).
 - **`SyncStatusBadge` has no tap/retry affordance.** A `FAILED` row is visible but
   not actionable from the badge itself — no "retry now" or "see error" interaction.
   The task scoped this as "at minimum a visible indicator," not a full retry UX;
