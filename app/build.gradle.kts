@@ -173,8 +173,11 @@ dependencies {
     // Google Sign-In
     implementation(libs.google.signin)
 
-    // Android Security (EncryptedSharedPreferences)
-    implementation(libs.androidx.security.crypto)
+    // Tink + Android Keystore — encrypts TokenManager's DataStore-persisted secrets at rest.
+    // Not EncryptedSharedPreferences: deprecated in security-crypto 1.1.0-alpha07 (April 2025)
+    // for main-thread StrictMode violations and OEM keyset-corruption crashes. See
+    // docs/decisions/ADR-0005-token-storage-encryption.md.
+    implementation(libs.tink.android)
 
     // Room (offline-first local database — see docs/decisions/ADR-0004-offline-first.md)
     implementation(libs.androidx.room.runtime)

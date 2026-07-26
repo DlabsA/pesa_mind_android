@@ -56,10 +56,16 @@ Before writing any new composable, util function, or manager method:
 - No secret, password, or key ever has a literal fallback value in a committed file
   (`build.gradle.kts` or otherwise). Env var / local `.env` / Gradle property only — if none
   is set, fail the build, don't fall back to a string literal.
-- Any locally-persisted secret (JWT, refresh token, PIN, pattern) must be encrypted via
-  Android Keystore (`EncryptedSharedPreferences` or a Keystore-wrapped key), not plain
-  DataStore/SharedPreferences. `androidx.security.crypto` is already a dependency — use it,
-  don't add a second one.
+- Any locally-persisted secret (JWT, refresh token, PIN, pattern) must be encrypted at rest.
+  Current pattern (see `docs/decisions/ADR-0005-token-storage-encryption.md`): keep the value
+  in DataStore, encrypt it with Tink's `Aead` primitive (AES256-GCM) using a keyset wrapped by
+  an Android Keystore-resident key (`com.google.crypto.tink:tink-android`,
+  `AndroidKeysetManager`) — encryption is a layer on top of DataStore, not a storage swap.
+  **Do not use `EncryptedSharedPreferences`** — deprecated in `security-crypto` 1.1.0-alpha07
+  (April 2025) for main-thread StrictMode violations and OEM keyset-corruption crashes;
+  `androidx.security.crypto` is no longer a dependency in this repo. `TokenCryptoManager`
+  (`core/storage/`) is the reference implementation — extend it rather than adding a second
+  crypto layer for a new secret.
 
 ## Performance budgets
 
