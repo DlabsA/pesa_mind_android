@@ -1,6 +1,5 @@
 package cc.dlabs.pesamind.core.storage
 
-import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

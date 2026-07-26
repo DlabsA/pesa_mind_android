@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   API 31+. See https://developer.android.com/about/versions/12/backup-restore#xml-changes
 -->
 <data-extraction-rules>
-    <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
-    </cloud-backup>
     <!--
-    <device-transfer>
-        <include .../>
-        <exclude .../>
-    </device-transfer>
+      ADR-0005: excluded from both cloud-backup AND device-transfer for the same reason —
+      the Tink keyset's wrapping key lives in this device's Android Keystore and never
+      migrates with either kind of transfer, so a restored/transferred copy of either file
+      below would be permanently undecryptable on the receiving device. See backup_rules.xml
+      (the API < 31 fallback) for the equivalent legacy-path exclusion.
     -->
+    <cloud-backup>
+        <exclude domain="file" path="datastore/pesamind_prefs.preferences_pb" />
+        <exclude domain="sharedpref" path="pesamind_token_keyset_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/pesamind_prefs.preferences_pb" />
+        <exclude domain="sharedpref" path="pesamind_token_keyset_prefs.xml" />
+    </device-transfer>
 </data-extraction-rules>
