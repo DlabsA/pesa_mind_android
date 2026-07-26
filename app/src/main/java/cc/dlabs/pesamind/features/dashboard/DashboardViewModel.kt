@@ -60,11 +60,18 @@ class DashboardViewModel
         init {
             // Mirror iOS: observe connectivity, auto-load when connection returns
             viewModelScope.launch {
+                var wasConnected: Boolean? = null
                 networkMonitor.isConnected.collect { connected ->
                     _state.update { it.copy(isOffline = !connected) }
-                    if (connected && _state.value.dashboard == null) {
+                    // dashboard == null covers "never loaded"; wasConnected == false covers
+                    // "loaded, but stale because we were offline since" — without the second
+                    // check, reconnecting after an offline stretch never refetched once a
+                    // dashboard had already loaded once this session.
+                    val reconnected = wasConnected == false
+                    if (connected && (_state.value.dashboard == null || reconnected)) {
                         fetchFromNetwork()
                     }
+                    wasConnected = connected
                 }
             }
         }
@@ -111,6 +118,10 @@ class DashboardViewModel
                     viewModelScope.launch { refresh() }
                 }
 
+                // SyncWorker just finished a push+pull cycle — the accurate correction after
+                // TransactionCreated's immediate (possibly-stale) refresh above.
+                is StateEvent.SyncCompleted -> refreshAfterSync()
+
                 else -> {
                     Log.d("DashboardViewModel", "Ignoring event: ${event::class.simpleName}")
                 }
@@ -144,6 +155,21 @@ class DashboardViewModel
                     } else {
                         _state.update { it.copy(isOffline = true) }
                     }
+                } finally {
+                    _state.update { it.copy(isRefreshing = false) }
+                }
+            }
+        }
+
+        /** Same as [refresh] but skips the `isConnectedNow` guard — only called from
+         * [StateEvent.SyncCompleted], where connectivity is already implied by a sync having
+         * just completed, so that guard would only add a redundant, possibly-racy recheck. */
+        private fun refreshAfterSync() {
+            if (_state.value.isRefreshing) return
+            viewModelScope.launch {
+                _state.update { it.copy(isRefreshing = true) }
+                try {
+                    fetchFromNetwork()
                 } finally {
                     _state.update { it.copy(isRefreshing = false) }
                 }

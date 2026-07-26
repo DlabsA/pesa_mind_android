@@ -1,6 +1,8 @@
 package cc.dlabs.pesamind.core.database.migration
 
+import cc.dlabs.pesamind.core.data.parseLineItems
 import cc.dlabs.pesamind.core.database.SyncStatus
+import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
@@ -197,5 +199,47 @@ class PrefsToRoomMigratorTest {
         val entity = dto.toEntity(now = 1000L, resolvedYearlyBudgetId = null)
 
         assertNull(entity.yearlyBudgetId)
+    }
+
+    // ── ADR-0006 compatibility: parseLineItems must read pre-A9 migrated JSON correctly ────
+
+    @Test
+    fun `migrated yearly budget line items round-trip through parseLineItems with serverId backfilled`() {
+        val tx =
+            BudgetTransactionResponse(
+                id = "tx-server-1",
+                name = "Rent",
+                amount = 500.0,
+                type = "expense",
+                createdAt = "2026-01-01T00:00:00Z",
+            )
+        val dto =
+            YearlyBudgetResponse(
+                id = "yb-1",
+                userId = "user-1",
+                year = 2026,
+                totalExpenditures = 500,
+                totalIncome = 0,
+                totalSavings = 0,
+                totalTransactions = 1,
+                transactions = listOf(tx),
+                createdAt = "2026-01-01T00:00:00Z",
+                updatedAt = "2026-01-01T00:00:00Z",
+            )
+
+        // This is exactly what PrefsToRoomMigrator.migrateIfNeeded persists today — a raw
+        // Gson(transactions) blob with no serverId/pendingAction keys, since those fields
+        // didn't exist before ADR-0006.
+        val entity = dto.toEntity(now = 1000L)
+        val items = parseLineItems(entity.transactionsJson)
+
+        assertEquals(1, items.size)
+        val item = items.first()
+        assertEquals("a migrated line item's local id must be the server id it always was", tx.id, item.id)
+        assertEquals("legacy JSON has no serverId key — parseLineItems must backfill it from id", tx.id, item.serverId)
+        assertNull("a migrated row is already synced — pendingAction must be null (clean)", item.pendingAction)
+        assertEquals(tx.name, item.name)
+        assertEquals(tx.amount, item.amount, 0.0)
+        assertEquals(tx.type, item.type)
     }
 }

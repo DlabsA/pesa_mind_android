@@ -5,25 +5,42 @@ import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import cc.dlabs.pesamind.core.coordinator.StateEvent
+import cc.dlabs.pesamind.core.coordinator.UnifiedStateCoordinator
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.LocalBudgetLineItem
+import cc.dlabs.pesamind.core.data.MonthlyBudgetRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
+import cc.dlabs.pesamind.core.data.YearlyBudgetRepository
+import cc.dlabs.pesamind.core.data.parseLineItems
+import cc.dlabs.pesamind.core.data.toLocalLineItem
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.PushCompletionDecision
 import cc.dlabs.pesamind.core.database.PushCompletionResolver
 import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
+import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
+import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
 import cc.dlabs.pesamind.core.database.entity.ChannelEntity
+import cc.dlabs.pesamind.core.database.entity.MonthlyBudgetEntity
 import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.OutboxOperation
 import cc.dlabs.pesamind.core.database.entity.TransactionEntity
+import cc.dlabs.pesamind.core.database.entity.YearlyBudgetEntity
 import cc.dlabs.pesamind.core.database.migration.resolveUniqueChannelIdsByName
 import cc.dlabs.pesamind.core.network.ApiService
+import cc.dlabs.pesamind.core.network.models.BudgetTransactionOperation
+import cc.dlabs.pesamind.core.network.models.BudgetTransactionRequest
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
+import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.storage.SyncMetadataManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -59,10 +76,17 @@ class SyncWorker
 
         private val justSyncedChannelServerIds = mutableSetOf<String>()
         private val justSyncedTransactionServerIds = mutableSetOf<String>()
+        private val justSyncedYearlyBudgetServerIds = mutableSetOf<String>()
+        private val justSyncedMonthlyBudgetServerIds = mutableSetOf<String>()
 
         override suspend fun doWork(): Result {
             val pushClean = pushOutbox()
             val pullClean = pullChanges()
+            // Published unconditionally, not just on full success: a transient failure only
+            // fails specific rows (see PushOutcome.TRANSIENT_FAILURE), so a "partial" run can
+            // still have pushed/pulled real changes that stats screens should reflect now
+            // rather than waiting for a fully-clean run that may not come for a while.
+            UnifiedStateCoordinator.publishEvent(StateEvent.SyncCompleted)
             // 4xx (PERMANENT_FAILURE) is terminal per-row and never retried — it does not
             // fail the worker run. Only a transient (network/5xx) failure asks WorkManager
             // to retry the whole run with backoff; PENDING rows are simply re-attempted then.
@@ -79,7 +103,12 @@ class SyncWorker
             // channel's own outbox entry has drained. See pushTransactionEntry's skip branch.
             val channelsClean = pushChannelOutbox()
             val transactionsClean = pushTransactionOutbox()
-            return channelsClean && transactionsClean
+            // Yearly before monthly: a monthly budget's yearlyBudgetId FK needs the yearly
+            // row's *serverId* to populate the CREATE/UPDATE request body — same reasoning as
+            // channels-before-transactions above (ADR-0006).
+            val yearlyBudgetsClean = pushYearlyBudgetOutbox()
+            val monthlyBudgetsClean = pushMonthlyBudgetOutbox()
+            return channelsClean && transactionsClean && yearlyBudgetsClean && monthlyBudgetsClean
         }
 
         /** A row a *previous* run's process death left claimed but unresolved is invisible
@@ -484,6 +513,10 @@ class SyncWorker
             try {
                 pullChannels()
                 pullTransactions()
+                // Yearly before monthly — pullMonthlyBudgets resolves each server row's
+                // yearlyBudgetId against the yearly table already-pulled by this same run.
+                pullYearlyBudgets()
+                pullMonthlyBudgets()
                 SyncMetadataManager.setLastFullPullAt(System.currentTimeMillis())
                 true
             } catch (e: IOException) {
@@ -546,4 +579,423 @@ class SyncWorker
                 }
                 .forEach { transactionDao.update(it.copy(deletedAt = now, syncStatus = SyncStatus.SYNCED, updatedAt = now)) }
         }
+
+        // ── Push: yearly & monthly budgets (ADR-0006) ──────────────────────────
+
+        private suspend fun pushYearlyBudgetOutbox(): Boolean {
+            val outboxDao = database.outboxDao()
+            val yearlyBudgetDao = database.yearlyBudgetDao()
+            reclaimStaleSyncingRows(outboxDao, OutboxEntityType.YEARLY_BUDGET)
+            val pendingEntityIds =
+                outboxDao.getByStatus(SyncStatus.PENDING).filter { it.entityType == OutboxEntityType.YEARLY_BUDGET }.map { it.entityId }
+            var clean = true
+            for (entityId in pendingEntityIds) {
+                if (pushYearlyBudgetEntry(entityId, yearlyBudgetDao, outboxDao) == PushOutcome.TRANSIENT_FAILURE) clean = false
+            }
+            return clean
+        }
+
+        private suspend fun pushYearlyBudgetEntry(
+            entityId: String,
+            yearlyBudgetDao: YearlyBudgetDao,
+            outboxDao: OutboxDao,
+        ): PushOutcome {
+            val current = outboxDao.findFor(OutboxEntityType.YEARLY_BUDGET, entityId) ?: return PushOutcome.SKIPPED
+            if (current.status != SyncStatus.PENDING) return PushOutcome.SKIPPED
+
+            val entity = yearlyBudgetDao.getById(entityId)
+            if (entity == null) {
+                outboxDao.delete(current.id)
+                return PushOutcome.SKIPPED
+            }
+            if (current.operation != OutboxOperation.CREATE && entity.serverId == null) {
+                markYearlyBudgetPermanentFailure(
+                    current,
+                    entity,
+                    yearlyBudgetDao,
+                    outboxDao,
+                    "Invariant violation: ${current.operation} with no serverId",
+                )
+                return PushOutcome.PERMANENT_FAILURE
+            }
+            if (current.operation != OutboxOperation.CREATE && current.operation != OutboxOperation.UPDATE) {
+                // No whole-budget delete is ever driven from the UI today — defensive only,
+                // same status as pushTransactionEntry's non-CREATE branch.
+                markYearlyBudgetPermanentFailure(
+                    current,
+                    entity,
+                    yearlyBudgetDao,
+                    outboxDao,
+                    "Unsupported budget outbox operation: ${current.operation}",
+                )
+                return PushOutcome.PERMANENT_FAILURE
+            }
+
+            val now = System.currentTimeMillis()
+            outboxDao.update(current.copy(status = SyncStatus.SYNCING, updatedAt = now))
+            val dispatchUpdatedAt = entity.updatedAt
+            val items = parseLineItems(entity.transactionsJson)
+            val dispatchedItems = items.filter { it.pendingAction != null }
+
+            return try {
+                val response =
+                    when (current.operation) {
+                        OutboxOperation.CREATE ->
+                            api.createYearlyBudget(
+                                CreateYearlyBudgetRequest(year = entity.year, transactions = items.map { it.toBudgetTransactionRequest() }),
+                            )
+                        OutboxOperation.UPDATE ->
+                            api.updateYearlyBudget(
+                                entity.serverId!!,
+                                UpdateYearlyBudgetRequest(
+                                    transactionOps = items.filter { it.pendingAction != null }.map { it.toOperation() },
+                                ),
+                            )
+                        OutboxOperation.DELETE -> error("Unreachable: filtered above")
+                    }
+                when {
+                    response.isSuccessful -> {
+                        val body = response.body()
+                        if (body == null) {
+                            markTransientFailure(current, outboxDao, "Empty response body")
+                            PushOutcome.TRANSIENT_FAILURE
+                        } else {
+                            finishYearlyBudgetPush(current, yearlyBudgetDao, outboxDao, dispatchUpdatedAt, dispatchedItems, body)
+                            PushOutcome.SUCCESS
+                        }
+                    }
+                    response.code() in 400..499 -> {
+                        markYearlyBudgetPermanentFailure(
+                            current,
+                            entity,
+                            yearlyBudgetDao,
+                            outboxDao,
+                            "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                        )
+                        PushOutcome.PERMANENT_FAILURE
+                    }
+                    else -> {
+                        markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
+                        PushOutcome.TRANSIENT_FAILURE
+                    }
+                }
+            } catch (e: IOException) {
+                markTransientFailure(current, outboxDao, e.message ?: "network error")
+                PushOutcome.TRANSIENT_FAILURE
+            }
+        }
+
+        private suspend fun finishYearlyBudgetPush(
+            current: OutboxEntry,
+            yearlyBudgetDao: YearlyBudgetDao,
+            outboxDao: OutboxDao,
+            dispatchUpdatedAt: Long,
+            dispatchedItems: List<LocalBudgetLineItem>,
+            responseBody: cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse,
+        ) {
+            val now = System.currentTimeMillis()
+            val latest = yearlyBudgetDao.getById(current.entityId) ?: return
+            val responseItems = responseBody.transactions.map { it.toLocalLineItem() }
+            when (
+                val decision =
+                    PushCompletionResolver.resolve(current.operation, dispatchUpdatedAt, latest.updatedAt, responseBody.id.ifBlank { null })
+            ) {
+                is PushCompletionDecision.ClearAndSync -> {
+                    val resolvedServerId = decision.serverId ?: latest.serverId
+                    YearlyBudgetRepository.applyPushCompletion(
+                        latest.id,
+                        resolvedServerId,
+                        dispatchedItems,
+                        responseItems,
+                        clearDirty = true,
+                    )
+                    outboxDao.delete(current.id)
+                    resolvedServerId?.let { justSyncedYearlyBudgetServerIds.add(it) }
+                }
+                is PushCompletionDecision.RequeueDirty -> {
+                    YearlyBudgetRepository.applyPushCompletion(
+                        latest.id,
+                        decision.serverId ?: latest.serverId,
+                        dispatchedItems,
+                        responseItems,
+                        clearDirty = false,
+                    )
+                    outboxDao.update(
+                        current.copy(
+                            operation = decision.nextOperation,
+                            status = SyncStatus.PENDING,
+                            attempts = 0,
+                            lastError = null,
+                            updatedAt = now,
+                        ),
+                    )
+                }
+            }
+        }
+
+        private suspend fun markYearlyBudgetPermanentFailure(
+            current: OutboxEntry,
+            entity: YearlyBudgetEntity,
+            yearlyBudgetDao: YearlyBudgetDao,
+            outboxDao: OutboxDao,
+            error: String,
+        ) {
+            val now = System.currentTimeMillis()
+            Log.w(TAG, "Yearly budget ${entity.id} push permanently failed: $error")
+            yearlyBudgetDao.update(entity.copy(syncStatus = SyncStatus.FAILED, updatedAt = now))
+            outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
+        }
+
+        private suspend fun pushMonthlyBudgetOutbox(): Boolean {
+            val outboxDao = database.outboxDao()
+            val monthlyBudgetDao = database.monthlyBudgetDao()
+            val yearlyBudgetDao = database.yearlyBudgetDao()
+            reclaimStaleSyncingRows(outboxDao, OutboxEntityType.MONTHLY_BUDGET)
+            val pendingEntityIds =
+                outboxDao.getByStatus(SyncStatus.PENDING).filter { it.entityType == OutboxEntityType.MONTHLY_BUDGET }.map { it.entityId }
+            var clean = true
+            for (entityId in pendingEntityIds) {
+                val outcome = pushMonthlyBudgetEntry(entityId, monthlyBudgetDao, yearlyBudgetDao, outboxDao)
+                if (outcome == PushOutcome.TRANSIENT_FAILURE) clean = false
+            }
+            return clean
+        }
+
+        private suspend fun pushMonthlyBudgetEntry(
+            entityId: String,
+            monthlyBudgetDao: MonthlyBudgetDao,
+            yearlyBudgetDao: YearlyBudgetDao,
+            outboxDao: OutboxDao,
+        ): PushOutcome {
+            val current = outboxDao.findFor(OutboxEntityType.MONTHLY_BUDGET, entityId) ?: return PushOutcome.SKIPPED
+            if (current.status != SyncStatus.PENDING) return PushOutcome.SKIPPED
+
+            val entity = monthlyBudgetDao.getById(entityId)
+            if (entity == null) {
+                outboxDao.delete(current.id)
+                return PushOutcome.SKIPPED
+            }
+            if (current.operation != OutboxOperation.CREATE && entity.serverId == null) {
+                markMonthlyBudgetPermanentFailure(
+                    current,
+                    entity,
+                    monthlyBudgetDao,
+                    outboxDao,
+                    "Invariant violation: ${current.operation} with no serverId",
+                )
+                return PushOutcome.PERMANENT_FAILURE
+            }
+            if (current.operation != OutboxOperation.CREATE && current.operation != OutboxOperation.UPDATE) {
+                markMonthlyBudgetPermanentFailure(
+                    current,
+                    entity,
+                    monthlyBudgetDao,
+                    outboxDao,
+                    "Unsupported budget outbox operation: ${current.operation}",
+                )
+                return PushOutcome.PERMANENT_FAILURE
+            }
+
+            // Channel-before-transaction's exact FK-not-ready-yet shape: a CREATE needs the
+            // yearly parent's *serverId*, which only exists once that row's own outbox entry
+            // (drained earlier this run by pushYearlyBudgetOutbox) has synced.
+            val yearlyEntity = entity.yearlyBudgetId?.let { yearlyBudgetDao.getById(it) }
+            if (current.operation == OutboxOperation.CREATE && entity.yearlyBudgetId != null && yearlyEntity?.serverId == null) {
+                if (yearlyEntity?.syncStatus == SyncStatus.FAILED) {
+                    markMonthlyBudgetPermanentFailure(
+                        current,
+                        entity,
+                        monthlyBudgetDao,
+                        outboxDao,
+                        "Blocked: yearly budget ${entity.yearlyBudgetId} failed to sync",
+                    )
+                    return PushOutcome.PERMANENT_FAILURE
+                }
+                return PushOutcome.SKIPPED
+            }
+            val yearlyServerId = yearlyEntity?.serverId
+
+            val now = System.currentTimeMillis()
+            outboxDao.update(current.copy(status = SyncStatus.SYNCING, updatedAt = now))
+            val dispatchUpdatedAt = entity.updatedAt
+            val items = parseLineItems(entity.transactionsJson)
+            val dispatchedItems = items.filter { it.pendingAction != null }
+
+            return try {
+                val response =
+                    when (current.operation) {
+                        OutboxOperation.CREATE ->
+                            api.createMonthlyBudget(
+                                CreateMonthlyBudgetRequest(
+                                    yearlyBudgetId = yearlyServerId.orEmpty(),
+                                    month = entity.month,
+                                    year = entity.year,
+                                    transactions = items.map { it.toBudgetTransactionRequest() },
+                                ),
+                            )
+                        OutboxOperation.UPDATE ->
+                            api.updateMonthlyBudget(
+                                entity.serverId!!,
+                                UpdateMonthlyBudgetRequest(
+                                    transactionOps = items.filter { it.pendingAction != null }.map { it.toOperation() },
+                                ),
+                            )
+                        OutboxOperation.DELETE -> error("Unreachable: filtered above")
+                    }
+                when {
+                    response.isSuccessful -> {
+                        val body = response.body()
+                        if (body == null) {
+                            markTransientFailure(current, outboxDao, "Empty response body")
+                            PushOutcome.TRANSIENT_FAILURE
+                        } else {
+                            finishMonthlyBudgetPush(current, monthlyBudgetDao, outboxDao, dispatchUpdatedAt, dispatchedItems, body)
+                            PushOutcome.SUCCESS
+                        }
+                    }
+                    response.code() in 400..499 -> {
+                        markMonthlyBudgetPermanentFailure(
+                            current,
+                            entity,
+                            monthlyBudgetDao,
+                            outboxDao,
+                            "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                        )
+                        PushOutcome.PERMANENT_FAILURE
+                    }
+                    else -> {
+                        markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
+                        PushOutcome.TRANSIENT_FAILURE
+                    }
+                }
+            } catch (e: IOException) {
+                markTransientFailure(current, outboxDao, e.message ?: "network error")
+                PushOutcome.TRANSIENT_FAILURE
+            }
+        }
+
+        private suspend fun finishMonthlyBudgetPush(
+            current: OutboxEntry,
+            monthlyBudgetDao: MonthlyBudgetDao,
+            outboxDao: OutboxDao,
+            dispatchUpdatedAt: Long,
+            dispatchedItems: List<LocalBudgetLineItem>,
+            responseBody: cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse,
+        ) {
+            val now = System.currentTimeMillis()
+            val latest = monthlyBudgetDao.getById(current.entityId) ?: return
+            val responseItems = responseBody.transactions.map { it.toLocalLineItem() }
+            when (
+                val decision =
+                    PushCompletionResolver.resolve(current.operation, dispatchUpdatedAt, latest.updatedAt, responseBody.id.ifBlank { null })
+            ) {
+                is PushCompletionDecision.ClearAndSync -> {
+                    val resolvedServerId = decision.serverId ?: latest.serverId
+                    MonthlyBudgetRepository.applyPushCompletion(
+                        latest.id,
+                        resolvedServerId,
+                        dispatchedItems,
+                        responseItems,
+                        clearDirty = true,
+                    )
+                    outboxDao.delete(current.id)
+                    resolvedServerId?.let { justSyncedMonthlyBudgetServerIds.add(it) }
+                }
+                is PushCompletionDecision.RequeueDirty -> {
+                    MonthlyBudgetRepository.applyPushCompletion(
+                        latest.id,
+                        decision.serverId ?: latest.serverId,
+                        dispatchedItems,
+                        responseItems,
+                        clearDirty = false,
+                    )
+                    outboxDao.update(
+                        current.copy(
+                            operation = decision.nextOperation,
+                            status = SyncStatus.PENDING,
+                            attempts = 0,
+                            lastError = null,
+                            updatedAt = now,
+                        ),
+                    )
+                }
+            }
+        }
+
+        private suspend fun markMonthlyBudgetPermanentFailure(
+            current: OutboxEntry,
+            entity: MonthlyBudgetEntity,
+            monthlyBudgetDao: MonthlyBudgetDao,
+            outboxDao: OutboxDao,
+            error: String,
+        ) {
+            val now = System.currentTimeMillis()
+            Log.w(TAG, "Monthly budget ${entity.id} push permanently failed: $error")
+            monthlyBudgetDao.update(entity.copy(syncStatus = SyncStatus.FAILED, updatedAt = now))
+            outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
+        }
+
+        // ── Pull: yearly & monthly budgets (ADR-0006) ──────────────────────────
+
+        private suspend fun pullYearlyBudgets() {
+            val response = api.getYearlyBudgets()
+            if (!response.isSuccessful) throw IOException("getYearlyBudgets failed: HTTP ${response.code()}")
+            val remote = response.body().orEmpty()
+            val remoteServerIds = remote.mapNotNull { it.id.ifBlank { null } }.toSet()
+            for (details in remote) {
+                YearlyBudgetRepository.reconcileFromServer(details)
+            }
+            applyYearlyBudgetServerSideDeletions(remoteServerIds)
+        }
+
+        /** See applyServerSideDeletions's doc comment — same just-synced-this-run guard. */
+        private suspend fun applyYearlyBudgetServerSideDeletions(remoteServerIds: Set<String>) {
+            val yearlyBudgetDao = database.yearlyBudgetDao()
+            val now = System.currentTimeMillis()
+            yearlyBudgetDao.getAllIncludingDeleted()
+                .filter {
+                    it.serverId != null && it.deletedAt == null && !it.dirty &&
+                        it.serverId !in remoteServerIds && it.serverId !in justSyncedYearlyBudgetServerIds
+                }
+                .forEach { yearlyBudgetDao.update(it.copy(deletedAt = now, syncStatus = SyncStatus.SYNCED, updatedAt = now)) }
+        }
+
+        private suspend fun pullMonthlyBudgets() {
+            val response = api.getMonthlyBudgets()
+            if (!response.isSuccessful) throw IOException("getMonthlyBudgets failed: HTTP ${response.code()}")
+            val remote = response.body().orEmpty()
+            val remoteServerIds = remote.mapNotNull { it.id.ifBlank { null } }.toSet()
+
+            // MonthlyBudgetResponse.yearlyBudgetId is the server's yearly-budget id — resolve
+            // it against the yearly table this same run's pullYearlyBudgets already refreshed,
+            // same shape as pullTransactions' channelIdByUniqueName lookup.
+            val yearlyLocalIdByServerId =
+                database.yearlyBudgetDao().getAllIncludingDeleted()
+                    .filter { it.deletedAt == null && it.serverId != null }
+                    .associate { it.serverId!! to it.id }
+
+            for (details in remote) {
+                MonthlyBudgetRepository.reconcileFromServer(details, yearlyLocalIdByServerId[details.yearlyBudgetId])
+            }
+
+            val monthlyBudgetDao = database.monthlyBudgetDao()
+            val now = System.currentTimeMillis()
+            monthlyBudgetDao.getAllIncludingDeleted()
+                .filter {
+                    it.serverId != null && it.deletedAt == null && !it.dirty &&
+                        it.serverId !in remoteServerIds && it.serverId !in justSyncedMonthlyBudgetServerIds
+                }
+                .forEach { monthlyBudgetDao.update(it.copy(deletedAt = now, syncStatus = SyncStatus.SYNCED, updatedAt = now)) }
+        }
     }
+
+private fun LocalBudgetLineItem.toBudgetTransactionRequest() = BudgetTransactionRequest(name = name, amount = amount, type = type)
+
+private fun LocalBudgetLineItem.toOperation() =
+    BudgetTransactionOperation(
+        id = serverId.orEmpty(),
+        name = name,
+        amount = amount,
+        type = type,
+        action = pendingAction ?: "update",
+    )

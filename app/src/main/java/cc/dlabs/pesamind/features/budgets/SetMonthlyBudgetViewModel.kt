@@ -2,14 +2,9 @@ package cc.dlabs.pesamind.features.budgets
 
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
-import cc.dlabs.pesamind.core.network.ApiClient.api
-import cc.dlabs.pesamind.core.network.models.BudgetTransactionOperation
-import cc.dlabs.pesamind.core.network.models.BudgetTransactionRequest
+import cc.dlabs.pesamind.core.data.MonthlyBudgetRepository
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
-import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
-import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
-import cc.dlabs.pesamind.core.storage.BudgetManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +37,6 @@ data class SetMonthlyBudgetUiState(
     val year: Int = 0,
     // Budget data
     val budget: MonthlyBudgetResponse? = null,
-    val yearlyBudgetId: String = "",
     // Loading / saving
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
@@ -86,6 +80,13 @@ data class SetMonthlyBudgetUiState(
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
+/**
+ * Room-backed (ADR-0006) — reads/writes go through [MonthlyBudgetRepository], never
+ * `ApiClient`/`BudgetManager` directly. `budget` in [state] is kept live by
+ * [MonthlyBudgetRepository.observeMonthlyBudget] below; [addTransaction]/[deleteTransaction]
+ * don't splice a result into state by hand — the repository's Room write triggers that same
+ * Flow to re-emit, exactly like `ChannelViewModel`/`TransactionViewModel`.
+ */
 class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
     private val _state = MutableStateFlow(SetMonthlyBudgetUiState())
     val state: StateFlow<SetMonthlyBudgetUiState> = _state.asStateFlow()
@@ -97,78 +98,25 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
         year: Int,
     ) {
         _state.update { it.copy(month = month, year = year) }
-        loadBudget(month, year)
+        observeBudget(month, year)
     }
 
-    // ── Load existing budget (or prepare for creation) ────────────────────────
-
-    private fun loadBudget(
+    private fun observeBudget(
         month: Int,
         year: Int,
     ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-
-            // Try cache first
-            val cached = BudgetManager.getMonthlyBudgetByMonthYear(month, year.toLong())
-            if (cached != null) {
-                _state.update { it.copy(budget = cached, yearlyBudgetId = cached.yearlyBudgetId) }
-            }
-
-            // Fetch from network
             try {
-                val response = api.getMonthlyBudgetByMonthYear(month, year.toLong())
-                if (response.isSuccessful) {
-                    val budget = response.body()
-                    if (budget != null) {
-                        BudgetManager.saveCurrentMonthlyBudget(budget)
-                        _state.update {
-                            it.copy(
-                                budget = budget,
-                                yearlyBudgetId = budget.yearlyBudgetId,
-                                isLoading = false,
-                            )
-                        }
-                    } else {
-                        // Budget doesn't exist yet — resolve yearly budget id
-                        resolveYearlyBudgetId(year)
-                        _state.update { it.copy(isLoading = false) }
-                    }
-                } else {
-                    resolveYearlyBudgetId(year)
-                    _state.update { it.copy(isLoading = false) }
+                MonthlyBudgetRepository.observeMonthlyBudget(month, year.toLong()).collect { budget ->
+                    _state.update { it.copy(budget = budget, isLoading = false) }
                 }
             } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        error = if (cached == null) "Couldn't load budget data" else null,
-                    )
-                }
+                _state.update { it.copy(isLoading = false, error = "Couldn't load budget data") }
             }
         }
     }
 
-    private suspend fun resolveYearlyBudgetId(year: Int) {
-        // Look up cached yearly budget
-        val cached = BudgetManager.getYearlyBudgetByYear(year.toLong())
-        if (cached != null) {
-            _state.update { it.copy(yearlyBudgetId = cached.id) }
-            return
-        }
-        // Fallback: fetch all yearly budgets
-        try {
-            val response = api.getYearlyBudgets()
-            if (response.isSuccessful) {
-                val match = response.body()?.find { it.year == year.toLong() }
-                if (match != null) {
-                    BudgetManager.saveYearlyBudgets(response.body()!!)
-                    _state.update { it.copy(yearlyBudgetId = match.id) }
-                }
-            }
-        } catch (_: Exception) {
-        }
-    }
     // ── Form field updates ────────────────────────────────────────────────────
 
     fun onNameChange(v: String) =
@@ -206,20 +154,16 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
 
         viewModelScope.launch {
             _state.update { it.copy(isAddingTransaction = true) }
-            val tx =
-                BudgetTransactionRequest(
-                    name = s.formName.trim(),
-                    amount = amount!!,
-                    type = s.formType,
-                )
-
             try {
-                if (s.budget == null) {
-                    // No budget exists yet — create one with this first transaction
-                    createBudgetWithTransaction(tx)
-                } else {
-                    // Budget exists — patch with transaction_ops
-                    patchBudgetAddTransaction(s.budget.id, tx)
+                MonthlyBudgetRepository.addLineItem(s.month, s.year.toLong(), s.formName.trim(), amount!!, s.formType)
+                _state.update {
+                    it.copy(
+                        isAddingTransaction = false,
+                        message = "Transaction added",
+                        formName = "",
+                        formAmount = "",
+                        formType = TransactionType.INCOME,
+                    )
                 }
             } catch (e: Exception) {
                 _state.update {
@@ -232,87 +176,6 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
         }
     }
 
-    private suspend fun createBudgetWithTransaction(tx: BudgetTransactionRequest) {
-        val s = _state.value
-        if (s.yearlyBudgetId.isBlank()) {
-            _state.update {
-                it.copy(
-                    isAddingTransaction = false,
-                    error = "No yearly budget found for ${s.year}. Create one first.",
-                )
-            }
-            return
-        }
-
-        val body =
-            CreateMonthlyBudgetRequest(
-                yearlyBudgetId = s.yearlyBudgetId,
-                month = s.month,
-                year = s.year.toLong(),
-                transactions = listOf(tx),
-            )
-        val response = api.createMonthlyBudget(body)
-        if (response.isSuccessful) {
-            val created = response.body()!!
-            BudgetManager.saveCurrentMonthlyBudget(created)
-            _state.update {
-                it.copy(
-                    budget = created,
-                    yearlyBudgetId = created.yearlyBudgetId,
-                    isAddingTransaction = false,
-                    message = "Transaction added",
-                    formName = "",
-                    formAmount = "",
-                    formType = TransactionType.INCOME,
-                )
-            }
-        } else {
-            _state.update {
-                it.copy(isAddingTransaction = false, error = "Failed to create budget")
-            }
-        }
-    }
-
-    private suspend fun patchBudgetAddTransaction(
-        budgetId: String,
-        tx: BudgetTransactionRequest,
-    ) {
-        val s = _state.value
-
-        val body =
-            UpdateMonthlyBudgetRequest(
-                yearlyBudgetId = s.yearlyBudgetId,
-                transactionOps =
-                    listOf(
-                        BudgetTransactionOperation(
-                            name = tx.name,
-                            amount = tx.amount,
-                            type = tx.type,
-                            action = "add",
-                        ),
-                    ),
-            )
-        val response = api.updateMonthlyBudget(budgetId, body)
-        if (response.isSuccessful) {
-            val updated = response.body()!!
-            BudgetManager.saveCurrentMonthlyBudget(updated)
-            _state.update {
-                it.copy(
-                    budget = updated,
-                    isAddingTransaction = false,
-                    message = "Transaction added",
-                    formName = "",
-                    formAmount = "",
-                    formType = TransactionType.INCOME,
-                )
-            }
-        } else {
-            _state.update {
-                it.copy(isAddingTransaction = false, error = "Failed to add transaction")
-            }
-        }
-    }
-
     // ── Delete transaction ────────────────────────────────────────────────────
 
     fun confirmDeleteTransaction(tx: BudgetTransactionResponse) = _state.update { it.copy(pendingDeleteTx = tx) }
@@ -321,34 +184,18 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
 
     fun deleteTransaction() {
         val tx = _state.value.pendingDeleteTx ?: return
-        val budgetId = _state.value.budget?.id ?: return
+        val s = _state.value
 
         _state.update { it.copy(pendingDeleteTx = null, isDeletingTransactionId = tx.id) }
 
         viewModelScope.launch {
             try {
-                val body =
-                    UpdateMonthlyBudgetRequest(
-                        transactionOps =
-                            listOf(
-                                BudgetTransactionOperation(id = tx.id, action = "delete"),
-                            ),
+                MonthlyBudgetRepository.deleteLineItem(s.month, s.year.toLong(), tx.id)
+                _state.update {
+                    it.copy(
+                        isDeletingTransactionId = null,
+                        message = "${tx.name} removed",
                     )
-                val response = api.updateMonthlyBudget(budgetId, body)
-                if (response.isSuccessful) {
-                    val updated = response.body()!!
-                    BudgetManager.saveCurrentMonthlyBudget(updated)
-                    _state.update {
-                        it.copy(
-                            budget = updated,
-                            isDeletingTransactionId = null,
-                            message = "${tx.name} removed",
-                        )
-                    }
-                } else {
-                    _state.update {
-                        it.copy(isDeletingTransactionId = null, error = "Failed to delete")
-                    }
                 }
             } catch (e: Exception) {
                 _state.update {
