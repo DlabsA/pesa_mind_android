@@ -19,18 +19,22 @@ import androidx.compose.ui.unit.sp
 // ─────────────────────────────────────────────
 data class CountryCode(
     val name: String,
-    val code: String,    // e.g. "+256"
-    val flag: String,    // emoji flag
-    val digitCount: Int  // expected local digits after country code
+    // e.g. "+256"
+    val code: String,
+    // emoji flag
+    val flag: String,
+    // expected local digits after country code
+    val digitCount: Int,
 )
 
-val COUNTRY_CODES = listOf(
-    CountryCode("Uganda",       "+256", "🇺🇬", 9),
-    CountryCode("Kenya",        "+254", "🇰🇪", 9),
-    CountryCode("Tanzania",     "+255", "🇹🇿", 9),
-    CountryCode("Rwanda",       "+250", "🇷🇼", 9),
-    CountryCode("South Africa", "+27",  "🇿🇦", 9),
-)
+val COUNTRY_CODES =
+    listOf(
+        CountryCode("Uganda", "+256", "🇺🇬", 9),
+        CountryCode("Kenya", "+254", "🇰🇪", 9),
+        CountryCode("Tanzania", "+255", "🇹🇿", 9),
+        CountryCode("Rwanda", "+250", "🇷🇼", 9),
+        CountryCode("South Africa", "+27", "🇿🇦", 9),
+    )
 
 // ─────────────────────────────────────────────
 //  Visual transformer — formats as: 07X XXX XXXX
@@ -38,31 +42,36 @@ val COUNTRY_CODES = listOf(
 class PhoneNumberVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val digits = text.text.filter { it.isDigit() }.take(10)
-        val formatted = buildString {
-            digits.forEachIndexed { i, c ->
-                if (i == 3 || i == 6) append(' ')
-                append(c)
+        val formatted =
+            buildString {
+                digits.forEachIndexed { i, c ->
+                    if (i == 3 || i == 6) append(' ')
+                    append(c)
+                }
             }
-        }
         // Map offsets between original and formatted text
-        val offsetMap = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int {
-                val clamped = offset.coerceAtMost(digits.length)
-                return clamped + when {
-                    clamped > 6 -> 2
-                    clamped > 3 -> 1
-                    else        -> 0
+        val offsetMap =
+            object : OffsetMapping {
+                override fun originalToTransformed(offset: Int): Int {
+                    val clamped = offset.coerceAtMost(digits.length)
+                    return clamped +
+                        when {
+                            clamped > 6 -> 2
+                            clamped > 3 -> 1
+                            else -> 0
+                        }
+                }
+
+                override fun transformedToOriginal(offset: Int): Int {
+                    val spaces =
+                        when {
+                            offset > 8 -> 2
+                            offset > 4 -> 1
+                            else -> 0
+                        }
+                    return (offset - spaces).coerceIn(0, digits.length)
                 }
             }
-            override fun transformedToOriginal(offset: Int): Int {
-                val spaces = when {
-                    offset > 8 -> 2
-                    offset > 4 -> 1
-                    else       -> 0
-                }
-                return (offset - spaces).coerceIn(0, digits.length)
-            }
-        }
         return TransformedText(AnnotatedString(formatted), offsetMap)
     }
 }
@@ -76,8 +85,9 @@ fun MobileMoneyNumberField(
     phoneNumber: String,
     onPhoneNumberChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    selectedCountry: CountryCode = COUNTRY_CODES[0],   // default Uganda
-    onCountryChange: (CountryCode) -> Unit = {}
+    // default Uganda
+    selectedCountry: CountryCode = COUNTRY_CODES[0],
+    onCountryChange: (CountryCode) -> Unit = {},
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
 
@@ -88,12 +98,12 @@ fun MobileMoneyNumberField(
     Column(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             // ── Country code dropdown ──────────────────────
             ExposedDropdownMenuBox(
                 expanded = dropdownExpanded,
-                onExpandedChange = { dropdownExpanded = !dropdownExpanded }
+                onExpandedChange = { dropdownExpanded = !dropdownExpanded },
             ) {
                 OutlinedTextField(
                     value = "${selectedCountry.flag} ${selectedCountry.code}",
@@ -102,19 +112,27 @@ fun MobileMoneyNumberField(
                     trailingIcon = {
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Select country code"
+                            contentDescription = "Select country code",
                         )
                     },
-                    modifier = Modifier
-                        .width(130.dp)
-                        .menuAnchor(),
+                    modifier =
+                        Modifier
+                            .width(130.dp)
+                            .menuAnchor(),
                     shape = RoundedCornerShape(10.dp),
-                    singleLine = true
+                    singleLine = true,
+                    supportingText = {
+                        // Invisible placeholder to match phone number field height
+                        Text(
+                            text = " ",
+                            fontSize = 12.sp,
+                        )
+                    },
                 )
 
                 ExposedDropdownMenu(
                     expanded = dropdownExpanded,
-                    onDismissRequest = { dropdownExpanded = false }
+                    onDismissRequest = { dropdownExpanded = false },
                 ) {
                     COUNTRY_CODES.forEach { country ->
                         DropdownMenuItem(
@@ -124,7 +142,7 @@ fun MobileMoneyNumberField(
                             onClick = {
                                 onCountryChange(country)
                                 dropdownExpanded = false
-                            }
+                            },
                         )
                     }
                 }
@@ -137,36 +155,43 @@ fun MobileMoneyNumberField(
                 value = phoneNumber,
                 onValueChange = { raw ->
                     // Only allow digits, cap at expected length
-                    val digits = raw.filter { it.isDigit() }
-                        .take(selectedCountry.digitCount)
+                    val digits =
+                        raw.filter { it.isDigit() }
+                            .take(selectedCountry.digitCount)
                     onPhoneNumberChange(digits)
                 },
                 label = { Text("Mobile Number") },
                 placeholder = { Text("7X XXX XXXX") },
                 visualTransformation = PhoneNumberVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Phone,
-                    imeAction = ImeAction.Done
-                ),
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Done,
+                    ),
                 singleLine = true,
                 isError = showError,
                 supportingText = {
-                    when {
-                        showError -> Text(
-                            "Enter a valid ${selectedCountry.digitCount}-digit number",
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 12.sp
-                        )
-                        isValid -> Text(
-                            "✓  ${selectedCountry.code} ${phoneNumber.take(3)} " +
-                                    "${phoneNumber.substring(3, 6)} ${phoneNumber.drop(6)}",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 12.sp
-                        )
-                    }
+                    // Always reserve space for supporting text to prevent layout shift
+                    Text(
+                        text =
+                            when {
+                                showError -> "Enter a valid ${selectedCountry.digitCount}-digit number"
+                                isValid ->
+                                    "✓  ${selectedCountry.code} ${phoneNumber.take(3)} " +
+                                        "${phoneNumber.substring(3, 6)} ${phoneNumber.drop(6)}"
+                                else -> " " // Empty space to maintain height
+                            },
+                        color =
+                            when {
+                                showError -> MaterialTheme.colorScheme.error
+                                isValid -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0f) // Invisible placeholder
+                            },
+                        fontSize = 12.sp,
+                    )
                 },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(10.dp),
             )
         }
     }

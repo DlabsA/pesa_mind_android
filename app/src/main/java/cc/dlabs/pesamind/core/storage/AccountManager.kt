@@ -13,6 +13,7 @@ object AccountManager {
     private val ID = stringPreferencesKey("id")
     private val Email = stringPreferencesKey("email")
     private val Username = stringPreferencesKey("username")
+    private val AvatarUrl = stringPreferencesKey("avatar_url")
     private val Balance = stringPreferencesKey("balance")
     private val Type = stringPreferencesKey("type")
 
@@ -24,12 +25,20 @@ object AccountManager {
         appContext = context.applicationContext
     }
 
-    suspend fun saveAccount(id: String, email: String, username: String, balance: String, type: String) {
+    suspend fun saveAccount(
+        id: String,
+        email: String,
+        username: String,
+        avatarUrl: String,
+        balance: String,
+        type: String,
+    ) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
             it[ID] = id
             it[Email] = email
             it[Username] = username
+            it[AvatarUrl] = avatarUrl
             it[Balance] = balance
             it[Type] = type
         }
@@ -41,12 +50,14 @@ object AccountManager {
             it[Email] = email
         }
     }
+
     suspend fun saveUsername(username: String) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
             it[Username] = username
         }
     }
+
     suspend fun saveBalance(balance: String) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
@@ -63,8 +74,9 @@ object AccountManager {
             id = data[ID] ?: "",
             username = data[Username] ?: "",
             email = data[Email] ?: "",
+            avatarUrl = data[AvatarUrl] ?: "",
             type = data[Type] ?: "",
-            balance = data[Balance]?.toDoubleOrNull() ?: 0.0
+            balance = data[Balance]?.toDoubleOrNull() ?: 0.0,
         )
     }
 
@@ -74,6 +86,7 @@ object AccountManager {
             it.remove(ID)
             it.remove(Email)
             it.remove(Username)
+            it.remove(AvatarUrl)
             it.remove(Balance)
             it.remove(Type)
         }

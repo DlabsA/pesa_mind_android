@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.settings.security
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,11 +13,10 @@ enum class LockMode { NONE, PIN, PATTERN }
 data class SecurityState(
     val currentMode: LockMode = LockMode.NONE,
     val isLoading: Boolean = true,
-    val message: String? = null
+    val message: String? = null,
 )
 
-class SecurityViewModel : ViewModel() {
-
+class SecurityViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(SecurityState())
     val state: StateFlow<SecurityState> = _state.asStateFlow()
 
@@ -27,11 +26,12 @@ class SecurityViewModel : ViewModel() {
 
     private fun loadCurrentMode() {
         viewModelScope.launch {
-            val mode = when {
-                TokenManager.isPinEnabled() -> LockMode.PIN
-                TokenManager.isPatternEnabled() -> LockMode.PATTERN
-                else -> LockMode.NONE
-            }
+            val mode =
+                when {
+                    TokenManager.isPinEnabled() -> LockMode.PIN
+                    TokenManager.isPatternEnabled() -> LockMode.PATTERN
+                    else -> LockMode.NONE
+                }
             _state.value = SecurityState(currentMode = mode, isLoading = false)
         }
     }
@@ -39,13 +39,13 @@ class SecurityViewModel : ViewModel() {
     fun disableLock() {
         viewModelScope.launch {
             TokenManager.clearLock()
-            _state.value = _state.value.copy(
-                currentMode = LockMode.NONE,
-                message = "Lock disabled"
-            )
+            _state.value =
+                _state.value.copy(
+                    currentMode = LockMode.NONE,
+                    message = "Lock disabled",
+                )
         }
     }
-
 
     fun clearMessage() {
         _state.value = _state.value.copy(message = null)

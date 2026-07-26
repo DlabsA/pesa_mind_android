@@ -6,7 +6,7 @@ data class SpendingVelocityResponse(
     val data: VelocityData,
     val metadata: Metadata,
     val health: Health,
-    val recommendations: List<Recommendation> = emptyList()
+    val recommendations: List<Recommendation> = emptyList(),
 )
 
 data class VelocityData(
@@ -30,5 +30,5 @@ data class VelocityData(
     @SerializedName("alert_level")
     val alertLevel: String,
     @SerializedName("days_until_budget_exhausted")
-    val daysUntilBudgetExhausted: Double
+    val daysUntilBudgetExhausted: Double,
 )

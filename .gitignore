@@ -9,3 +9,17 @@
 .cxx
 local.properties
 /.idea/*
+.env
+
+# release signing secrets — never commit
+keystore.properties
+*.jks
+*.keystore
+
+# graphify working/cache dir — regenerate locally with the /graphify skill.
+# Committed copies of its report/JSON/HTML live in docs/vault/graphify/ instead.
+/graphify-out/
+
+# session-local marker for the graphify Stop-hook sync heuristic
+.claude/hooks/.last-graphify-sync
+*.log

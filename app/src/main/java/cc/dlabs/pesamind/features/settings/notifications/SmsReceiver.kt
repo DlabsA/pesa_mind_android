@@ -17,14 +17,16 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 
 class SmsReceiver : BroadcastReceiver() {
-
     companion object {
         private const val TAG = "SmsReceiver"
         private val scope = CoroutineScope(Dispatchers.IO) // ✅ Single reusable scope
     }
 
     @SuppressLint("MissingPermission")
-    override fun onReceive(context: Context?, intent: Intent?) {
+    override fun onReceive(
+        context: Context?,
+        intent: Intent?,
+    ) {
         if (intent?.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         if (context == null) return
 
@@ -39,7 +41,7 @@ class SmsReceiver : BroadcastReceiver() {
             }
 
             val receivingSimInfo = getReceivingSimInfo(context, intent)
-            
+
             // Track how many coroutines are running to know when to finish
             val pendingJobs = AtomicInteger(messages.size)
             val jobs = mutableListOf<Job>()
@@ -49,28 +51,28 @@ class SmsReceiver : BroadcastReceiver() {
                 val messageBody = message.messageBody
                 val timestamp = message.timestampMillis
 
-                val job = scope.launch {
-                    try {
-                        NotificationStorage.init(context)
+                val job =
+                    scope.launch {
+                        try {
+                            NotificationStorage.init(context)
 
-                        val processor = SMSMessageProcessor(context, TransactionViewModel())
-                        processor.processMessage(
-                            senderId = senderNumber,
-                            content = messageBody,
-                            timestamp = timestamp,
-                            simInfo = receivingSimInfo.slotIndex,
-                            receivingSimNumber = receivingSimInfo.phoneNumber
-                        )
-
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing SMS: ${e.message}", e)
-                    } finally {
-                        // Only finish when all jobs are complete
-                        if (pendingJobs.decrementAndGet() == 0) {
-                            pendingResult.finish()
+                            val processor = SMSMessageProcessor(context, TransactionViewModel())
+                            processor.processMessage(
+                                senderId = senderNumber,
+                                content = messageBody,
+                                timestamp = timestamp,
+                                simInfo = receivingSimInfo.slotIndex,
+                                receivingSimNumber = receivingSimInfo.phoneNumber,
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error processing SMS: ${e.message}", e)
+                        } finally {
+                            // Only finish when all jobs are complete
+                            if (pendingJobs.decrementAndGet() == 0) {
+                                pendingResult.finish()
+                            }
                         }
                     }
-                }
                 jobs.add(job)
             }
         } catch (e: Exception) {
@@ -90,16 +92,22 @@ class SmsReceiver : BroadcastReceiver() {
      * ⚠️ Some carriers do NOT provision the number on the SIM — phoneNumber may be empty.
      */
     @SuppressLint("MissingPermission")
-    private fun getReceivingSimInfo(context: Context, intent: Intent): SimInfo {
+    private fun getReceivingSimInfo(
+        context: Context,
+        intent: Intent,
+    ): SimInfo {
         return try {
             // Extract subscription ID from the SMS intent
-            val subscriptionId: Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,
-                    SubscriptionManager.INVALID_SUBSCRIPTION_ID)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getIntExtra("subscription", SubscriptionManager.INVALID_SUBSCRIPTION_ID)
-            }
+            val subscriptionId: Int =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    intent.getIntExtra(
+                        SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,
+                        SubscriptionManager.INVALID_SUBSCRIPTION_ID,
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getIntExtra("subscription", SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+                }
 
             if (subscriptionId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
                 Log.w(TAG, "Could not determine subscription ID from intent")
@@ -108,21 +116,24 @@ class SmsReceiver : BroadcastReceiver() {
 
             val subscriptionManager =
                 context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
-                        as SubscriptionManager
+                    as SubscriptionManager
 
-            val subscriptionInfo = subscriptionManager.getActiveSubscriptionInfo(subscriptionId)
-                ?: return SimInfo(slotIndex = -1, phoneNumber = "Unknown (sub: $subscriptionId)")
+            val subscriptionInfo =
+                subscriptionManager.getActiveSubscriptionInfo(subscriptionId)
+                    ?: return SimInfo(slotIndex = -1, phoneNumber = "Unknown (sub: $subscriptionId)")
 
-            val phoneNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // API 33+: use the new permission-scoped method
-                subscriptionManager.getPhoneNumber(subscriptionId)
-            } else {
-                subscriptionInfo.number ?: ""
-            }
+            val phoneNumber =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // API 33+: use the new permission-scoped method
+                    subscriptionManager.getPhoneNumber(subscriptionId)
+                } else {
+                    subscriptionInfo.number ?: ""
+                }
 
             SimInfo(
-                slotIndex = subscriptionInfo.simSlotIndex,    // 0 = SIM 1, 1 = SIM 2
-                phoneNumber = phoneNumber.ifBlank { "Not provisioned by carrier" }
+                // 0 = SIM 1, 1 = SIM 2
+                slotIndex = subscriptionInfo.simSlotIndex,
+                phoneNumber = phoneNumber.ifBlank { "Not provisioned by carrier" },
             )
         } catch (e: SecurityException) {
             // READ_PHONE_STATE / READ_PHONE_NUMBERS permission not granted
@@ -141,7 +152,7 @@ class SmsReceiver : BroadcastReceiver() {
      */
     data class SimInfo(
         val slotIndex: Int,
-        val phoneNumber: String
+        val phoneNumber: String,
     ) {
         companion object {
             val UNKNOWN = SimInfo(slotIndex = -1, phoneNumber = "Unknown")

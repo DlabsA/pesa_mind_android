@@ -1,0 +1,32 @@
+root = true
+
+[*]
+trim_trailing_whitespace = true
+insert_final_newline = true
+end_of_line = lf
+charset = utf-8
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+indent_size = 4
+# Compose functions are PascalCase by convention (they behave like factory
+# functions returning UI), which standard:function-naming otherwise flags.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# Verified via ./gradlew ktlintCheck before this change: 91 of 93 wildcard-import
+# violations are `androidx.compose.*`/`androidx.navigation.compose.*` package imports
+# across ~25 Compose screen files (foundation.layout.*, material3.*, runtime.*,
+# animation.*, ui.*, etc.) — the standard, idiomatic import style for Compose, which
+# exposes hundreds of small top-level functions per package. Expanding these to
+# explicit imports per-file is high-churn and high-risk to do by hand (no IDE symbol
+# resolution available to verify completeness) for zero readability gain. See
+# docs/decisions/ADR-0003-enable-app-scoped-ktlint.md.
+ktlint_standard_no-wildcard-imports = disabled
+
+# core/theme/ hosts this project's design tokens (Spacing.Space4, Radius.Medium, ...),
+# referenced throughout features/ per the "Spacing/Radius/theme colors" rule in
+# .claude/CLAUDE.md. These are intentionally PascalCase to match Color's own token
+# style (Color.kt), not SCREAMING_SNAKE_CASE constants — renaming would ripple across
+# every screen that reads a token. See docs/decisions/ADR-0003-enable-app-scoped-ktlint.md.
+[app/src/main/java/cc/dlabs/pesamind/core/theme/*.kt]
+ktlint_standard_property-naming = disabled

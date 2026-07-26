@@ -6,7 +6,7 @@ data class BudgetVsActualResponse(
     val data: BudgetActualData,
     val metadata: Metadata,
     val health: Health,
-    val recommendations: List<Recommendation> = emptyList()
+    val recommendations: List<Recommendation> = emptyList(),
 )
 
 data class BudgetActualData(
@@ -23,7 +23,7 @@ data class BudgetActualData(
     @SerializedName("categories_on_track")
     val categoriesOnTrack: Int,
     @SerializedName("categories_over_budget")
-    val categoriesOverBudget: Int
+    val categoriesOverBudget: Int,
 )
 
 data class BudgetActualItem(
@@ -35,5 +35,5 @@ data class BudgetActualItem(
     val variancePercent: Double,
     val transactions: Int,
     @SerializedName("average_per_transaction")
-    val averagePerTransaction: Double
+    val averagePerTransaction: Double,
 )

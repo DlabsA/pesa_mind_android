@@ -15,25 +15,26 @@ import androidx.navigation.compose.*
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.features.analytics.AnalyticsScreen
-import cc.dlabs.pesamind.features.tools.BudgetScreen
+import cc.dlabs.pesamind.features.budgets.BudgetScreen
 import cc.dlabs.pesamind.features.dashboard.DashboardScreen
 import cc.dlabs.pesamind.features.settings.SettingsScreen
 
 data class BottomNavItem(
     val label: String,
     val route: String,
-    val icon: ImageVector
+    val icon: ImageVector,
 )
 
 @Composable
 fun MainScreen(rootNav: NavHostController) {
     val navController = rememberNavController()
-    val items = listOf(
-        BottomNavItem("Home", Routes.Home.route, Icons.Filled.Home),
-        BottomNavItem("Analytics", Routes.Analytics.route, Icons.Filled.BarChart),
-        BottomNavItem("Budget", Routes.Tools.route, Icons.Filled.MonetizationOn),
-        BottomNavItem("Settings", Routes.Settings.route, Icons.Filled.Settings),
-    )
+    val items =
+        listOf(
+            BottomNavItem("Home", Routes.Home.route, Icons.Filled.Home),
+            BottomNavItem("Analytics", Routes.Analytics.route, Icons.Filled.BarChart),
+            BottomNavItem("Budget", Routes.Tools.route, Icons.Filled.MonetizationOn),
+            BottomNavItem("Settings", Routes.Settings.route, Icons.Filled.Settings),
+        )
 
     Scaffold(
         bottomBar = {
@@ -57,13 +58,14 @@ fun MainScreen(rootNav: NavHostController) {
                         },
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        colors =
+                            NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                     )
                 }
             }
@@ -72,19 +74,20 @@ fun MainScreen(rootNav: NavHostController) {
             FloatingActionButton(
                 onClick = { rootNav.navigate(Routes.AddTransaction.route) },
                 containerColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size((Spacing.Space12 + 4).dp)
-                    .offset(y = (-18).dp)
+                modifier =
+                    Modifier
+                        .size((Spacing.Space12 + 4).dp)
+                        .offset(y = (-18).dp),
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add transaction", tint = MaterialTheme.colorScheme.onPrimary)
             }
         },
-        floatingActionButtonPosition = FabPosition.Center
+        floatingActionButtonPosition = FabPosition.Center,
     ) { padding ->
         NavHost(
             navController,
             startDestination = Routes.Home.route,
-            modifier = Modifier.padding(padding)
+            modifier = Modifier.padding(padding),
         ) {
             composable(Routes.Home.route) { DashboardScreen(rootNav) }
             composable(Routes.Analytics.route) { AnalyticsScreen(rootNav) }

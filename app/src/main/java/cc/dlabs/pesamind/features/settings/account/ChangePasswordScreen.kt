@@ -24,7 +24,7 @@ import androidx.navigation.NavHostController
 @Composable
 fun ChangePasswordScreen(
     navController: NavHostController,
-    vm: ChangePasswordViewModel = viewModel()
+    vm: ChangePasswordViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
     val teal = Color(0xFF1A9E8F)
@@ -46,19 +46,19 @@ fun ChangePasswordScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-
             // ── Current password ─────────────────────────────
             PasswordField(
                 value = state.currentPassword,
@@ -66,7 +66,7 @@ fun ChangePasswordScreen(
                 label = "Current Password",
                 showPassword = showCurrent,
                 onToggle = { showCurrent = !showCurrent },
-                teal = teal
+                teal = teal,
             )
 
             // ── New password ─────────────────────────────────
@@ -76,7 +76,7 @@ fun ChangePasswordScreen(
                 label = "New Password",
                 showPassword = showNew,
                 onToggle = { showNew = !showNew },
-                teal = teal
+                teal = teal,
             )
 
             // ── Confirm new password ─────────────────────────
@@ -87,7 +87,7 @@ fun ChangePasswordScreen(
                 showPassword = showConfirm,
                 onToggle = { showConfirm = !showConfirm },
                 teal = teal,
-                isError = state.error?.contains("match") == true
+                isError = state.error?.contains("match") == true,
             )
 
             // ── Password strength indicator ──────────────────
@@ -100,7 +100,7 @@ fun ChangePasswordScreen(
                 Text(
                     text = state.error!!,
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
 
@@ -109,18 +109,19 @@ fun ChangePasswordScreen(
             // ── Submit button ────────────────────────────────
             Button(
                 onClick = { vm.submit() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = teal),
-                enabled = !state.isLoading
+                enabled = !state.isLoading,
             ) {
                 if (state.isLoading) {
                     CircularProgressIndicator(
                         color = Color.White,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
                     )
                 } else {
                     Text("Update Password", fontWeight = FontWeight.SemiBold)
@@ -139,7 +140,7 @@ private fun PasswordField(
     showPassword: Boolean,
     onToggle: () -> Unit,
     teal: Color,
-    isError: Boolean = false
+    isError: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -149,8 +150,12 @@ private fun PasswordField(
         shape = RoundedCornerShape(12.dp),
         singleLine = true,
         isError = isError,
-        visualTransformation = if (showPassword)
-            VisualTransformation.None else PasswordVisualTransformation(),
+        visualTransformation =
+            if (showPassword) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         leadingIcon = {
             Icon(Icons.Filled.Lock, contentDescription = null, tint = teal)
@@ -160,39 +165,42 @@ private fun PasswordField(
                 Icon(
                     if (showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                     contentDescription = if (showPassword) "Hide" else "Show",
-                    tint = Color.Gray
+                    tint = Color.Gray,
                 )
             }
-        }
+        },
     )
 }
 
 // ── Password strength bar ────────────────────────────────────
 @Composable
 private fun PasswordStrengthBar(password: String) {
-    val strength = when {
-        password.length < 6 -> 0
-        password.length < 8 -> 1
-        password.any { it.isDigit() } && password.any { it.isLetter() } -> 3
-        else -> 2
-    }
-    val (label, color) = when (strength) {
-        0 -> "Weak" to Color(0xFFE74C3C)
-        1 -> "Fair" to Color(0xFFE67E22)
-        2 -> "Good" to Color(0xFF3498DB)
-        else -> "Strong" to Color(0xFF2ECC71)
-    }
+    val strength =
+        when {
+            password.length < 6 -> 0
+            password.length < 8 -> 1
+            password.any { it.isDigit() } && password.any { it.isLetter() } -> 3
+            else -> 2
+        }
+    val (label, color) =
+        when (strength) {
+            0 -> "Weak" to Color(0xFFE74C3C)
+            1 -> "Fair" to Color(0xFFE67E22)
+            2 -> "Good" to Color(0xFF3498DB)
+            else -> "Strong" to Color(0xFF2ECC71)
+        }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             repeat(4) { index ->
                 LinearProgressIndicator(
                     progress = { if (index < strength) 1f else 0f },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(4.dp),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(4.dp),
                     color = color,
-                    trackColor = Color.LightGray
+                    trackColor = Color.LightGray,
                 )
             }
         }

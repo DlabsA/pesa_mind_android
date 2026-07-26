@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.auth
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.storage.TokenManager
@@ -13,26 +13,29 @@ import kotlinx.coroutines.launch
 data class UnlockState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val isSetupMode: Boolean = false
+    val isSetupMode: Boolean = false,
 )
 
-class UnlockViewModel : ViewModel() {
-
+class UnlockViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(UnlockState())
     val state: StateFlow<UnlockState> = _state.asStateFlow()
 
     /**
      * Save PIN during setup (no JWT refresh needed)
      */
-    fun setupPin(pin: String, onSuccess: () -> Unit) {
+    fun setupPin(
+        pin: String,
+        onSuccess: () -> Unit,
+    ) {
         viewModelScope.launch {
             try {
                 TokenManager.savePin(pin)
                 onSuccess()
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    errorMessage = "Failed to save PIN"
-                )
+                _state.value =
+                    _state.value.copy(
+                        errorMessage = "Failed to save PIN",
+                    )
             }
         }
     }
@@ -40,7 +43,11 @@ class UnlockViewModel : ViewModel() {
     /**
      * Verify PIN during unlock, then refresh JWT
      */
-    fun unlockWithPin(enteredPin: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun unlockWithPin(
+        enteredPin: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, errorMessage = null)
 
@@ -71,15 +78,19 @@ class UnlockViewModel : ViewModel() {
     /**
      * Save pattern during setup (no JWT refresh needed)
      */
-    fun setupPattern(pattern: String, onSuccess: () -> Unit) {
+    fun setupPattern(
+        pattern: String,
+        onSuccess: () -> Unit,
+    ) {
         viewModelScope.launch {
             try {
                 TokenManager.savePattern(pattern)
                 onSuccess()
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    errorMessage = "Failed to save pattern"
-                )
+                _state.value =
+                    _state.value.copy(
+                        errorMessage = "Failed to save pattern",
+                    )
             }
         }
     }
@@ -87,7 +98,11 @@ class UnlockViewModel : ViewModel() {
     /**
      * Verify pattern during unlock, then refresh JWT
      */
-    fun unlockWithPattern(enteredPattern: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun unlockWithPattern(
+        enteredPattern: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, errorMessage = null)
 
@@ -118,7 +133,10 @@ class UnlockViewModel : ViewModel() {
     /**
      * Refresh JWT using the stored refresh token
      */
-    private suspend fun refreshJWT(onSuccess: () -> Unit, onError: (String) -> Unit) {
+    private suspend fun refreshJWT(
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
         try {
             val refreshToken = TokenManager.getRefreshToken()
 

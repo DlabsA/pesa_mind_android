@@ -18,6 +18,7 @@ import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.network.models.SMSMessage
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.utils.TransactionCreationResult
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import cc.dlabs.pesamind.features.home.TYPE_EXPENSE
 import cc.dlabs.pesamind.features.home.TYPE_INCOME
@@ -29,9 +30,8 @@ import java.util.Locale
 
 class SMSMessageProcessor(
     private val context: Context,
-    private val viewModel: TransactionViewModel
+    private val viewModel: TransactionViewModel,
 ) {
-
     // ── Notification channel constants ────────────────────────────────────────
 
     companion object {
@@ -39,7 +39,7 @@ class SMSMessageProcessor(
 
         // One channel per notification category — required on Android 8+
         const val CHANNEL_ID_TRANSACTIONS = "pesamind_transactions"
-        const val CHANNEL_ID_ALERTS       = "pesamind_alerts"
+        const val CHANNEL_ID_ALERTS = "pesamind_alerts"
 
         // Stable IDs prevent notification flooding; derive from senderId so
         // MTN and Airtel each have their own slot that gets replaced, not stacked.
@@ -54,7 +54,7 @@ class SMSMessageProcessor(
         content: String,
         timestamp: Long,
         simInfo: Int,
-        receivingSimNumber: String
+        receivingSimNumber: String,
     ) = withContext(Dispatchers.IO) {
         try {
             if (senderId.isBlank() || content.isBlank()) {
@@ -75,40 +75,83 @@ class SMSMessageProcessor(
                 return@withContext
             }
 
-            val (amount, txType, parsedNote) = when (normalizedSender) {
-                MessageSender.MTNMobMoney -> parseMTNMessage(content)
-                MessageSender.airtelmoney -> parseAirtelMessage(content)
-                else -> null
-            } ?: run {
-                Log.w(TAG, "Could not parse message content: $content")
-                return@withContext
-            }
+            val parsed =
+                when (normalizedSender) {
+                    MessageSender.MTN_MOB_MONEY -> parseMTNMessage(content)
+                    MessageSender.AIRTEL_MONEY -> parseAirtelMessage(content)
+                    else -> null
+                } ?: run {
+                    Log.w(TAG, "Could not parse message content: $content")
+                    return@withContext
+                }
+            val (amount, txType, parsedNote, providerTransactionId) = parsed
 
             val channelId = channelInfo.channel.id
             val finalNote = parsedNote.ifEmpty { content.take(255) }
 
-            viewModel.CreateTransaction(
-                channelID = channelId,
-                amount    = amount,
-                type      = txType,
-                note      = finalNote
-            )
+            // Redelivery/reprocessing safety net for every sender, TID or not — two *different*
+            // SMS bodies sharing one real transaction (confirmed: Airtel Uganda) are NOT caught
+            // by this key, since it's derived from this exact message's own content; that's what
+            // [providerTransactionId] exists to catch instead (see TransactionEntity's doc
+            // comment). Redelivery of the *same* message (e.g. a service restart reprocessing a
+            // queued broadcast) IS caught by this, since its inputs are identical both times.
+            val smsSourceKey = "$normalizedSender:$timestamp:${content.trim().hashCode()}"
 
-            val smsMessage = SMSMessage(
-                id         = generateMessageId(senderId, timestamp),
-                senderId   = senderId,
-                senderName = extractSenderName(senderId),
-                content    = content,
-                timestamp  = timestamp,
-                isRead     = false
-            )
+            // Awaited, not fire-and-forget: we must know the real outcome before telling
+            // the user anything, and before persisting the pending-message record — both
+            // used to happen unconditionally, which meant a user could get a "Spent X UGX"
+            // notification for a transaction that never made it past a network exception.
+            val result =
+                viewModel.createTransactionAwaited(
+                    channelID = channelId,
+                    amount = amount,
+                    type = txType,
+                    note = finalNote,
+                    smsSourceKey = smsSourceKey,
+                    providerTransactionId = providerTransactionId,
+                )
+
+            when (result) {
+                is TransactionCreationResult.Failure -> {
+                    Log.w(TAG, "Transaction creation failed for SMS from $senderId: ${result.message}")
+                    return@withContext
+                }
+                is TransactionCreationResult.Success -> {
+                    if (result.wasDuplicate) {
+                        // Real duplicate discarded by the atomic (channelId, providerTransactionId)
+                        // or smsSourceKey unique index — logged with both raw bodies (this
+                        // message's, and the already-recorded transaction's, which for
+                        // MTN/Airtel is always its full raw SMS — see parseMTNMessage/
+                        // parseAirtelMessage) so a discarded duplicate is diagnosable in
+                        // production instead of silently invisible.
+                        Log.i(
+                            TAG,
+                            "Discarded duplicate transaction from $senderId " +
+                                "(providerTransactionId=$providerTransactionId, smsSourceKey=$smsSourceKey). " +
+                                "This message: \"$content\" | Already-recorded message: " +
+                                "\"${result.transaction?.note}\"",
+                        )
+                        return@withContext
+                    }
+                }
+            }
+
+            val smsMessage =
+                SMSMessage(
+                    id = generateMessageId(senderId, timestamp),
+                    senderId = senderId,
+                    senderName = extractSenderName(senderId),
+                    content = content,
+                    timestamp = timestamp,
+                    isRead = false,
+                )
             NotificationStorage.savePendingMessage(Gson().toJson(smsMessage))
 
             // Pass the parsed values so the notification can show a rich summary
             // Check POST_NOTIFICATIONS permission before calling showLocalNotification
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.POST_NOTIFICATIONS
+                        context, Manifest.permission.POST_NOTIFICATIONS,
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
                     showLocalNotificationSafe(smsMessage, amount, txType)
@@ -119,7 +162,6 @@ class SMSMessageProcessor(
                 // On Android < 13, POST_NOTIFICATIONS is not required
                 showLocalNotificationSafe(smsMessage, amount, txType)
             }
-
         } catch (e: Exception) {
             Log.e(TAG, "Error processing message: ${e.message}", e)
         }
@@ -135,7 +177,7 @@ class SMSMessageProcessor(
     private fun showLocalNotificationSafe(
         message: SMSMessage,
         amount: Double,
-        txType: String
+        txType: String,
     ) = showLocalNotification(message, amount, txType)
 
     /**
@@ -155,25 +197,26 @@ class SMSMessageProcessor(
     private fun showLocalNotification(
         message: SMSMessage,
         amount: Double,
-        txType: String
+        txType: String,
     ) {
         ensureNotificationChannels()
 
         // Guard: POST_NOTIFICATIONS is a runtime permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+            val granted =
+                ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.POST_NOTIFICATIONS,
+                ) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
                 Log.w(TAG, "POST_NOTIFICATIONS permission not granted — skipping notification")
                 return
             }
         }
 
-        val isExpense   = txType == TYPE_EXPENSE
+        val isExpense = txType == TYPE_EXPENSE
         val amountLabel = formatUgx(amount)
-        val emoji       = if (isExpense) "💸" else "💰"
-        val verb        = if (isExpense) "Spent" else "Received"
+        val emoji = if (isExpense) "💸" else "💰"
+        val verb = if (isExpense) "Spent" else "Received"
 
         // Title: "💸 Spent 45,000 UGX"  or  "💰 Received 120,000 UGX"
         val title = "$emoji $verb $amountLabel UGX"
@@ -182,36 +225,39 @@ class SMSMessageProcessor(
         val body = "${message.senderName}: ${message.content.take(100)}"
 
         // Tap action — opens the app's main launcher Activity
-        val launchIntent = context.packageManager
-            .getLaunchIntentForPackage(context.packageName)
-            ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP }
+        val launchIntent =
+            context.packageManager
+                .getLaunchIntentForPackage(context.packageName)
+                ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP }
 
-        val pendingIntent = launchIntent?.let {
-            PendingIntent.getActivity(
-                context,
-                notificationId(message.senderId),
-                it,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID_TRANSACTIONS)
-            .setSmallIcon(R.drawable.ic_notification)   // provide a 24dp white-on-transparent icon
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))  // expand for long SMS
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setAutoCancel(true)        // dismiss on tap
-            .setContentIntent(pendingIntent)
-            // Colour-code the notification LED / accent by transaction type
-            .setColor(
-                ContextCompat.getColor(
+        val pendingIntent =
+            launchIntent?.let {
+                PendingIntent.getActivity(
                     context,
-                    if (isExpense) R.color.expense_red else R.color.income_green
+                    notificationId(message.senderId),
+                    it,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
-            )
-            .build()
+            }
+
+        val notification =
+            NotificationCompat.Builder(context, CHANNEL_ID_TRANSACTIONS)
+                .setSmallIcon(R.drawable.ic_notification) // provide a 24dp white-on-transparent icon
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body)) // expand for long SMS
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setAutoCancel(true) // dismiss on tap
+                .setContentIntent(pendingIntent)
+                // Colour-code the notification LED / accent by transaction type
+                .setColor(
+                    ContextCompat.getColor(
+                        context,
+                        if (isExpense) R.color.expense_red else R.color.income_green,
+                    ),
+                )
+                .build()
 
         NotificationManagerCompat.from(context)
             .notify(notificationId(message.senderId), notification)
@@ -225,8 +271,8 @@ class SMSMessageProcessor(
      * an already-existing channel with the same ID.
      */
     private fun ensureNotificationChannels() {
-
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+        val manager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE)
                 as NotificationManager
 
         // Primary channel: every MTN / Airtel transaction
@@ -234,7 +280,7 @@ class SMSMessageProcessor(
             NotificationChannel(
                 CHANNEL_ID_TRANSACTIONS,
                 "Transactions",
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "Notifications for incoming and outgoing mobile money transactions"
                 enableLights(true)
@@ -247,7 +293,7 @@ class SMSMessageProcessor(
             NotificationChannel(
                 CHANNEL_ID_ALERTS,
                 "Alerts",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "Budget alerts and financial health warnings"
             }.also { manager.createNotificationChannel(it) }
@@ -256,67 +302,112 @@ class SMSMessageProcessor(
 
     // ── Parsers ───────────────────────────────────────────────────────────────
 
-    private fun parseMTNMessage(content: String): Triple<Double, String, String>? {
-        val expensePatterns = listOf(
-            Regex("has deducted UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("You have paid .+? UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("You have withdrawn UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("You have sent UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE)
-        )
+    /** [providerTransactionId] is null unless a provider-specific TID pattern matched —
+     * see [extractAirtelTid]'s doc comment for why MTN doesn't have one yet. */
+    private data class ParsedSms(
+        val amount: Double,
+        val type: String,
+        val note: String,
+        val providerTransactionId: String? = null,
+    )
+
+    private fun parseMTNMessage(content: String): ParsedSms? {
+        // No providerTransactionId extraction here: MTN's transaction-reference format hasn't
+        // been confirmed against a real sample message (ADR-0004 Phase 0 measurement found
+        // zero MTN SMS samples anywhere in this repo) — falling back to smsSourceKey-only
+        // dedup for MTN rather than guessing a pattern, per this task's own instruction.
+        val expensePatterns =
+            listOf(
+                Regex("has deducted UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("You have paid .+? UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("You have withdrawn UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("You have sent UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+            )
         for (pattern in expensePatterns) {
             pattern.find(content)?.let { match ->
                 val amount = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@let
-                return Triple(amount, TYPE_EXPENSE, content)
+                return ParsedSms(amount, TYPE_EXPENSE, content)
             }
         }
 
-        val incomePatterns = listOf(
-            Regex("You have received UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE)
-        )
+        val incomePatterns =
+            listOf(
+                Regex("You have received UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+            )
         for (pattern in incomePatterns) {
             pattern.find(content)?.let { match ->
                 val amount = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@let
-                return Triple(amount, TYPE_INCOME, content)
+                return ParsedSms(amount, TYPE_INCOME, content)
             }
         }
         return null
     }
 
-    private fun parseAirtelMessage(content: String): Triple<Double, String, String>? {
-        val expensePatterns = listOf(
-            Regex("SENT UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("WITHDRAWN\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("You have been debited UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE)
-        )
+    private fun parseAirtelMessage(content: String): ParsedSms? {
+        val tid = extractAirtelTid(content)
+
+        val expensePatterns =
+            listOf(
+                Regex("SENT\\.TID.*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("SENT UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("WITHDRAWN\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("has collected UGX\\s*([\\d,]+(?:\\.[\\d]+)?)\\s*from your account", RegexOption.IGNORE_CASE),
+                Regex("You have been debited UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+            )
         for (pattern in expensePatterns) {
             pattern.find(content)?.let { match ->
                 val amount = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@let
-                return Triple(amount, TYPE_EXPENSE, content)
+                return ParsedSms(amount, TYPE_EXPENSE, content, tid)
             }
         }
 
-        val incomePatterns = listOf(
-            Regex("CASH DEPOSIT of UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("RECEIVED UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
-            Regex("RECEIVED\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE)
-        )
+        val incomePatterns =
+            listOf(
+                Regex("CASH DEPOSIT of UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("RECEIVED UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("RECEIVED\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+            )
         for (pattern in incomePatterns) {
             pattern.find(content)?.let { match ->
                 val amount = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@let
-                return Triple(amount, TYPE_INCOME, content)
+                return ParsedSms(amount, TYPE_INCOME, content, tid)
             }
         }
         return null
     }
+
+    /**
+     * Extracts Airtel Uganda's `TID` transaction reference, e.g. "...SENT.TID 123456.UGX..."
+     * or "...TID: 123456...". Tolerant of a colon or bare whitespace before the value, since
+     * the only confirmed real-world evidence of this field's shape in this repo (the
+     * pre-existing `SENT\.TID.*?UGX` amount regex above) shows `TID` and `UGX` co-occurring
+     * in expense messages but doesn't itself capture the value or its exact delimiter — this
+     * pattern is a reasonable first cut, not verified against a real Airtel sample message
+     * (ADR-0004 Phase 0 measurement found none in this repo). Flagged in the ADR for
+     * confirmation once real discarded-duplicate log lines are observed in production (see
+     * the logging in [processMessage]).
+     *
+     * `\b` on both sides of `TID` and a `{4,}` minimum on the captured value are deliberate,
+     * unverified-pattern safeguards, not evidence-backed specifics: this key feeds
+     * [TransactionEntity.providerTransactionId]'s dedup, which *discards* an insert on a match
+     * (`offline-sync-reviewer` flagged this) — a false extraction that happens to be constant
+     * across genuinely different messages would silently and permanently discard every
+     * subsequent real transaction on that channel, which is a worse failure mode than simply
+     * failing to extract (which only falls back to the existing `smsSourceKey` dedup). The
+     * `\b`s avoid matching `TID` as a substring of an unrelated word; the length floor avoids
+     * treating a stray 1-3 character token as a transaction id.
+     */
+    private fun extractAirtelTid(content: String): String? =
+        Regex("\\bTID\\b[:\\s]+(\\w{4,})", RegexOption.IGNORE_CASE).find(content)?.groupValues?.get(1)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun generateMessageId(senderId: String, timestamp: Long): String =
-        "${senderId}_${timestamp}_${System.nanoTime()}"
+    private fun generateMessageId(
+        senderId: String,
+        timestamp: Long,
+    ): String = "${senderId}_${timestamp}_${System.nanoTime()}"
 
-    private fun extractSenderName(senderId: String): String =
-        if (senderId.contains("@")) senderId.substringBefore("@") else senderId
+    private fun extractSenderName(senderId: String): String = if (senderId.contains("@")) senderId.substringBefore("@") else senderId
 
-    private fun formatUgx(amount: Double): String =
-        NumberFormat.getNumberInstance(Locale.US).format(amount.toLong())
+    private fun formatUgx(amount: Double): String = NumberFormat.getNumberInstance(Locale.US).format(amount.toLong())
 }

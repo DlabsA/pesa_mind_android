@@ -1,12 +1,11 @@
 package cc.dlabs.pesamind.features.settings.channels
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.coordinator.StateEvent
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
+import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
-import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
-import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
-import cc.dlabs.pesamind.core.storage.ChannelManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,124 +17,97 @@ data class ChannelState(
     val isSaving: Boolean = false,
     val isDeleting: Boolean = false,
     val error: String? = null,
-    val message: String? = null
+    val message: String? = null,
 )
 
-class ChannelViewModel : ViewModel() {
-
+/**
+ * Room-backed (ADR-0004 Slice A1) — reads/writes go through [ChannelRepository], never
+ * `ApiClient`/`ChannelManager` directly. [state]'s `channels` list is kept live by the
+ * [ChannelRepository.observeChannels] collector below; create/update/delete/toggle methods
+ * don't need to splice their own result into `channels` by hand (the old network-backed
+ * version did, and that manual splicing is exactly what caused `updateChannel`'s
+ * false-success bug the data-path-tracer found — a "Channel updated successfully" message
+ * with the list still showing pre-edit values). Room's write-then-Flow-reemit does that
+ * correctly by construction.
+ *
+ * [activeTypeFilter]/[activeStatusFilter] exist because the live collector runs for this
+ * ViewModel's whole lifetime: `compose-perf` and `android-reviewer` both independently caught
+ * that a one-shot filtered write into `_state.channels` (the first version of this file) gets
+ * silently clobbered back to the full list the instant *any* write hits the channels table —
+ * which happens concurrently and often, since SMS auto-creation (`ChannelManager.
+ * isSmsAllowedForSender` -> `ChannelRepository.reconcileFromServer`) writes to this same table
+ * from a background service. Tracking the active filter and having the collector re-apply it
+ * on every emission (instead of a one-shot DAO query racing the collector) fixes this by
+ * construction rather than by timing.
+ */
+class ChannelViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(ChannelState(isLoading = true))
     val state: StateFlow<ChannelState> = _state.asStateFlow()
 
+    private var activeTypeFilter: String? = null
+    private var activeStatusFilter: Boolean? = null
+
     init {
-        loadChannels()
-    }
-
-    /**
-     * Load channels: first from local cache, then sync with backend
-     */
-    fun loadChannels() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                // Step 1: Load from local cache first
-                val cachedChannels = ChannelManager.getChannels()
-                if (cachedChannels.isNotEmpty()) {
-                    _state.value = _state.value.copy(channels = cachedChannels)
-                }
-
-                // Step 2: Sync with backend
-                val response = ApiClient.api.getChannels()
-                if (response.isSuccessful) {
-                    val channels = response.body().orEmpty()
-                    
-                    // Restore SMS notification flags from local storage before saving
-                    val channelsWithFlags = channels.map { channel ->
-                        if (channel.channelType != "CASH") {
-                            val localFlag = ChannelManager.isSmsNotificationEnabled(channel.id)
-                            channel.copy(smsNotificationEnabled = localFlag)
-                        } else {
-                            channel
-                        }
-                    }
-
-                    // Save to local storage
-                    ChannelManager.saveChannels(channelsWithFlags)
-
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        channels = channelsWithFlags,
-                        error = null
-                    )
-                } else {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = "Failed to load channels (${response.code()})"
-                    )
+                ChannelRepository.observeChannels().collect { channels ->
+                    _state.value = _state.value.copy(channels = applyActiveFilter(channels), isLoading = false)
                 }
             } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
+                _state.value = _state.value.copy(isLoading = false, error = "Failed to load channels: ${e.message}")
             }
         }
     }
+
+    private fun applyActiveFilter(channels: List<ChannelDetails>): List<ChannelDetails> =
+        when {
+            activeTypeFilter != null -> channels.filter { it.channelType == activeTypeFilter }
+            activeStatusFilter != null -> channels.filter { it.status == activeStatusFilter }
+            else -> channels
+        }
+
+    /** Resets out of a `loadChannelsByType`/`loadChannelsByStatus` filtered view back to the
+     * full list, and satisfies the existing "refresh" icon/pull-to-refresh call sites. Local
+     * data is already live via [ChannelRepository.observeChannels] — this is a one-shot Room
+     * read, not a network call; there is no sync worker to trigger yet (ADR-0004 Slice A2). */
+    fun loadChannels() {
+        activeTypeFilter = null
+        activeStatusFilter = null
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
+            val channels = ChannelRepository.getAllChannels()
+            _state.value = _state.value.copy(isLoading = false, channels = channels)
+        }
+    }
+
+    fun refresh() = loadChannels()
 
     fun loadChannelsByType(channelType: String) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
         if (normalizedType == null) {
-            _state.value = _state.value.copy(
-                error = "Invalid channel type. Use: ${ChannelTypes.valid.joinToString()}"
-            )
+            _state.value =
+                _state.value.copy(
+                    error = "Invalid channel type. Use: ${ChannelTypes.valid.joinToString()}",
+                )
             return
         }
 
+        activeTypeFilter = normalizedType
+        activeStatusFilter = null
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val response = ApiClient.api.getChannelsByType(normalizedType)
-                if (response.isSuccessful) {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        channels = response.body().orEmpty()
-                    )
-                } else {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = "Failed to filter channels (${response.code()})"
-                    )
-                }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
-            }
+            val filtered = ChannelRepository.getByChannelType(normalizedType)
+            _state.value = _state.value.copy(isLoading = false, channels = filtered)
         }
     }
 
     fun loadChannelsByStatus(status: Boolean) {
+        activeStatusFilter = status
+        activeTypeFilter = null
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val response = ApiClient.api.getChannelsByStatus(status)
-                if (response.isSuccessful) {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        channels = response.body().orEmpty()
-                    )
-                } else {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = "Failed to filter channels (${response.code()})"
-                    )
-                }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
-            }
+            val filtered = ChannelRepository.getByActiveStatus(status)
+            _state.value = _state.value.copy(isLoading = false, channels = filtered)
         }
     }
 
@@ -144,10 +116,12 @@ class ChannelViewModel : ViewModel() {
         description: String,
         channelType: String,
         channelDescription: String,
-        status: Boolean = true
+        status: Boolean = true,
     ) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
-        val normalizedChannelDesc = ChannelDescMobileMoney.normalizeOrNull(channelDescription) ?: ChannelDescBank.normalizeOrNull(channelDescription)
+        val normalizedChannelDesc =
+            ChannelDescMobileMoney.normalizeOrNull(channelDescription)
+                ?: ChannelDescBank.normalizeOrNull(channelDescription)
         when {
             name.isBlank() -> {
                 _state.value = _state.value.copy(error = "Name is required")
@@ -158,9 +132,10 @@ class ChannelViewModel : ViewModel() {
                 return
             }
             normalizedType == null -> {
-                _state.value = _state.value.copy(
-                    error = "Invalid channel type. Use: ${ChannelTypes.valid.joinToString()}"
-                )
+                _state.value =
+                    _state.value.copy(
+                        error = "Invalid channel type. Use: ${ChannelTypes.valid.joinToString()}",
+                    )
                 return
             }
             normalizedType != ChannelTypes.CASH && (channelDescription.isBlank() || normalizedChannelDesc == null) -> {
@@ -171,34 +146,32 @@ class ChannelViewModel : ViewModel() {
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
-            try {
-                val body = CreateChannelRequest(
-                    name = name.trim(),
-                    description = description.trim(),
-                    channelType = normalizedType,
-                    channelDesc = normalizedChannelDesc ?: "Cash",
-                    status = status
-                )
-                val response = ApiClient.api.createChannel(body = body)
-
-                if (response.isSuccessful) {
-                    val created = response.body()
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        message = "Channel created successfully",
-                        channels = if (created != null) _state.value.channels + created else _state.value.channels
+            when (
+                val outcome =
+                    ChannelRepository.createChannel(
+                        name = name.trim(),
+                        description = description.trim(),
+                        channelType = normalizedType,
+                        channelDesc = normalizedChannelDesc ?: "Cash",
+                        status = status,
                     )
-                } else {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        error = "Failed to create channel (${response.code()})"
+            ) {
+                is ChannelCreateOutcome.Created -> {
+                    publishEvent(
+                        StateEvent.ChannelCreated(channelId = outcome.channel.id, channelName = outcome.channel.name),
                     )
+                    _state.value = _state.value.copy(isSaving = false, message = "Channel created successfully")
                 }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isSaving = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
+                is ChannelCreateOutcome.AlreadyExists -> {
+                    // Deduped against an existing channel for this same provider — nothing was
+                    // inserted, so this must not be reported as a fresh success (it previously
+                    // was, silently discarding the user's custom name/description).
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            message = "A channel for this provider already exists: ${outcome.existing.name}",
+                        )
+                }
             }
         }
     }
@@ -207,7 +180,7 @@ class ChannelViewModel : ViewModel() {
         id: String,
         name: String,
         description: String,
-        status: Boolean
+        status: Boolean,
     ) {
         if (id.isBlank()) {
             _state.value = _state.value.copy(error = "Invalid channel id")
@@ -216,34 +189,14 @@ class ChannelViewModel : ViewModel() {
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
-            try {
-                val response = ApiClient.api.updateChannel(
-                    id = id,
-                    body = UpdateChannelRequest(
-                        name = name.trim(),
-                        description = description.trim(),
-                        status = status
-                    )
-                )
-
-                if (response.isSuccessful) {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        message = response.body()?.message ?: "Channel updated successfully"
-                    )
-                    loadChannels()
+            val updated = ChannelRepository.updateChannel(id, name.trim(), description.trim(), status)
+            _state.value =
+                if (updated != null) {
+                    publishEvent(StateEvent.ChannelUpdated(channelId = id, channelName = updated.name))
+                    _state.value.copy(isSaving = false, message = "Channel updated successfully")
                 } else {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        error = "Failed to update channel (${response.code()})"
-                    )
+                    _state.value.copy(isSaving = false, error = "Channel not found")
                 }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isSaving = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
-            }
         }
     }
 
@@ -255,26 +208,14 @@ class ChannelViewModel : ViewModel() {
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isDeleting = true, error = null)
-            try {
-                val response = ApiClient.api.deleteChannel(id)
-                if (response.isSuccessful) {
-                    _state.value = _state.value.copy(
-                        isDeleting = false,
-                        message = response.body()?.message ?: "Channel deleted successfully",
-                        channels = _state.value.channels.filterNot { it.id == id }
-                    )
+            val deleted = ChannelRepository.deleteChannel(id)
+            _state.value =
+                if (deleted) {
+                    publishEvent(StateEvent.ChannelDeleted(channelId = id))
+                    _state.value.copy(isDeleting = false, message = "Channel deleted successfully")
                 } else {
-                    _state.value = _state.value.copy(
-                        isDeleting = false,
-                        error = "Failed to delete channel (${response.code()})"
-                    )
+                    _state.value.copy(isDeleting = false, error = "Channel not found")
                 }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isDeleting = false,
-                    error = "Cannot reach server: ${e.message ?: "Unknown error"}"
-                )
-            }
         }
     }
 
@@ -284,8 +225,7 @@ class ChannelViewModel : ViewModel() {
     fun toggleSmsNotification(channelId: String) {
         viewModelScope.launch {
             try {
-                val currentChannels = _state.value.channels
-                val targetChannel = currentChannels.find { it.id == channelId } ?: return@launch
+                val targetChannel = _state.value.channels.find { it.id == channelId } ?: return@launch
 
                 if (targetChannel.channelType == "CASH") {
                     _state.value = _state.value.copy(error = "SMS notifications not available for CASH channels")
@@ -293,23 +233,12 @@ class ChannelViewModel : ViewModel() {
                 }
 
                 val newFlag = !targetChannel.smsNotificationEnabled
+                ChannelRepository.setSmsNotificationEnabled(channelId, newFlag)
 
-                // Update local storage
-                ChannelManager.updateChannelSmsNotification(channelId, newFlag)
-
-                // Update state
-                val updatedChannels = currentChannels.map { channel ->
-                    if (channel.id == channelId) {
-                        channel.copy(smsNotificationEnabled = newFlag)
-                    } else {
-                        channel
-                    }
-                }
-
-                _state.value = _state.value.copy(
-                    channels = updatedChannels,
-                    message = "SMS notifications ${if (newFlag) "enabled" else "disabled"} for this channel"
-                )
+                _state.value =
+                    _state.value.copy(
+                        message = "SMS notifications ${if (newFlag) "enabled" else "disabled"} for this channel",
+                    )
             } catch (e: Exception) {
                 _state.value = _state.value.copy(error = "Failed to update notification setting: ${e.message}")
             }

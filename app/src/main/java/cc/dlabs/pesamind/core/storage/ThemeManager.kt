@@ -32,5 +32,3 @@ object ThemeManager {
         setDarkModeEnabled(!isDarkModeEnabled())
     }
 }
-
-

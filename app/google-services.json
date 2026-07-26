@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "123473103275",
+    "project_id": "pesamind-13524",
+    "storage_bucket": "pesamind-13524.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123473103275:android:909b2f1acae110154ceaee",
+        "android_client_info": {
+          "package_name": "cc.dlabs.pesamind"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "123473103275-2duf1adqbn2tp8snsrml65fe4vp7jn9p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "cc.dlabs.pesamind",
+            "certificate_hash": "77a7d4f3f368d7a525cbc4e6db4832c381846180"
+          }
+        },
+        {
+          "client_id": "123473103275-q5sgg8b72nct7h4m7n5n9g5usqut71sq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "cc.dlabs.pesamind",
+            "certificate_hash": "b3aaba5ebab97a82312838d783f6a093e046fc03"
+          }
+        },
+        {
+          "client_id": "123473103275-smqr09mb7jhecfnuet7b6uviqsdun98l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB45EhSPCVZGGr7_KfsXHbcmN5BSSh8XAU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "123473103275-smqr09mb7jhecfnuet7b6uviqsdun98l.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

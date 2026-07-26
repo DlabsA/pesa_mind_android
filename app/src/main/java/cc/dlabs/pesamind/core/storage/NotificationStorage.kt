@@ -68,9 +68,12 @@ object NotificationStorage {
         return data[LAST_SYNC]?.toLongOrNull() ?: 0
     }
 
+    suspend fun isSyncStale(): Boolean {
+        return SyncPolicy.isStale(getLastSyncTime())
+    }
+
     suspend fun clearAll() {
         if (!isInitialized()) return
         appContext.notificationDataStore.edit { it.clear() }
     }
 }
-

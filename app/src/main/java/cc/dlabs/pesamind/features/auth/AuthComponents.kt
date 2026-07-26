@@ -43,70 +43,77 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun AuthTextField(
-    value:                String,
-    onValueChange:        (String) -> Unit,
-    label:                String,
-    placeholder:          String,
-    leadingIcon:          ImageVector,
-    modifier:             Modifier              = Modifier,
-    errorMessage:         String?               = null,
-    trailingIcon:         ImageVector?          = null,
-    onTrailingIconClick:  (() -> Unit)?         = null,
-    visualTransformation: VisualTransformation  = VisualTransformation.None,
-    keyboardOptions:      KeyboardOptions       = KeyboardOptions.Default,
-    keyboardActions:      KeyboardActions       = KeyboardActions.Default,
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    leadingIcon: ImageVector,
+    modifier: Modifier = Modifier,
+    errorMessage: String? = null,
+    trailingIcon: ImageVector? = null,
+    onTrailingIconClick: (() -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text       = label,
-            fontSize   = 13.sp,
+            text = label,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            color      = MaterialTheme.colorScheme.onSurface,
-            modifier   = Modifier.padding(bottom = 6.dp),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 6.dp),
         )
 
         OutlinedTextField(
-            value                = value,
-            onValueChange        = onValueChange,
-            placeholder          = { Text(placeholder, color = MaterialTheme.colorScheme.onSurface) },
-            leadingIcon          = {
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = MaterialTheme.colorScheme.onSurface) },
+            leadingIcon = {
                 Icon(
-                    imageVector        = leadingIcon,
+                    imageVector = leadingIcon,
                     contentDescription = null,
-                    modifier           = Modifier.size(20.dp),
-                    tint               = if (errorMessage != null)
-                        MaterialTheme.colorScheme.error
-                    else
-                        MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp),
+                    tint =
+                        if (errorMessage != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                 )
             },
-            trailingIcon = trailingIcon?.let {
-                {
-                    IconButton(onClick = { onTrailingIconClick?.invoke() }) {
-                        Icon(
-                            imageVector        = it,
-                            contentDescription = if (visualTransformation == VisualTransformation.None)
-                                "Hide password" else "Show password",
-                            modifier           = Modifier.size(20.dp),
-                            tint               = MaterialTheme.colorScheme.onSurface,
-                        )
+            trailingIcon =
+                trailingIcon?.let {
+                    {
+                        IconButton(onClick = { onTrailingIconClick?.invoke() }) {
+                            Icon(
+                                imageVector = it,
+                                contentDescription =
+                                    if (visualTransformation == VisualTransformation.None) {
+                                        "Hide password"
+                                    } else {
+                                        "Show password"
+                                    },
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
-                }
-            },
-            isError              = errorMessage != null,
+                },
+            isError = errorMessage != null,
             visualTransformation = visualTransformation,
-            keyboardOptions      = keyboardOptions,
-            keyboardActions      = keyboardActions,
-            singleLine           = true,
-            shape                = RoundedCornerShape(12.dp),
-            modifier             = Modifier.fillMaxWidth(),
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
 
         // Per-field inline error — mirrors Swift's `error: vm.emailError`
         if (errorMessage != null) {
             Text(
-                text     = errorMessage,
-                color    = MaterialTheme.colorScheme.error,
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(start = 4.dp, top = 4.dp),
             )
@@ -123,26 +130,26 @@ fun AuthTextField(
 @Composable
 fun ErrorBanner(message: String) {
     Surface(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(10.dp),
-        color     = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
         tonalElevation = 0.dp,
     ) {
         Row(
-            modifier          = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector        = Icons.Outlined.ErrorOutline,
+                imageVector = Icons.Outlined.ErrorOutline,
                 contentDescription = null,
-                tint               = MaterialTheme.colorScheme.onErrorContainer,
-                modifier           = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text      = message,
-                color     = MaterialTheme.colorScheme.onErrorContainer,
-                fontSize  = 13.sp,
+                text = message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                fontSize = 13.sp,
                 lineHeight = 18.sp,
             )
         }

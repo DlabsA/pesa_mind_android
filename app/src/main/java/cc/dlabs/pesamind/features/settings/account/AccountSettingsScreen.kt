@@ -3,6 +3,7 @@ package cc.dlabs.pesamind.features.settings.account
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,18 +14,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.ShimmerBox
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountSettingsScreen(
     navController: NavHostController,
-    vm: AccountViewModel = viewModel()
+    vm: AccountViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
     val displayName = state.username
@@ -54,47 +56,58 @@ fun AccountSettingsScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
 
         if (state.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(horizontal = Spacing.Space6.dp, vertical = Spacing.Space4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
             ) {
-                CircularProgressIndicator(color = teal)
+                ShimmerBox(Modifier.size(80.dp), cornerRadius = 40.dp)
+                Spacer(Modifier.height(Spacing.Space1.dp))
+                ShimmerBox(Modifier.width(120.dp).height(Spacing.Space4.dp))
+                ShimmerBox(Modifier.width(160.dp).height(13.dp))
+                HorizontalDivider()
+                ShimmerBox(Modifier.fillMaxWidth().height(56.dp), cornerRadius = 12.dp)
+                ShimmerBox(Modifier.fillMaxWidth().height(56.dp), cornerRadius = 12.dp)
             }
             return@Scaffold
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-
             // ── Profile avatar placeholder ───────────────────
             Box(
                 modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Surface(
                         modifier = Modifier.size(80.dp),
                         shape = androidx.compose.foundation.shape.CircleShape,
-                        color = teal.copy(alpha = 0.15f)
+                        color = teal.copy(alpha = 0.15f),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = state.username.take(1).uppercase(),
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = teal
+                                color = teal,
                             )
                         }
                     }
@@ -110,7 +123,7 @@ fun AccountSettingsScreen(
                 "Edit Profile",
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
-                color = Color.Gray
+                color = Color.Gray,
             )
 
             // ── Username field ───────────────────────────────
@@ -123,7 +136,7 @@ fun AccountSettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                singleLine = true
+                singleLine = true,
             )
 
             // ── Email field ──────────────────────────────────
@@ -137,24 +150,25 @@ fun AccountSettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                singleLine = true
+                singleLine = true,
             )
 
             // ── Save button ──────────────────────────────────
             Button(
                 onClick = { vm.saveProfile() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = teal),
-                enabled = !state.isSaving
+                enabled = !state.isSaving,
             ) {
                 if (state.isSaving) {
                     CircularProgressIndicator(
                         color = Color.White,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
                     )
                 } else {
                     Text("Save Changes", fontWeight = FontWeight.SemiBold)
@@ -167,22 +181,23 @@ fun AccountSettingsScreen(
                 "Password",
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
-                color = Color.Gray
+                color = Color.Gray,
             )
 
             // ── Change password button ───────────────────────
             OutlinedButton(
                 onClick = { navController.navigate(Routes.ChangePassword.route) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = teal)
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = teal),
             ) {
                 Icon(
                     Icons.Filled.Lock,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Change Password", fontWeight = FontWeight.SemiBold)

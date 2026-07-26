@@ -8,14 +8,14 @@ import androidx.compose.ui.graphics.Color
 // BRAND PRIMITIVES
 // ============================================================================
 object BrandColors {
-    val Forest900 = Color(0xFF003934)  // Primary dark
-    val Forest800 = Color(0xFF004D45)  // Hover
-    val Forest700 = Color(0xFF006B5E)  // Focus rings
-    val Forest100 = Color(0xFFE6F0EF)  // Pale tint surface
+    val Forest900 = Color(0xFF003934) // Primary dark
+    val Forest800 = Color(0xFF004D45) // Hover
+    val Forest700 = Color(0xFF006B5E) // Focus rings
+    val Forest100 = Color(0xFFE6F0EF) // Pale tint surface
 
-    val Lime500 = Color(0xFF9FE870)    // Accent
-    val Lime400 = Color(0xFFB8F093)    // Accent hover
-    val Lime200 = Color(0xFFDDF7C9)    // Pale lime tint
+    val Lime500 = Color(0xFF9FE870) // Accent
+    val Lime400 = Color(0xFFB8F093) // Accent hover
+    val Lime200 = Color(0xFFDDF7C9) // Pale lime tint
 
     val CanvasWarm = Color(0xFFF8F9F0) // Light background
     val CanvasDark = Color(0xFF0D1410) // Dark background
@@ -27,7 +27,7 @@ object BrandColors {
 object LightColors {
     // Surfaces
     val Background = Color(0xFFF8F9F0)
-    val Surface = Color(0xFFFFFFFF)
+    val Surface = Color(0xFFF8F9F0)
     val SurfaceRaised = Color(0xFFF0F4F2)
 
     // Borders
@@ -37,7 +37,7 @@ object LightColors {
     // Primary (Forest Green in light mode)
     val Primary = Color(0xFF003934)
     val PrimaryHover = Color(0xFF004D45)
-    val PrimaryForeground = Color(0xFFFFFFFF)
+    val PrimaryForeground = Color(0xFFF8F9F0)
 
     // Accent (Lime in light mode)
     val Accent = Color(0xFF9FE870)
@@ -76,12 +76,12 @@ object DarkColors {
     val SurfaceRaised = Color(0xFF21262D)
 
     // Borders
-    val Border = Color(0xFF223130)            // Subtle edge definition for Surface cards
-    val BorderStrong = Color(0xFF344B49)      // Pronounced definition for inputs / active outlines
+    val Border = Color(0xFF223130) // Subtle edge definition for Surface cards
+    val BorderStrong = Color(0xFF344B49) // Pronounced definition for inputs / active outlines
 
     // Primary (Lime in dark mode — INTENTIONAL FLIP!)
-    val Primary = Color(0xFF9FE870)           // Actionable elements / FABs / Toggles
-    val PrimaryHover = Color(0xFFB8F093)      // Hover / Pressed state feedback
+    val Primary = Color(0xFF9FE870) // Actionable elements / FABs / Toggles
+    val PrimaryHover = Color(0xFFB8F093) // Hover / Pressed state feedback
     val PrimaryForeground = Color(0xFF003934) // High-contrast text ON top of Primary color
 
     // Accent (Forest in dark mode — complement)
@@ -124,6 +124,8 @@ object Spacing {
     const val Space8 = 32
     const val Space10 = 40
     const val Space12 = 48
+
+    const val space20 = 80
 }
 
 // ============================================================================
@@ -148,7 +150,6 @@ object Radius {
  */
 @Composable
 fun getPrimaryColor(): Color = MaterialTheme.colorScheme.primary
-
 
 /**
  * Get the tertiary (income) color dynamically based on current theme
@@ -182,52 +183,52 @@ fun getBackgroundColor(): Color = MaterialTheme.colorScheme.background
 
 @Deprecated(
     "Use getPrimaryColor() @Composable function instead for theme-aware color",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val PesaMindTeal = LightColors.Primary
 
 @Deprecated(
     "Use getTertiaryColor() @Composable function instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val PesaMindGreen = LightColors.Income
 
 @Deprecated(
     "Use getPrimaryColor() @Composable function instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val PesaMindNavy = LightColors.Primary
 
 @Deprecated(
     "Use getTertiaryColor() @Composable function instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val IncomeGreen = LightColors.Income
 
 @Deprecated(
     "Use getTertiaryColor() @Composable function instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val PesaMindGreen_Income = LightColors.Income
 
 @Deprecated(
     "Use getErrorColor() @Composable function instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val ExpenseRed = LightColors.Expense
 
 @Deprecated(
     "Use getBackgroundColor() @Composable function instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val BackgroundLight = LightColors.Background
 
 @Deprecated(
     "Use MaterialTheme.colorScheme.onSurfaceVariant instead",
-    level = DeprecationLevel.WARNING
+    level = DeprecationLevel.WARNING,
 )
 val TextSecondary = LightColors.TextSecondary
-val ChipActive     = Color(0xFF378ADD)
-val NetPos  = Color(0xFF639922)
-val NetNeg  = Color(0xFFE24B4A)
+val ChipActive = Color(0xFF378ADD)
+val NetPos = Color(0xFF639922)
+val NetNeg = Color(0xFFE24B4A)
 val IncomeText = Color(0xFF085041)

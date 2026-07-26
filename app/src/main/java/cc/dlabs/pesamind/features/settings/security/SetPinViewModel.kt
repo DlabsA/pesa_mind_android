@@ -1,7 +1,7 @@
 package cc.dlabs.pesamind.features.settings.security
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.storage.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,11 +15,10 @@ data class SetPinState(
     val pin: String = "",
     val firstPin: String = "",
     val error: String? = null,
-    val success: Boolean = false
+    val success: Boolean = false,
 )
 
-class SetPinViewModel : ViewModel() {
-
+class SetPinViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(SetPinState())
     val state: StateFlow<SetPinState> = _state.asStateFlow()
 
@@ -46,11 +45,12 @@ class SetPinViewModel : ViewModel() {
         when (current.step) {
             PinStep.ENTER -> {
                 // Move to confirm step
-                _state.value = current.copy(
-                    step = PinStep.CONFIRM,
-                    firstPin = pin,
-                    pin = ""
-                )
+                _state.value =
+                    current.copy(
+                        step = PinStep.CONFIRM,
+                        firstPin = pin,
+                        pin = "",
+                    )
             }
             PinStep.CONFIRM -> {
                 if (pin == current.firstPin) {
@@ -61,12 +61,13 @@ class SetPinViewModel : ViewModel() {
                     }
                 } else {
                     // No match — restart
-                    _state.value = current.copy(
-                        step = PinStep.ENTER,
-                        pin = "",
-                        firstPin = "",
-                        error = "PINs did not match, try again"
-                    )
+                    _state.value =
+                        current.copy(
+                            step = PinStep.ENTER,
+                            pin = "",
+                            firstPin = "",
+                            error = "PINs did not match, try again",
+                        )
                 }
             }
         }

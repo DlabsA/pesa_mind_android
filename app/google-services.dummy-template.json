@@ -1,0 +1,56 @@
+{
+  "project_info": {
+    "project_number": "123473103275",
+    "project_id": "pesamind-13524",
+    "storage_bucket": "pesamind-13524.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123473103275:android:909b2f1acae110154ceaee",
+        "android_client_info": {
+          "package_name": "cc.dlabs.pesamind"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "123473103275-ANDROID_APP_SIGNING_SHA.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "cc.dlabs.pesamind",
+            "certificate_hash": "REPLACE_WITH_PLAY_APP_SIGNING_SHA1"
+          }
+        },
+        {
+          "client_id": "123473103275-ANDROID_UPLOAD_KEY_SHA.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "cc.dlabs.pesamind",
+            "certificate_hash": "REPLACE_WITH_UPLOAD_KEY_SHA1"
+          }
+        },
+        {
+          "client_id": "123473103275-WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUMMY_REPLACE_WITH_REAL_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "123473103275-WEB_CLIENT_ID.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+

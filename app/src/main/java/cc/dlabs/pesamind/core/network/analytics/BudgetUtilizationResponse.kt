@@ -6,5 +6,5 @@ data class BudgetUtilizationResponse(
     @SerializedName("budget_utilization")
     val budgetUtilization: Double,
     val month: Int,
-    val year: Int
+    val year: Int,
 )

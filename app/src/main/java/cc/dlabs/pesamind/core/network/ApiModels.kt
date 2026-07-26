@@ -1,22 +1,23 @@
 package cc.dlabs.pesamind.core.network.models
 
-import com.google.gson.annotations.SerializedName
+import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.network.analytics.Health
+import com.google.gson.annotations.SerializedName
 
 data class RegisterRequest(
     val username: String = "",
     val email: String = "",
-    val password: String = ""
+    val password: String = "",
 )
 
 data class LoginRequest(
     val email: String = "",
-    val password: String = ""
+    val password: String = "",
 )
 
 data class RefreshRequest(
     @SerializedName("refresh_token")
-    val refreshToken: String = ""
+    val refreshToken: String = "",
 )
 
 data class AuthResponse(
@@ -25,7 +26,7 @@ data class AuthResponse(
     @SerializedName("refresh_token")
     val refreshToken: String? = null,
     val error: String? = null,
-    val profile: AuthProfile? = null
+    val profile: AuthProfile? = null,
 )
 
 data class AuthProfile(
@@ -33,8 +34,10 @@ data class AuthProfile(
     @SerializedName("user_id")
     val userId: String? = null,
     val username: String? = null,
+    @SerializedName(value = "avatar_url", alternate = ["avatarUrl", "AvatarURL"])
+    val avatarUrl: String? = null,
     val type: String? = null,
-    val balance: Double? = null
+    val balance: Double? = null,
 )
 
 data class AuthRegisterResponse(
@@ -43,20 +46,159 @@ data class AuthRegisterResponse(
     val error: String? = null,
 )
 
+// ── Google OAuth Models ────────────────────────────────────────────────────────
+
+/**
+ * Request to verify a Google ID token and check if user exists
+ */
+data class VerifyGoogleTokenRequest(
+    @SerializedName("id_token")
+    val idToken: String,
+)
+
+/**
+ * Response from /api/v1/auth/google/verify-token
+ * - If is_new_user=true, user must complete signup
+ * - If is_new_user=false, user is already registered, tokens are returned
+ */
+data class VerifyGoogleTokenResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null,
+)
+
+/**
+ * Request to complete signup after user selects username
+ */
+data class CompleteGoogleSignupRequest(
+    val email: String,
+    @SerializedName("google_id")
+    val googleId: String,
+    val username: String,
+    @SerializedName("google_display_name")
+    val googleDisplayName: String? = null,
+    @SerializedName("google_profile_photo")
+    val googleProfilePhoto: String? = null,
+)
+
+/**
+ * Response from /api/v1/auth/google/complete-signup
+ */
+data class CompleteGoogleSignupResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null,
+)
+
+/**
+ * Request to check if username is available
+ */
+data class CheckUsernameRequest(
+    val username: String,
+)
+
+/**
+ * Response from /api/v1/auth/google/check-username
+ */
+data class CheckUsernameResponse(
+    val available: Boolean,
+    val message: String? = null,
+    val error: String? = null,
+)
+
+/**
+ * Request for Android-client-only Google sign-in.
+ * This flow sends account identity fields instead of Google ID tokens.
+ */
+data class GoogleMobileSignInRequest(
+    val email: String,
+    @SerializedName("google_id")
+    val googleId: String,
+    @SerializedName("google_display_name")
+    val googleDisplayName: String? = null,
+    @SerializedName("google_profile_photo")
+    val googleProfilePhoto: String? = null,
+)
+
+/**
+ * Response from /api/v1/auth/google/mobile-signin
+ */
+data class GoogleMobileSignInResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null,
+)
+
+/**
+ * Request for platform-specific Google sign-in.
+ * The platform field indicates which OAuth client should be used:
+ * - android: GOOGLE_OAUTH_ANDROID_CLIENT_ID
+ * - web: GOOGLE_CLIENT_ID
+ * - ios: GOOGLE_OAUTH_IOS_CLIENT_ID
+ */
+data class GooglePlatformSigninRequest(
+    // "android", "web", or "ios"
+    val platform: String,
+    val email: String,
+    @SerializedName("google_id")
+    val googleId: String,
+    @SerializedName("google_display_name")
+    val googleDisplayName: String? = null,
+    @SerializedName("google_profile_photo")
+    val googleProfilePhoto: String? = null,
+)
+
+/**
+ * Response from /api/v1/auth/google/platform-signin
+ * Same structure as mobile-signin but now with platform-aware validation
+ */
+data class GooglePlatformSigninResponse(
+    @SerializedName("access_token")
+    val accessToken: String? = null,
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+    @SerializedName("is_new_user")
+    val isNewUser: Boolean = false,
+    val profile: AuthProfile? = null,
+    val error: String? = null,
+)
+
+// ── Account Models ────────────────────────────────────────────────────────────
+
 data class Account(
     val id: String = "",
     val username: String = "",
     val email: String = "",
+    val avatarUrl: String = "",
     val type: String = "",
-    val balance: Double = 0.0
+    val balance: Double = 0.0,
 )
 
 data class TransactionRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004 Slice A2) — the
+    // server's actual handling of this field is unverified; omitted (Gson drops nulls by
+    // default) for any caller that doesn't supply one. See SyncWorker.
+    val id: String? = null,
     val amount: Double = 0.0,
     val type: String = "",
     val note: String = "",
     @SerializedName("channel_details_id")
-    val channelId: String = ""
+    val channelId: String = "",
 )
 
 data class TransactionDetails(
@@ -67,30 +209,34 @@ data class TransactionDetails(
     @SerializedName("channel_details_name")
     val channelDetailsName: String = "",
     val username: String = "",
+    // Local-only field (ADR-0004 Slice A3 sync-status UI): mirrors ChannelDetails.smsNotificationEnabled's
+    // @Transient pattern — never sent to or read from the server, populated from TransactionEntity.syncStatus.
+    @Transient
+    val syncStatus: SyncStatus = SyncStatus.SYNCED,
 )
 
 data class AnalyticsResponse(
     val totalIncome: Double = 0.0,
     val totalExpense: Double = 0.0,
-    val netBalance: Double = 0.0
+    val netBalance: Double = 0.0,
 )
 
 data class Budget(
     val id: String = "",
     val category: String = "",
     val limit: Double = 0.0,
-    val spent: Double = 0.0
+    val spent: Double = 0.0,
 )
 
 data class UpdateProfileRequest(
     val username: String? = null,
-    val email: String? = null
+    val email: String? = null,
 )
 
 data class ChangePasswordRequest(
     val current_password: String,
     val new_password: String,
-    val confirm_password: String
+    val confirm_password: String,
 )
 
 data class UserResponse(
@@ -98,8 +244,10 @@ data class UserResponse(
     @SerializedName("name")
     val username: String,
     val email: String,
+    @SerializedName(value = "avatar_url", alternate = ["avatarUrl", "AvatarURL"])
+    val avatarUrl: String = "",
     val balance: Double,
-    val type: String
+    val type: String,
 )
 
 data class ChannelDetails(
@@ -116,145 +264,156 @@ data class ChannelDetails(
     val channelDesc: String = "",
     // Local-only field: SMS notification flag (not sent to backend)
     @Transient
-    val smsNotificationEnabled: Boolean = true
+    val smsNotificationEnabled: Boolean = true,
+    // Local-only field (ADR-0004 Slice A3 sync-status UI): not sent to or read from the server,
+    // populated from ChannelEntity.syncStatus.
+    @Transient
+    val syncStatus: SyncStatus = SyncStatus.SYNCED,
 )
 
 data class CreateChannelRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004 Slice A2) — see
+    // TransactionRequest.id for the same caveat. Omitted for the existing SMS auto-create
+    // call site, which doesn't supply one.
+    val id: String? = null,
     val name: String,
     @SerializedName("channel_type")
     val channelType: String,
     val description: String,
     @SerializedName("channel_desc")
     val channelDesc: String,
-    val status: Boolean
+    val status: Boolean,
 )
 
 data class UpdateChannelRequest(
     val name: String,
     val description: String,
-    val status: Boolean
+    val status: Boolean,
 )
 
 data class ApiMessageResponse(
     val message: String? = null,
-    val error: String? = null
+    val error: String? = null,
 )
 
 // SMS Message Model
 data class SMSMessage(
-	val id: String = "",
-	@SerializedName("sender_id")
-	val senderId: String = "",
-	@SerializedName("sender_name")
-	val senderName: String = "",
-	val content: String = "",
-	val timestamp: Long = System.currentTimeMillis(),
-	@SerializedName("is_read")
-	val isRead: Boolean = false,
-	@SerializedName("channel_id")
-	val channelId: String = ""
+    val id: String = "",
+    @SerializedName("sender_id")
+    val senderId: String = "",
+    @SerializedName("sender_name")
+    val senderName: String = "",
+    val content: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    @SerializedName("is_read")
+    val isRead: Boolean = false,
+    @SerializedName("channel_id")
+    val channelId: String = "",
 )
 
 // Budget Transaction Models
 data class BudgetTransactionRequest(
-	val name: String = "",
-	val amount: Double = 0.0,
-	val type: String = "" // income, expense, saving
+    val name: String = "",
+    val amount: Double = 0.0,
+    // income, expense, saving
+    val type: String = "",
 )
 
 data class BudgetTransactionOperation(
-	val id: String = "",
-	val name: String = "",
-	val amount: Double = 0.0,
-	val type: String = "",
-	val action: String = "" // add, update, delete
+    val id: String = "",
+    val name: String = "",
+    val amount: Double = 0.0,
+    val type: String = "",
+    // add, update, delete
+    val action: String = "",
 )
 
 data class BudgetTransactionResponse(
-	val id: String = "",
-	val name: String = "",
-	val amount: Double = 0.0,
-	val type: String = "",
-	@SerializedName("created_at")
-	val createdAt: String = "",
+    val id: String = "",
+    val name: String = "",
+    val amount: Double = 0.0,
+    val type: String = "",
+    @SerializedName("created_at")
+    val createdAt: String = "",
 )
 
 // Monthly Budget Models
 data class CreateMonthlyBudgetRequest(
-	@SerializedName("yearly_budget_id")
-	val yearlyBudgetId: String = "",
-	val month: Int = 0,
-	val year: Long = 0,
-	val transactions: List<BudgetTransactionRequest> = emptyList()
+    @SerializedName("yearly_budget_id")
+    val yearlyBudgetId: String = "",
+    val month: Int = 0,
+    val year: Long = 0,
+    val transactions: List<BudgetTransactionRequest> = emptyList(),
 )
 
 data class MonthlyBudgetResponse(
-	val id: String = "",
-	@SerializedName("user_id")
-	val userId: String = "",
-	@SerializedName("yearly_budget_id")
-	val yearlyBudgetId: String = "",
-	val month: Int = 0,
-	val year: Long = 0,
-	@SerializedName("total_expenditures")
-	val totalExpenditures: Long = 0,
-	@SerializedName("total_income")
-	val totalIncome: Long = 0,
-	@SerializedName("total_savings")
-	val totalSavings: Long = 0,
-	@SerializedName("total_transactions")
-	val totalTransactions: Long = 0,
-	val transactions: List<BudgetTransactionResponse> = emptyList(),
-	@SerializedName("created_at")
-	val createdAt: String = "",
-	@SerializedName("updated_at")
-	val updatedAt: String = ""
+    val id: String = "",
+    @SerializedName("user_id")
+    val userId: String = "",
+    @SerializedName("yearly_budget_id")
+    val yearlyBudgetId: String = "",
+    val month: Int = 0,
+    val year: Long = 0,
+    @SerializedName("total_expenditures")
+    val totalExpenditures: Long = 0,
+    @SerializedName("total_income")
+    val totalIncome: Long = 0,
+    @SerializedName("total_savings")
+    val totalSavings: Long = 0,
+    @SerializedName("total_transactions")
+    val totalTransactions: Long = 0,
+    val transactions: List<BudgetTransactionResponse> = emptyList(),
+    @SerializedName("created_at")
+    val createdAt: String = "",
+    @SerializedName("updated_at")
+    val updatedAt: String = "",
 )
 
 data class UpdateMonthlyBudgetRequest(
     val yearlyBudgetId: String? = null,
-	val month: Int? = null,
-	val year: Long? = null,
-	val transactions: List<BudgetTransactionRequest> = emptyList(),
-	@SerializedName("transaction_ops")
-	val transactionOps: List<BudgetTransactionOperation> = emptyList()
+    val month: Int? = null,
+    val year: Long? = null,
+    val transactions: List<BudgetTransactionRequest> = emptyList(),
+    @SerializedName("transaction_ops")
+    val transactionOps: List<BudgetTransactionOperation> = emptyList(),
 )
 
 // Yearly Budget Models
 data class CreateYearlyBudgetRequest(
-	val year: Long = 0,
-	val transactions: List<BudgetTransactionRequest> = emptyList()
+    val year: Long = 0,
+    val transactions: List<BudgetTransactionRequest> = emptyList(),
 )
 
 data class YearlyBudgetResponse(
-	val id: String = "",
-	@SerializedName("user_id")
-	val userId: String = "",
-	val year: Long = 0,
-	@SerializedName("total_expenditures")
-	val totalExpenditures: Long = 0,
-	@SerializedName("total_income")
-	val totalIncome: Long = 0,
-	@SerializedName("total_savings")
-	val totalSavings: Long = 0,
-	@SerializedName("total_transactions")
-	val totalTransactions: Long = 0,
-	val transactions: List<BudgetTransactionResponse> = emptyList(),
+    val id: String = "",
+    @SerializedName("user_id")
+    val userId: String = "",
+    val year: Long = 0,
+    @SerializedName("total_expenditures")
+    val totalExpenditures: Long = 0,
+    @SerializedName("total_income")
+    val totalIncome: Long = 0,
+    @SerializedName("total_savings")
+    val totalSavings: Long = 0,
+    @SerializedName("total_transactions")
+    val totalTransactions: Long = 0,
+    val transactions: List<BudgetTransactionResponse> = emptyList(),
+    // or Date if you have a custom adapter
     @SerializedName("created_at")
-    val createdAt: String,  // or Date if you have a custom adapter
-
+    val createdAt: String,
+    // or Date if you have a custom adapter
     @SerializedName("updated_at")
-    val updatedAt: String,  // or Date if you have a custom adapter
-
+    val updatedAt: String,
+    // Make it nullable since it can be null
     @SerializedName("deleted_at")
-    val deletedAt: String? = null  // Make it nullable since it can be null
+    val deletedAt: String? = null,
 )
 
 data class UpdateYearlyBudgetRequest(
-	val year: Long? = null,
-	val transactions: List<BudgetTransactionRequest> = emptyList(),
-	@SerializedName("transaction_ops")
-	val transactionOps: List<BudgetTransactionOperation> = emptyList()
+    val year: Long? = null,
+    val transactions: List<BudgetTransactionRequest> = emptyList(),
+    @SerializedName("transaction_ops")
+    val transactionOps: List<BudgetTransactionOperation> = emptyList(),
 )
 
 data class BudgetVsActualItem(
@@ -266,7 +425,8 @@ data class BudgetVsActualItem(
     val variance: Double = 0.0,
     @SerializedName("variance_percent")
     val variancePercent: Double = 0.0,
-    val status: String = "on-track" // "under", "on-track", "over"
+    // "under", "on-track", "over"
+    val status: String = "on-track",
 )
 
 data class BudgetVsActualResponse(
@@ -283,12 +443,10 @@ data class BudgetVsActualResponse(
     @SerializedName("overall_status")
     val overallStatus: String = "on-track",
     @SerializedName("budget_vs_actual")
-    val budgetVsActual: List<BudgetVsActualItem> = emptyList()
+    val budgetVsActual: List<BudgetVsActualItem> = emptyList(),
 )
 
-
 // ─── Top-level response ───────────────────────────────────────────────────────
-
 
 data class AnalyticResponse(
     @SerializedName("summary") val summary: SummarySection,
@@ -364,8 +522,11 @@ data class MonthEntry(
         val parts = date.split("-")
         if (parts.size < 2) return date
         val m = parts[1].toIntOrNull() ?: return date
-        val names = listOf("Jan","Feb","Mar","Apr","May","Jun",
-            "Jul","Aug","Sep","Oct","Nov","Dec")
+        val names =
+            listOf(
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            )
         return if (m in 1..12) names[m - 1] else date
     }
 }
@@ -409,7 +570,6 @@ data class SpendingVelocityData(
 
 // ─── Budget vs Actual ─────────────────────────────────────────────────────────
 
-
 data class BvaExpenseComponent(
     val actual: Double,
     val budgeted: Double,
@@ -442,21 +602,26 @@ data class BvaHealthComponents(
 
 data class BvaHealth(
     val score: Int,
-    val status: String,   // "excellent" | "good" | "fair" | "poor"
-    val trend: String,    // "stable" | "improving" | "declining"
+    // "excellent" | "good" | "fair" | "poor"
+    val status: String,
+    // "stable" | "improving" | "declining"
+    val trend: String,
     val components: BvaHealthComponents,
 )
 
 data class BvaData(
-    val period: String,           // "2026-06"
+    // "2026-06"
+    val period: String,
     @SerializedName("budget_total")
     val budgetTotal: Double,
     @SerializedName("actual_total")
     val actualTotal: Double,
-    val variance: Double,         // positive = under budget (saved), negative = over
+    // positive = under budget (saved), negative = over
+    val variance: Double,
     @SerializedName("variance_percent")
     val variancePercent: Double,
-    val status: String,           // "under_budget" | "on_budget" | "over_budget"
+    // "under_budget" | "on_budget" | "over_budget"
+    val status: String,
 )
 
 data class BvaMetadata(
@@ -507,33 +672,45 @@ data class BudgetLineItem(
 // ─── Expense Forecast ─────────────────────────────────────────────────────────
 
 data class ForecastData(
-    val period: String,             // "2026-06"
+    // "2026-06"
+    val period: String,
+    // 16
     @SerializedName("days_elapsed")
-    val daysElapsed: Int,           // 16
+    val daysElapsed: Int,
+    // 7250.0
     @SerializedName("days_remaining")
-    val dailyBurnRate: Double,      // 7250.0
+    val dailyBurnRate: Double,
+    // 116000.0
     @SerializedName("actual_spent")
-    val actualSpent: Double,        // 116000.0
+    val actualSpent: Double,
+    // 217500.0
     @SerializedName("projected_total")
-    val projectedTotal: Double,     // 217500.0
+    val projectedTotal: Double,
+    // 200000.0
     @SerializedName("budget_limit")
-    val budgetLimit: Double,        // 200000.0
+    val budgetLimit: Double,
+    // 17500.0  (+ve = over, -ve = under)
     @SerializedName("amount_variance")
-    val projectedVariance: Double,  // 17500.0  (+ve = over, -ve = under)
+    val projectedVariance: Double,
+    // true
     @SerializedName("will_exceed_budget")
-    val willExceedBudget: Boolean,  // true
-    val confidence: Double,         // 0.0–1.0
+    val willExceedBudget: Boolean,
+    // 0.0–1.0
+    val confidence: Double,
 ) {
     /** Derived — no separate backend field needed */
     val confidencePct: Int get() = (confidence * 100).toInt().coerceIn(0, 100)
 }
 
 data class ForecastRecommendation(
-    val type: String,       // "alert" | "tip" | ...
+    // "alert" | "tip" | ...
+    val type: String,
     val title: String,
     val message: String,
-    val confidence: Double, // 0.0–1.0
-    val severity: String,   // "warning" | "critical" | "info" | "success"
+    // 0.0–1.0
+    val confidence: Double,
+    // "warning" | "critical" | "info" | "success"
+    val severity: String,
 )
 
 data class ForecastMetadata(
@@ -548,7 +725,6 @@ data class ExpenseForecastSection(
     val metadata: ForecastMetadata,
     val recommendations: List<ForecastRecommendation> = emptyList(),
 )
-
 
 // ─── Cash Flow Waterfall ──────────────────────────────────────────────────────
 
@@ -580,7 +756,6 @@ data class CashFlowEntry(
 
 // ─── Anomalies ────────────────────────────────────────────────────────────────
 
-
 // Note: AnomalyData should be defined elsewhere (likely already exists)
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
@@ -591,7 +766,8 @@ data class AnalyticsRecommendation(
     @SerializedName("confidence") val confidence: Double,
     @SerializedName("severity") val severity: String,
 )
-//Also update the AnomalyData class (if not already defined):
+
+// Also update the AnomalyData class (if not already defined):
 //    kotlin
 data class AnomalyData(
     @SerializedName("anomalies_detected") val anomaliesDetected: Int,
@@ -611,8 +787,6 @@ data class AnomalyItem(
     @SerializedName("sigma_multiple") val sigmaMultiple: Double,
     @SerializedName("detected_at") val detectedAt: String,
 )
-
-
 
 data class AnomalyMetadata(
     val period: String,
