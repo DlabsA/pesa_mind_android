@@ -698,6 +698,11 @@ fun FinancialHealthCard(
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     components.forEach { (name, comp) ->
+                        // Gson deserializes a JSON `null` component value (e.g. "budget_adherence"
+                        // when there's no budget to compare against yet) straight into this map
+                        // despite its declared type being non-null Component — skip rendering a
+                        // row for it rather than crashing on comp.score.
+                        if (comp == null) return@forEach
                         HealthComponentRow(
                             label = name.replace("_", " ").replaceFirstChar { it.uppercase() },
                             score = comp.score,
