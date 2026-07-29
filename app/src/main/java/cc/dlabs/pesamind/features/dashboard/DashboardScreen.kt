@@ -33,6 +33,7 @@ import cc.dlabs.pesamind.core.theme.DarkColors
 import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.core.ui.ErrorState
+import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.features.analytics.AnomaliesCard
 import java.text.NumberFormat
@@ -219,7 +220,7 @@ private fun DashboardScrollBody(
                         enter = slideInVertically() + fadeIn(),
                         exit = slideOutVertically() + fadeOut(),
                     ) {
-                        DashboardOfflineBanner(
+                        OfflineBanner(
                             caption = viewModel.formattedLastUpdated,
                             modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
@@ -227,17 +228,21 @@ private fun DashboardScrollBody(
                 }
             }
 
-            state.dashboard?.let { d ->
-
-                // ── Net Movement Hero
+            // ── Net Movement Hero — computed live from local Room transactions
+            // (TransactionRepository.observeMonthlySummary), independent of whether the
+            // network dashboard fetch below has ever succeeded.
+            state.localSummary?.let { summary ->
                 item {
                     StaggeredCard(index = 0, visible = cardsVisible) {
                         NetMovementCard(
-                            data = d.summary.data,
+                            data = summary,
                             modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
                     }
                 }
+            }
+
+            state.dashboard?.let { d ->
 
                 // ── Quick Stats
                 item {
@@ -370,40 +375,6 @@ private fun DashboardHeader(
         streakLabel = viewModel.streakLabel,
         modifier = modifier,
     )
-}
-
-// ─── Offline Banner ───────────────────────────────────────────────────────────
-
-@Composable
-private fun DashboardOfflineBanner(
-    caption: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(listOf(Color(0xFFFF9500), Color(0xFFFF6B00))),
-                    shape = RoundedCornerShape(12.dp),
-                ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(Icons.Default.AccessTime, null, tint = Color.White, modifier = Modifier.size(16.dp))
-            Column {
-                Text(
-                    "Offline — showing cached data",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-                Text(caption, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.80f))
-            }
-        }
-    }
 }
 
 // ─── Net Movement Hero Card ───────────────────────────────────────────────────

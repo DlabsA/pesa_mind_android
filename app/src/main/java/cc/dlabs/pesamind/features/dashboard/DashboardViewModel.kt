@@ -4,9 +4,11 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
+import cc.dlabs.pesamind.core.network.analytics.SummaryData
 import cc.dlabs.pesamind.core.storage.StreakSessionCache
 import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +41,11 @@ sealed class DashboardPhase {
 
 data class DashboardUiState(
     val dashboard: DashboardResponse? = null,
+    // Income/expense/savings/net-movement, computed live from local Room transactions — see
+    // TransactionRepository.observeMonthlySummary. Populated independently of [dashboard]/
+    // [phase]: it doesn't need a network round-trip, so it's available even when the network
+    // fetch below has never succeeded (fresh install, offline-since-launch).
+    val localSummary: SummaryData? = null,
     val phase: DashboardPhase = DashboardPhase.Idle,
     val isRefreshing: Boolean = false,
     val isOffline: Boolean = false,
@@ -72,6 +79,23 @@ class DashboardViewModel
                         fetchFromNetwork()
                     }
                     wasConnected = connected
+                }
+            }
+            observeLocalSummary()
+        }
+
+        /** Sole writer of [DashboardUiState.localSummary] — a live Room Flow, so this needs no
+         * connectivity check and no explicit refresh call anywhere: a transaction being
+         * created (dirty, unsynced) already changes the local numbers immediately, and a later
+         * [StateEvent.SyncCompleted] doesn't change them again (sync doesn't alter amounts,
+         * only sync-status metadata this summary never reads). */
+        private fun observeLocalSummary() {
+            val now = Calendar.getInstance()
+            val year = now.get(Calendar.YEAR)
+            val month = now.get(Calendar.MONTH) + 1
+            viewModelScope.launch {
+                TransactionRepository.observeMonthlySummary(year, month).collect { summary ->
+                    _state.update { it.copy(localSummary = summary) }
                 }
             }
         }

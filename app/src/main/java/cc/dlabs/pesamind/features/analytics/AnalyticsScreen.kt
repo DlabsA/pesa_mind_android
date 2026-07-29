@@ -57,7 +57,9 @@ import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
+import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
 import java.util.Locale
@@ -115,13 +117,38 @@ fun AnalyticsScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                phase is AnalyticsPhase.Error && state.analytics == null ->
+                phase is AnalyticsPhase.Error && state.analytics == null -> {
+                    val isDark = isSystemInDarkTheme()
                     ErrorState(
                         message = phase.message,
                         onRetry = { viewModel.load() },
-                        title = "Couldn't load analytics",
-                        icon = Icons.Default.CloudOff,
+                        title = if (state.isOffline) "You're offline" else "Couldn't load analytics",
+                        icon = if (state.isOffline) Icons.Default.CloudOff else Icons.Default.ErrorOutline,
+                        // Being offline isn't really an "error" — use the same warm Warning
+                        // tone as OfflineBanner instead of the alarming default error-red,
+                        // reserving red for genuine server failures.
+                        iconTint =
+                            if (state.isOffline) {
+                                if (isDark) DarkColors.Warning else LightColors.Warning
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        iconBackground =
+                            if (state.isOffline) {
+                                if (isDark) DarkColors.WarningBg else LightColors.WarningBg
+                            } else {
+                                MaterialTheme.colorScheme.errorContainer
+                            },
                         modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
+                phase is AnalyticsPhase.Empty ->
+                    EmptyState(
+                        icon = Icons.Default.QueryStats,
+                        title = "No analytics yet",
+                        subtitle = "Add a transaction and your spending insights will show up here.",
+                        modifier = Modifier.fillMaxSize().padding(Spacing.Space6.dp),
                     )
 
                 else ->
@@ -178,7 +205,7 @@ private fun AnalyticsScrollBody(
                         enter = slideInVertically() + fadeIn(),
                         exit = slideOutVertically() + fadeOut(),
                     ) {
-                        AnalyticsOfflineBanner(
+                        OfflineBanner(
                             caption = viewModel.formattedLastUpdated,
                             modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
@@ -321,40 +348,6 @@ private fun AnalyticsHeader(
         streakLabel = viewModel.streakLabel,
         modifier = modifier,
     )
-}
-
-// ─── Offline Banner ───────────────────────────────────────────────────────────
-
-@Composable
-private fun AnalyticsOfflineBanner(
-    caption: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(listOf(Color(0xFFFF9500), Color(0xFFFF6B00))),
-                    shape = RoundedCornerShape(12.dp),
-                ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(Icons.Default.AccessTime, null, tint = Color.White, modifier = Modifier.size(16.dp))
-            Column {
-                Text(
-                    "Offline — showing cached data",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-                Text(caption, style = MaterialTheme.typography.labelSmall, color = Color.White)
-            }
-        }
-    }
 }
 
 // ─── Health Score Card ────────────────────────────────────────────────────────
