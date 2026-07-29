@@ -2,8 +2,7 @@ package cc.dlabs.pesamind.features.budgets
 
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
-import cc.dlabs.pesamind.core.data.MonthlyBudgetRepository
-import cc.dlabs.pesamind.core.data.YearlyBudgetRepository
+import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.network.ApiClient.api
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
@@ -43,10 +42,9 @@ data class BudgetUiState(
     val error: String? = null,
     val isDarkMode: Boolean = false,
     val isOffline: Boolean = false,
-    // Computed from data — with Room as the real local cache (ADR-0006), isFromCache now
-    // means "the current month's budget hasn't been confirmed by the server yet" (the backing
-    // entity is dirty), not "we fell back to a cache because the network failed" — there is no
-    // more fetched-vs-cached distinction once Room is the only read path.
+    // Computed from data — with Room as the real local cache (ADR-0004 Slice B), there is no
+    // more fetched-vs-cached distinction once Room is the only read path. Always false: dirty
+    // state isn't currently surfaced by BudgetRepository's plain response Flows.
     val isFromCache: Boolean = false,
     val lastUpdated: Long? = null,
     val streakCount: Int = 0,
@@ -91,17 +89,16 @@ data class BudgetUiState(
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
 /**
- * Room-backed (ADR-0006) — reads go through [YearlyBudgetRepository]/[MonthlyBudgetRepository]
- * Flows, never `ApiClient`/`BudgetManager` directly. `BudgetManager`'s DataStore cache was
- * never actually live in production (its `init()` was never called from
- * `PesaMindApp.onCreate()` — see debt-burndown A9), so this isn't just a rewire — it's the
- * first time budgets have had a working local cache at all.
+ * Room-backed (ADR-0004 Slice B) — reads go through [BudgetRepository]'s Flows, never
+ * `ApiClient`/`BudgetManager` directly. `BudgetManager`'s DataStore cache was never actually
+ * live in production (its `init()` was never called from `PesaMindApp.onCreate()`), so this
+ * isn't just a rewire — it's the first time budgets have had a working local cache at all.
  *
  * Deliberately does NOT subscribe to `StateEvent.SyncCompleted` the way `DashboardViewModel`/
- * `AnalyticsViewModel` do (ADR-0006's own outline assumed it would need to) — those two are
- * still 100% server-computed and need an explicit "go refetch" trigger; budgets are now
- * genuinely local-first, so the Room write `SyncWorker` performs on a successful pull *is* the
- * trigger — [observeBudgets]'s Flow collectors pick it up automatically, no event needed.
+ * `AnalyticsViewModel` do — those two are still 100% server-computed and need an explicit
+ * "go refetch" trigger; budgets are now genuinely local-first, so the Room write `SyncWorker`
+ * performs on a successful pull *is* the trigger — [observeBudgets]'s Flow collectors pick it
+ * up automatically, no event needed.
  *
  * [fetchStreak]/`api.getDashboard()` stay network-backed, unchanged — gamification streak is
  * out of this fix's scope.
@@ -139,25 +136,24 @@ class BudgetViewModel
             val nextYear = _state.value.nextMonthYear.toLong()
 
             viewModelScope.launch {
-                YearlyBudgetRepository.observeYearlyBudgetSnapshot(year).collect { snapshot ->
-                    _state.update { it.copy(yearlyBudget = snapshot?.details, isLoadingYearly = false) }
+                BudgetRepository.observeYearlyBudget(year).collect { budget ->
+                    _state.update { it.copy(yearlyBudget = budget, isLoadingYearly = false) }
                 }
             }
             viewModelScope.launch {
-                MonthlyBudgetRepository.observeMonthlyBudgetSnapshot(month, year).collect { snapshot ->
+                BudgetRepository.observeMonthlyBudget(month, year).collect { budget ->
                     _state.update {
                         it.copy(
-                            currentMonthlyBudget = snapshot?.details,
+                            currentMonthlyBudget = budget,
                             isLoadingMonthly = false,
-                            isFromCache = snapshot?.dirty ?: false,
-                            lastUpdated = snapshot?.updatedAt ?: it.lastUpdated,
+                            lastUpdated = System.currentTimeMillis(),
                         )
                     }
                 }
             }
             viewModelScope.launch {
-                MonthlyBudgetRepository.observeMonthlyBudgetSnapshot(nextMonth, nextYear).collect { snapshot ->
-                    _state.update { it.copy(nextMonthBudget = snapshot?.details) }
+                BudgetRepository.observeMonthlyBudget(nextMonth, nextYear).collect { budget ->
+                    _state.update { it.copy(nextMonthBudget = budget) }
                 }
             }
         }
@@ -207,9 +203,9 @@ class BudgetViewModel
                     val month = _state.value.displayMonth
                     val nextMonth = _state.value.nextMonthIndex
                     val nextYear = _state.value.nextMonthYear.toLong()
-                    val yearly = YearlyBudgetRepository.getYearlyBudget(year)
-                    val monthly = MonthlyBudgetRepository.getMonthlyBudget(month, year)
-                    val next = MonthlyBudgetRepository.getMonthlyBudget(nextMonth, nextYear)
+                    val yearly = BudgetRepository.getYearlyBudgetByYear(year)
+                    val monthly = BudgetRepository.getMonthlyBudgetByMonthYear(month, year)
+                    val next = BudgetRepository.getMonthlyBudgetByMonthYear(nextMonth, nextYear)
                     _state.update { it.copy(yearlyBudget = yearly, currentMonthlyBudget = monthly, nextMonthBudget = next) }
                 } finally {
                     _state.update { it.copy(isRefreshing = false) }

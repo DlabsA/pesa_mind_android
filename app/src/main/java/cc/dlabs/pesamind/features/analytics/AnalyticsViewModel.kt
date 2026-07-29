@@ -182,12 +182,24 @@ class AnalyticsViewModel
                 if (_state.value.analytics == null) {
                     _state.value =
                         _state.value.copy(
-                            phase = AnalyticsPhase.Error(e.message ?: "Unknown error"),
+                            phase = AnalyticsPhase.Error(friendlyErrorMessage(e)),
                         )
                 }
                 _state.value = _state.value.copy(isOffline = true)
             }
         }
+
+        /** A thrown [java.io.IOException] (`UnknownHostException`/`ConnectException`/
+         * `SocketTimeoutException`/...) means the request never reached the server — the raw
+         * exception message (e.g. `"Unable to resolve host \"api.dlabs.cc\"..."`) is a Java
+         * string, not something to show a user. Anything else (JSON parsing, an unexpected
+         * runtime failure) gets an equally friendly, equally non-technical fallback. */
+        private fun friendlyErrorMessage(e: Exception): String =
+            if (e is java.io.IOException) {
+                "No internet connection. Check your connection and try again."
+            } else {
+                "Something went wrong loading your analytics. Please try again."
+            }
 
         // ── Computed helpers ──────────────────────────────────────────────────────
 

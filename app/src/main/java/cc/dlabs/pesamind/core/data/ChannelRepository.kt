@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.core.data
 
 import android.content.Context
+import android.util.Log
 import androidx.room.withTransaction
 import cc.dlabs.pesamind.core.database.CoalesceDecision
 import cc.dlabs.pesamind.core.database.ExistingRowSnapshot
@@ -14,11 +15,17 @@ import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.OutboxOperation
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
+import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.sync.OutboxPusher
 import dagger.hilt.EntryPoints
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.UUID
 
@@ -56,11 +63,19 @@ sealed class ChannelCreateOutcome {
  * [DatabaseEntryPoint], the same pattern `PrefsToRoomMigrator` already established.
  */
 object ChannelRepository {
+    private const val TAG = "ChannelRepository"
+
     // internal, not private: lets a JVM test inject a mocked PesaMindDatabase/DAO directly
     // (no Android runtime / device available to run a real Room in-memory-database test).
     internal lateinit var database: PesaMindDatabase
     private val channelDao get() = database.channelDao()
     private val outboxDao get() = database.outboxDao()
+
+    // Nullable, not lateinit: JVM unit tests inject `database` directly without calling [init]
+    // (no Android Context available off-device), so an eager push must be a safe no-op then,
+    // not a crash — those tests already exercise the outbox/background-sync path instead.
+    private var networkMonitor: NetworkMonitor? = null
+    private var outboxPusher: OutboxPusher? = null
 
     /**
      * The one `channelType` value that legitimately allows many rows sharing the same
@@ -84,6 +99,27 @@ object ChannelRepository {
 
     fun init(context: Context) {
         database = EntryPoints.get(context.applicationContext, DatabaseEntryPoint::class.java).database()
+        networkMonitor = NetworkMonitor(context.applicationContext)
+        outboxPusher = OutboxPusher(database, ApiClient.api)
+    }
+
+    /**
+     * Best-effort immediate push, fired right after a create/update/delete's local commit when
+     * the device is already known to be online — see [TransactionRepository]'s twin for the
+     * full rationale. Never awaited by the caller and never lets a network hiccup surface as a
+     * failure of the local write; the outbox row this pushes stays as the durable fallback.
+     */
+    private fun pushEagerly(entityId: String) {
+        val monitor = networkMonitor ?: return
+        val pusher = outboxPusher ?: return
+        if (!monitor.isConnectedNow) return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                pusher.pushChannelEntry(entityId)
+            } catch (e: Exception) {
+                Log.w(TAG, "Eager push failed for channel $entityId; will retry on next sync", e)
+            }
+        }
     }
 
     fun observeChannels(): Flow<List<ChannelDetails>> = channelDao.observeAll().map { list -> list.map { it.toDetails() } }
@@ -117,44 +153,50 @@ object ChannelRepository {
         val now = System.currentTimeMillis()
         val normalizedKey = if (isProviderChannelType(channelType)) normalizeSenderKey(channelDesc) else null
         val userId = currentUserId()
-        return database.withTransaction {
-            if (normalizedKey != null) {
-                channelDao.findByNormalizedSenderKey(normalizedKey)?.let {
-                    // Found a pre-existing row under this provider's normalizedSenderKey — live
-                    // or (rarely, see ChannelEntity's doc comment) soft-deleted. Either way,
-                    // nothing is inserted, so the caller must be told "already exists," not
-                    // "created" — see ChannelViewModel's handling of AlreadyExists.
-                    return@withTransaction ChannelCreateOutcome.AlreadyExists(it.toDetails())
+        val outcome =
+            database.withTransaction {
+                if (normalizedKey != null) {
+                    channelDao.findByNormalizedSenderKey(normalizedKey)?.let {
+                        // Found a pre-existing row under this provider's normalizedSenderKey —
+                        // live or (rarely, see ChannelEntity's doc comment) soft-deleted. Either
+                        // way, nothing is inserted, so the caller must be told "already exists,"
+                        // not "created" — see ChannelViewModel's handling of AlreadyExists.
+                        return@withTransaction ChannelCreateOutcome.AlreadyExists(it.toDetails())
+                    }
                 }
+                val entity =
+                    ChannelEntity(
+                        id = UUID.randomUUID().toString(),
+                        serverId = null,
+                        userId = userId,
+                        name = name,
+                        channelType = channelType,
+                        description = description,
+                        status = status,
+                        channelDesc = channelDesc,
+                        normalizedSenderKey = normalizedKey,
+                        availableBalance = 0.0,
+                        smsNotificationEnabled = true,
+                        syncStatus = SyncStatus.PENDING,
+                        dirty = true,
+                        createdAt = now,
+                        updatedAt = now,
+                        deletedAt = null,
+                    )
+                val rowId = channelDao.insertIgnore(entity)
+                if (rowId == -1L) {
+                    // Lost a race against a concurrent insert for the same provider — return the
+                    // row that actually won instead of a second, discarded one.
+                    val winner = channelDao.findByNormalizedSenderKey(normalizedKey!!)!!
+                    return@withTransaction ChannelCreateOutcome.AlreadyExists(winner.toDetails())
+                }
+                outboxDao.upsert(newOutboxEntry(OutboxEntityType.CHANNEL, entity.id, OutboxOperation.CREATE, now))
+                ChannelCreateOutcome.Created(entity.toDetails())
             }
-            val entity =
-                ChannelEntity(
-                    id = UUID.randomUUID().toString(),
-                    serverId = null,
-                    userId = userId,
-                    name = name,
-                    channelType = channelType,
-                    description = description,
-                    status = status,
-                    channelDesc = channelDesc,
-                    normalizedSenderKey = normalizedKey,
-                    smsNotificationEnabled = true,
-                    syncStatus = SyncStatus.PENDING,
-                    dirty = true,
-                    createdAt = now,
-                    updatedAt = now,
-                    deletedAt = null,
-                )
-            val rowId = channelDao.insertIgnore(entity)
-            if (rowId == -1L) {
-                // Lost a race against a concurrent insert for the same provider — return the
-                // row that actually won instead of a second, discarded one.
-                val winner = channelDao.findByNormalizedSenderKey(normalizedKey!!)!!
-                return@withTransaction ChannelCreateOutcome.AlreadyExists(winner.toDetails())
-            }
-            outboxDao.upsert(newOutboxEntry(OutboxEntityType.CHANNEL, entity.id, OutboxOperation.CREATE, now))
-            ChannelCreateOutcome.Created(entity.toDetails())
+        if (outcome is ChannelCreateOutcome.Created) {
+            pushEagerly(outcome.channel.id)
         }
+        return outcome
     }
 
     suspend fun updateChannel(
@@ -162,49 +204,64 @@ object ChannelRepository {
         name: String,
         description: String,
         status: Boolean,
-    ): ChannelDetails? =
-        database.withTransaction {
-            val existing = channelDao.getById(id) ?: return@withTransaction null
-            val now = System.currentTimeMillis()
-            val updated =
-                existing.copy(
-                    name = name,
-                    description = description,
-                    status = status,
-                    dirty = true,
-                    syncStatus = SyncStatus.PENDING,
-                    updatedAt = now,
-                )
-            channelDao.update(updated)
-            enqueueOutbox(OutboxEntityType.CHANNEL, id, OutboxOperation.UPDATE, now)
-            updated.toDetails()
-        }
-
-    suspend fun deleteChannel(id: String): Boolean =
-        database.withTransaction {
-            val existing = channelDao.getById(id) ?: return@withTransaction false
-            val now = System.currentTimeMillis()
-            val existingOutbox = outboxDao.findFor(OutboxEntityType.CHANNEL, id)
-            when (
-                val decision =
-                    OutboxCoalescer.coalesce(existingOutbox?.operation, existingOutbox?.status, OutboxOperation.DELETE)
-            ) {
-                is CoalesceDecision.HardDeleteNoOutbox -> {
-                    outboxDao.deleteFor(OutboxEntityType.CHANNEL, id)
-                    channelDao.hardDelete(id)
-                }
-                is CoalesceDecision.WriteOutbox -> {
-                    channelDao.update(existing.copy(deletedAt = now, dirty = true, syncStatus = SyncStatus.PENDING, updatedAt = now))
-                    outboxDao.upsert(
-                        upsertedOutboxEntry(existingOutbox, OutboxEntityType.CHANNEL, id, decision.operation, now),
+    ): ChannelDetails? {
+        val updated =
+            database.withTransaction {
+                val existing = channelDao.getById(id) ?: return@withTransaction null
+                val now = System.currentTimeMillis()
+                val updated =
+                    existing.copy(
+                        name = name,
+                        description = description,
+                        status = status,
+                        dirty = true,
+                        syncStatus = SyncStatus.PENDING,
+                        updatedAt = now,
                     )
-                }
-                is CoalesceDecision.LeaveInFlight -> {
-                    channelDao.update(existing.copy(deletedAt = now, dirty = true, syncStatus = SyncStatus.PENDING, updatedAt = now))
-                }
+                channelDao.update(updated)
+                enqueueOutbox(OutboxEntityType.CHANNEL, id, OutboxOperation.UPDATE, now)
+                updated.toDetails()
             }
-            true
+        if (updated != null) {
+            pushEagerly(id)
         }
+        return updated
+    }
+
+    suspend fun deleteChannel(id: String): Boolean {
+        var shouldPush = false
+        val result =
+            database.withTransaction {
+                val existing = channelDao.getById(id) ?: return@withTransaction false
+                val now = System.currentTimeMillis()
+                val existingOutbox = outboxDao.findFor(OutboxEntityType.CHANNEL, id)
+                when (
+                    val decision =
+                        OutboxCoalescer.coalesce(existingOutbox?.operation, existingOutbox?.status, OutboxOperation.DELETE)
+                ) {
+                    is CoalesceDecision.HardDeleteNoOutbox -> {
+                        outboxDao.deleteFor(OutboxEntityType.CHANNEL, id)
+                        channelDao.hardDelete(id)
+                    }
+                    is CoalesceDecision.WriteOutbox -> {
+                        channelDao.update(existing.copy(deletedAt = now, dirty = true, syncStatus = SyncStatus.PENDING, updatedAt = now))
+                        outboxDao.upsert(
+                            upsertedOutboxEntry(existingOutbox, OutboxEntityType.CHANNEL, id, decision.operation, now),
+                        )
+                        shouldPush = true
+                    }
+                    is CoalesceDecision.LeaveInFlight -> {
+                        // An existing push is already SYNCING for this row — nothing new to push.
+                        channelDao.update(existing.copy(deletedAt = now, dirty = true, syncStatus = SyncStatus.PENDING, updatedAt = now))
+                    }
+                }
+                true
+            }
+        if (shouldPush) {
+            pushEagerly(id)
+        }
+        return result
+    }
 
     suspend fun setSmsNotificationEnabled(
         id: String,
@@ -279,6 +336,8 @@ object ChannelRepository {
                             description = details.description,
                             status = details.status,
                             channelDesc = details.channelDesc,
+                            // Server-computed, never written locally — always refreshed here.
+                            availableBalance = details.availableBalance,
                             // Not backfilled here — see this method's doc comment for why an
                             // already-known row's normalizedSenderKey is left exactly as-is.
                             syncStatus = SyncStatus.SYNCED,
@@ -310,6 +369,7 @@ object ChannelRepository {
                             status = details.status,
                             channelDesc = details.channelDesc,
                             normalizedSenderKey = normalizedKey,
+                            availableBalance = details.availableBalance,
                             smsNotificationEnabled = details.smsNotificationEnabled,
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
@@ -402,6 +462,7 @@ internal fun ChannelEntity.toDetails() =
         description = description,
         status = status,
         channelDesc = channelDesc,
+        availableBalance = availableBalance,
         smsNotificationEnabled = smsNotificationEnabled,
         syncStatus = syncStatus,
     )

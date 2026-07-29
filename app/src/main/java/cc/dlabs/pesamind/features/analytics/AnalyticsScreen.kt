@@ -57,7 +57,9 @@ import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
+import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
 import java.util.Locale
@@ -115,13 +117,38 @@ fun AnalyticsScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                phase is AnalyticsPhase.Error && state.analytics == null ->
+                phase is AnalyticsPhase.Error && state.analytics == null -> {
+                    val isDark = isSystemInDarkTheme()
                     ErrorState(
                         message = phase.message,
                         onRetry = { viewModel.load() },
-                        title = "Couldn't load analytics",
-                        icon = Icons.Default.CloudOff,
+                        title = if (state.isOffline) "You're offline" else "Couldn't load analytics",
+                        icon = if (state.isOffline) Icons.Default.CloudOff else Icons.Default.ErrorOutline,
+                        // Being offline isn't really an "error" — use the same warm Warning
+                        // tone as OfflineBanner instead of the alarming default error-red,
+                        // reserving red for genuine server failures.
+                        iconTint =
+                            if (state.isOffline) {
+                                if (isDark) DarkColors.Warning else LightColors.Warning
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        iconBackground =
+                            if (state.isOffline) {
+                                if (isDark) DarkColors.WarningBg else LightColors.WarningBg
+                            } else {
+                                MaterialTheme.colorScheme.errorContainer
+                            },
                         modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
+                phase is AnalyticsPhase.Empty ->
+                    EmptyState(
+                        icon = Icons.Default.QueryStats,
+                        title = "No analytics yet",
+                        subtitle = "Add a transaction and your spending insights will show up here.",
+                        modifier = Modifier.fillMaxSize().padding(Spacing.Space6.dp),
                     )
 
                 else ->
@@ -178,7 +205,7 @@ private fun AnalyticsScrollBody(
                         enter = slideInVertically() + fadeIn(),
                         exit = slideOutVertically() + fadeOut(),
                     ) {
-                        AnalyticsOfflineBanner(
+                        OfflineBanner(
                             caption = viewModel.formattedLastUpdated,
                             modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
@@ -188,73 +215,148 @@ private fun AnalyticsScrollBody(
 
             state.analytics?.let { a ->
                 // Summary Metrics
-                a.summary?.let { summary ->
+                if (a.summary != null) {
                     item {
                         StaggeredCard(index = 1, visible = cardsVisible) {
                             SummaryMetricsCard(
-                                data = summary,
+                                data = a.summary,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else {
+                    a.errors["summary"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 1, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Summary unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
 
                 // Spending Velocity
-                a.spendingVelocity?.let { velocity ->
+                if (a.spendingVelocity != null) {
                     item {
                         StaggeredCard(index = 2, visible = cardsVisible) {
                             SpendingVelocityCard(
-                                section = velocity,
+                                section = a.spendingVelocity,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else {
+                    a.errors["spending_velocity"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 2, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Spending velocity unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
 
                 // Monthly Trends
-                a.monthlyTrends?.let { trends ->
+                if (a.monthlyTrends != null) {
                     item {
                         StaggeredCard(index = 3, visible = cardsVisible) {
                             MonthlyTrendsCard(
-                                section = trends,
+                                section = a.monthlyTrends,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else {
+                    a.errors["monthly_trends"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 3, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Monthly trends unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
 
                 // Budget vs Actual
-                a.budgetVsActual?.let { bva ->
+                if (a.budgetVsActual != null) {
                     item {
                         StaggeredCard(index = 4, visible = cardsVisible) {
                             BudgetVsActualCard(
-                                section = bva,
+                                section = a.budgetVsActual,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else {
+                    // A null budget_vs_actual with no entry in `errors` is the legitimate
+                    // "no monthly budget set yet" case (see comprehensive_service.go) — only
+                    // show a card here when the backend actually recorded a failure.
+                    a.errors["budget_vs_actual"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 4, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Budget vs actual unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
 
                 // Expense Forecast
-                a.expenseForecast?.let { forecast ->
+                if (a.expenseForecast != null) {
                     item {
                         StaggeredCard(index = 5, visible = cardsVisible) {
                             ExpenseForecastCard(
-                                section = forecast,
+                                section = a.expenseForecast,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else {
+                    a.errors["expense_forecast"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 5, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Expense forecast unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
 
                 // Cash Flow Waterfall
-                a.cashFlowWaterfall?.let { cashFlow ->
+                if (a.cashFlowWaterfall != null) {
                     item {
                         StaggeredCard(index = 6, visible = cardsVisible) {
                             CashFlowCard(
-                                section = cashFlow,
+                                section = a.cashFlowWaterfall,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else {
+                    a.errors["cash_flow_waterfall"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 6, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Cash flow unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -269,6 +371,18 @@ private fun AnalyticsScrollBody(
                                 section = a.anomalies,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
+                        }
+                    }
+                } else if (a.anomalies == null) {
+                    a.errors["anomalies"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 7, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Anomaly detection unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -321,40 +435,6 @@ private fun AnalyticsHeader(
         streakLabel = viewModel.streakLabel,
         modifier = modifier,
     )
-}
-
-// ─── Offline Banner ───────────────────────────────────────────────────────────
-
-@Composable
-private fun AnalyticsOfflineBanner(
-    caption: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(listOf(Color(0xFFFF9500), Color(0xFFFF6B00))),
-                    shape = RoundedCornerShape(12.dp),
-                ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(Icons.Default.AccessTime, null, tint = Color.White, modifier = Modifier.size(16.dp))
-            Column {
-                Text(
-                    "Offline — showing cached data",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-                Text(caption, style = MaterialTheme.typography.labelSmall, color = Color.White)
-            }
-        }
-    }
 }
 
 // ─── Health Score Card ────────────────────────────────────────────────────────
@@ -2991,5 +3071,43 @@ private fun AnalyticsCard(
         tonalElevation = 0.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp)) { content() }
+    }
+}
+
+/**
+ * Inline "this one card failed" placeholder — the backend now computes each analytics section
+ * independently and always returns 200, so one section's real failure (e.g. a transient DB
+ * error) no longer blanks out the whole screen ([AnalyticsPhase.Error] is now reserved for total
+ * failures with zero cached data). This surfaces that single section's error in its own slot
+ * instead, leaving every other card unaffected.
+ */
+@Composable
+private fun SectionErrorCard(
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    AnalyticsCard(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

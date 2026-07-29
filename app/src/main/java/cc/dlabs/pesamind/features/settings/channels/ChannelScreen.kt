@@ -39,7 +39,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Close
@@ -108,6 +107,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
@@ -116,6 +116,8 @@ import cc.dlabs.pesamind.core.theme.getTertiaryColor
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.SkeletonCard
 import cc.dlabs.pesamind.core.ui.SyncStatusBadge
+import java.text.NumberFormat
+import java.util.Locale
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 
@@ -426,6 +428,9 @@ fun ChannelScreen(
                                 onEdit = { editingChannel = channel },
                                 onDelete = { pendingDelete = channel },
                                 onToggleSms = { vm.toggleSmsNotification(channel.id) },
+                                onAddTransaction = {
+                                    navController.navigate(Routes.AddTransaction.createRoute(channel.id))
+                                },
                             )
                         }
                         item { Spacer(Modifier.height(96.dp)) }
@@ -642,18 +647,26 @@ private fun channelTypeIcon(type: String): ImageVector =
         else -> Icons.Outlined.Payments
     }
 
-// ─── Channel Card ─────────────────────────────────────────────────────────────
+// ─── Balance formatting ───────────────────────────────────────────────────────
+// Mirrors the "UGX 1,234,567" convention already used across DashboardScreen,
+// BudgetScreen, TransactionListScreen, etc.
 
+private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
+
+private fun Double.asUgx(): String = "UGX ${ugxFmt.format(this)}"
+
+// ─── Channel Card ─────────────────────────────────────────────────────────────
 @Composable
 fun ChannelCard(
     item: ChannelDetails,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggleSms: () -> Unit,
+    onAddTransaction: () -> Unit,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
+        initialValue = 0.4f,
         targetValue = 1f,
         animationSpec =
             infiniteRepeatable(
@@ -664,210 +677,247 @@ fun ChannelCard(
     )
 
     val statusDotColor = if (item.status) getTertiaryColor() else getErrorColor()
-    val statusChipBg =
-        if (item.status) {
-            getTertiaryColor().copy(alpha = 0.10f)
-        } else {
-            getErrorColor().copy(alpha = 0.09f)
-        }
     val typeColor = channelTypeColor(item.channelType)
-    var menuExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier =
             Modifier
                 .fillMaxWidth()
+                // Soft neutral lift instead of the old primary-tinted glow — the
+                // reference separates the card from the canvas with shadow + a
+                // hairline, not colour.
                 .shadow(
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(18.dp),
-                    ambientColor = getPrimaryColor().copy(alpha = 0.07f),
-                    spotColor = getPrimaryColor().copy(alpha = 0.13f),
+                    elevation = 3.dp,
+                    shape = RoundedCornerShape(20.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.35f),
+                    spotColor = Color.Black.copy(alpha = 0.45f),
                 ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(0.dp),
     ) {
-        Row(
+        // No more left accent strip — channel type now lives entirely in the
+        // icon-circle tint, keeping the surface clean like the reference.
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
+                    .padding(16.dp),
         ) {
-            // Type-colored accent strip
-            Box(
-                modifier =
-                    Modifier
-                        .width(4.dp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp))
-                        .background(typeColor),
-            )
-
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 12.dp),
+            // ── Header: type icon + name + muted status chip ──────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Type icon + name + status chip + overflow menu
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                Surface(
+                    shape = CircleShape,
+                    color = typeColor.copy(alpha = 0.16f),
+                    modifier = Modifier.size(46.dp),
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(11.dp),
-                        color = typeColor.copy(alpha = 0.12f),
-                        modifier = Modifier.size(38.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = channelTypeIcon(item.channelType),
-                                contentDescription = null,
-                                tint = typeColor,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.width(10.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = item.name,
-                            style =
-                                MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.2).sp,
-                                ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = displayChannelType(item.channelType),
-                            style =
-                                MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    letterSpacing = 0.25.sp,
-                                ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    // Sync-status badge (ADR-0004 Slice A3) + status chip share one
-                    // `spacedBy` Row — SyncStatusBadge renders nothing once synced, and
-                    // `spacedBy` only adds space *between* children that actually exist, so a
-                    // fully-synced channel's card keeps the original single 8dp gap here
-                    // instead of accumulating a second fixed Spacer's worth of dead space.
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SyncStatusBadge(status = item.syncStatus)
-                        Surface(shape = CircleShape, color = statusChipBg) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            ) {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .size(6.dp)
-                                            .alpha(if (item.status) pulseAlpha else 0.55f)
-                                            .background(statusDotColor, CircleShape),
-                                )
-                                Text(
-                                    text = if (item.status) "Active" else "Inactive",
-                                    style =
-                                        MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            letterSpacing = 0.2.sp,
-                                        ),
-                                    color = statusDotColor,
-                                )
-                            }
-                        }
-                    }
-
-                    Box {
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.MoreVert,
-                                contentDescription = "More options",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Edit") },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.Edit, contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onEdit()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Delete", color = getErrorColor()) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Outlined.Delete,
-                                        contentDescription = null,
-                                        tint = getErrorColor(),
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onDelete()
-                                },
-                            )
-                        }
-                    }
-                }
-
-                // Description inset block
-                if (item.description.isNotBlank()) {
-                    Spacer(Modifier.height(10.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = item.description,
-                            style =
-                                MaterialTheme.typography.bodySmall.copy(
-                                    lineHeight = 19.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                ),
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp),
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = channelTypeIcon(item.channelType),
+                            contentDescription = null,
+                            tint = typeColor,
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
 
-                // SMS Notification Toggle (only for non-cash channels)
-                if (item.channelType != ChannelTypes.CASH) {
-                    Spacer(Modifier.height(12.dp))
-                    SmsToggleRow(
-                        enabled = item.smsNotificationEnabled,
-                        onToggle = onToggleSms,
+                Spacer(Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.name,
+                        style =
+                            MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.2).sp,
+                            ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = displayChannelType(item.channelType),
+                        style =
+                            MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 0.25.sp,
+                            ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SyncStatusBadge(status = item.syncStatus)
+                    StatusChip(
+                        active = item.status,
+                        dotColor = statusDotColor,
+                        pulseAlpha = pulseAlpha,
                     )
                 }
             }
+
+            // ── Balance (the hero) ───────────────────────────────────────────
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Available balance",
+                style =
+                    MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = item.availableBalance.asUgx(),
+                style =
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = (-0.5).sp,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            // ── Action row: solid neutral pills ──────────────────────────────
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ChannelActionPill(
+                    icon = Icons.Filled.Add,
+                    label = "Add",
+                    onClick = onAddTransaction,
+                    modifier = Modifier.weight(1f),
+                )
+                ChannelActionPill(
+                    icon = Icons.Outlined.Edit,
+                    label = "Edit",
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f),
+                )
+                ChannelActionPill(
+                    icon = Icons.Outlined.Delete,
+                    label = "Delete",
+                    onClick = onDelete,
+                    // Delete keeps a restrained warm tint for destructive clarity;
+                    // swap to onSurface if you want it fully monochrome.
+                    tint = getErrorColor(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            // ── Description inset ────────────────────────────────────────────
+            if (item.description.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = item.description,
+                        style =
+                            MaterialTheme.typography.bodySmall.copy(
+                                lineHeight = 19.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            // ── SMS toggle (non-cash channels) ───────────────────────────────
+            if (item.channelType != ChannelTypes.CASH) {
+                Spacer(Modifier.height(12.dp))
+                SmsToggleRow(
+                    enabled = item.smsNotificationEnabled,
+                    onToggle = onToggleSms,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Muted status chip — neutral raised background so the only colour is the dot,
+ * matching the monochrome feel of the reference. Active dots pulse.
+ */
+@Composable
+private fun StatusChip(
+    active: Boolean,
+    dotColor: Color,
+    pulseAlpha: Float,
+) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(6.dp)
+                        .alpha(if (active) pulseAlpha else 0.55f)
+                        .background(dotColor, CircleShape),
+            )
+            Text(
+                text = if (active) "Active" else "Inactive",
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.2.sp,
+                    ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Solid neutral pill used in the channel card's action row (Add / Edit / Delete). */
+@Composable
+private fun ChannelActionPill(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                color = tint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -882,7 +932,9 @@ private fun SmsToggleRow(
     val tint = if (enabled) getPrimaryColor() else MaterialTheme.colorScheme.onSurfaceVariant
     val containerColor =
         if (enabled) {
-            getPrimaryColor().copy(alpha = 0.08f)
+            // With the new muted forest primary, this tint reads as a soft
+            // on-brand wash rather than a bright highlight.
+            getPrimaryColor().copy(alpha = 0.10f)
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         }
@@ -938,7 +990,6 @@ private fun SmsToggleRow(
         }
     }
 }
-
 // ─── Delete Confirm Dialog ────────────────────────────────────────────────────
 
 @Composable

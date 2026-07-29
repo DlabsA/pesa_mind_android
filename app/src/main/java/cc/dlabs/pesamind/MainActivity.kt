@@ -17,10 +17,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import androidx.work.Configuration
+import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
-import cc.dlabs.pesamind.core.data.MonthlyBudgetRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
-import cc.dlabs.pesamind.core.data.YearlyBudgetRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.di.WorkerFactoryEntryPoint
@@ -61,16 +60,12 @@ class PesaMindApp : Application(), Configuration.Provider {
         NotificationStorage.init(this)
         ThemeManager.init(this)
         SyncMetadataManager.init(this)
-        // Room-backed repositories (ADR-0004 Slice A1) — ChannelRepository/TransactionRepository
-        // are the source of truth ChannelViewModel/TransactionViewModel read and write through.
+        // Room-backed repositories (ADR-0004 Slice A1/B) — ChannelRepository/
+        // TransactionRepository/BudgetRepository are the source of truth their respective
+        // ViewModels read and write through.
         ChannelRepository.init(this)
         TransactionRepository.init(this)
-        // ADR-0006: Room schema for budgets already existed but nothing read/wrote through it
-        // (BudgetManager.init() was never called from here — see debt-burndown A9). This is
-        // the actual fix for that bug: the schema stops being inert the moment something
-        // reads/writes through it in production, which starts here.
-        YearlyBudgetRepository.init(this)
-        MonthlyBudgetRepository.init(this)
+        BudgetRepository.init(this)
 
         // One-time prefs-blob -> Room import (idempotent, safe to fire on every launch).
         // See docs/decisions/ADR-0004-offline-first.md. Caught, not propagated: this runs

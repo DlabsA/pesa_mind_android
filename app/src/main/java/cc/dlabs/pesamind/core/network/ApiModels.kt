@@ -262,6 +262,11 @@ data class ChannelDetails(
     val status: Boolean = true,
     @SerializedName("channel_desc")
     val channelDesc: String = "",
+    // Server-computed running balance (derived from transactions) — read-only from the
+    // client's perspective, so it flows in on every sync/reconcile but is never part of the
+    // dirty/outbox write path the way name/status/etc. are.
+    @SerializedName("available_balance")
+    val availableBalance: Double = 0.0,
     // Local-only field: SMS notification flag (not sent to backend)
     @Transient
     val smsNotificationEnabled: Boolean = true,
@@ -339,6 +344,9 @@ data class BudgetTransactionResponse(
 
 // Monthly Budget Models
 data class CreateMonthlyBudgetRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004) — see
+    // CreateYearlyBudgetRequest.id for the same caveat/rationale.
+    val id: String? = null,
     @SerializedName("yearly_budget_id")
     val yearlyBudgetId: String = "",
     val month: Int = 0,
@@ -380,6 +388,11 @@ data class UpdateMonthlyBudgetRequest(
 
 // Yearly Budget Models
 data class CreateYearlyBudgetRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004, same pattern as
+    // CreateChannelRequest/TransactionRequest) — see TransactionRequest.id for the same
+    // caveat. Nullable, not empty-string: Gson omits a null field, but the backend's
+    // *uuid.UUID would fail to parse an explicit "" and reject the whole request.
+    val id: String? = null,
     val year: Long = 0,
     val transactions: List<BudgetTransactionRequest> = emptyList(),
 )
@@ -449,14 +462,22 @@ data class BudgetVsActualResponse(
 // ─── Top-level response ───────────────────────────────────────────────────────
 
 data class AnalyticResponse(
-    @SerializedName("summary") val summary: SummarySection,
-    @SerializedName("monthly_trends") val monthlyTrends: MonthlyTrendsSection,
-    @SerializedName("spending_velocity") val spendingVelocity: SpendingVelocitySection,
-    @SerializedName("budget_vs_actual") val budgetVsActual: BudgetVsActualSection,
-    @SerializedName("expense_forecast") val expenseForecast: ExpenseForecastSection,
-    @SerializedName("cash_flow_waterfall") val cashFlowWaterfall: CashFlowWaterfallSection,
-    @SerializedName("anomalies") val anomalies: AnomalySection,
-    @SerializedName("budget_utilization") val budgetUtilization: Double,
+    // Every section field is nullable: the backend computes each of the 8 sections
+    // independently and always returns 200, so one section's genuine failure (or a
+    // legitimately-unavailable case, e.g. budget_vs_actual with no monthly budget set)
+    // never blanks out the others — see [errors] for which sections failed and why.
+    @SerializedName("summary") val summary: SummarySection? = null,
+    @SerializedName("monthly_trends") val monthlyTrends: MonthlyTrendsSection? = null,
+    @SerializedName("spending_velocity") val spendingVelocity: SpendingVelocitySection? = null,
+    @SerializedName("budget_vs_actual") val budgetVsActual: BudgetVsActualSection? = null,
+    @SerializedName("expense_forecast") val expenseForecast: ExpenseForecastSection? = null,
+    @SerializedName("cash_flow_waterfall") val cashFlowWaterfall: CashFlowWaterfallSection? = null,
+    @SerializedName("anomalies") val anomalies: AnomalySection? = null,
+    @SerializedName("budget_utilization") val budgetUtilization: Double = 0.0,
+    // Section name -> error message, only present for sections that failed server-side.
+    // A section absent from both this map and its own field simply has no data yet
+    // (e.g. no monthly budget), not an error.
+    @SerializedName("errors") val errors: Map<String, String> = emptyMap(),
 )
 
 // ─── Summary ──────────────────────────────────────────────────────────────────

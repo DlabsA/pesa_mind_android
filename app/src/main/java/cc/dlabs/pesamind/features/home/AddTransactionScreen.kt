@@ -49,6 +49,7 @@ const val TYPE_SAVING = "saving"
 @Composable
 fun AddTransactionScreen(
     navController: NavHostController,
+    initialChannelId: String? = null,
     viewModel: TransactionViewModel = viewModel(),
     channelViewModel: ChannelViewModel = viewModel(),
 ) {
@@ -57,7 +58,7 @@ fun AddTransactionScreen(
     val isDark = isSystemInDarkTheme()
 
     // ── Form state ────────────────────────────────────────────────────────────
-    var channelId by remember { mutableStateOf("") }
+    var channelId by remember { mutableStateOf(initialChannelId ?: "") }
     var channelDropdownExpanded by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }

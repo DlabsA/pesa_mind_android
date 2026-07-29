@@ -1,8 +1,9 @@
 package cc.dlabs.pesamind.features.budgets
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
-import cc.dlabs.pesamind.core.data.YearlyBudgetRepository
+import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,7 @@ data class YearlyBudgetUiState(
     val year: Int = 0,
     // Budget data
     val budget: YearlyBudgetResponse? = null,
+    val yearlyBudgetId: String = "",
     // Loading / saving
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
@@ -59,10 +61,11 @@ data class YearlyBudgetUiState(
 }
 
 /**
- * Room-backed (ADR-0006) — reads/writes go through [YearlyBudgetRepository], never
- * `ApiClient`/`BudgetManager` directly. See [SetMonthlyBudgetViewModel]'s doc comment for the
- * shared design — `budget` in [state] is kept live by
- * [YearlyBudgetRepository.observeYearlyBudget], not spliced in by hand after a mutation.
+ * Room-backed (ADR-0004 Slice B) — reads/writes go through [BudgetRepository], never
+ * `ApiClient`/`BudgetManager` directly. `state.budget` is kept live by the
+ * [BudgetRepository.observeYearlyBudget] collector below, mirroring
+ * `ChannelViewModel`'s "Room write-then-Flow-reemit" pattern — add/delete don't need to
+ * splice their own result into state by hand.
  */
 class YearlyBudgetViewModel() : UnifiedViewModel() {
     private val _state = MutableStateFlow(YearlyBudgetUiState())
@@ -70,32 +73,28 @@ class YearlyBudgetViewModel() : UnifiedViewModel() {
 
     fun init(year: Int) {
         _state.update { it.copy(year = year, isLoading = true) }
-        observeBudget(year)
-    }
-
-    private fun observeBudget(year: Int) {
         viewModelScope.launch {
             try {
-                YearlyBudgetRepository.observeYearlyBudgetSnapshot(year.toLong()).collect { snapshot ->
-                    _state.update { it.copy(budget = snapshot?.details, isLoading = false, error = null) }
+                BudgetRepository.observeYearlyBudget(year.toLong()).collect { budget ->
+                    _state.update {
+                        it.copy(
+                            budget = budget,
+                            yearlyBudgetId = budget?.id ?: "",
+                            isLoading = false,
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = if (it.budget == null) "Error: ${e.message}" else null) }
+                Log.e("YearlyBudgetVM", "Failed to observe budget for year $year", e)
+                _state.update { it.copy(isLoading = false, error = "Error: ${e.message}") }
             }
         }
     }
 
-    // Refresh budget data — one-shot Room re-read, kept for the pull-to-refresh UI action; the
-    // live Flow in observeBudget already keeps state current, same role as
-    // ChannelViewModel/TransactionViewModel.refresh().
-    fun refresh() {
-        val year = _state.value.year
-        if (year <= 0) return
-        viewModelScope.launch {
-            val budget = YearlyBudgetRepository.getYearlyBudget(year.toLong())
-            _state.update { it.copy(budget = budget) }
-        }
-    }
+    /** Local data is already live via [BudgetRepository.observeYearlyBudget] — this exists
+     * only to satisfy the existing "refresh" pull-to-refresh call site; sync with the
+     * server happens independently via SyncScheduler/SyncWorker, not on demand here. */
+    fun refresh() = Unit
 
     fun onNameChange(v: String) =
         _state.update {
@@ -129,7 +128,7 @@ class YearlyBudgetViewModel() : UnifiedViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(isAddingTransaction = true) }
             try {
-                YearlyBudgetRepository.addLineItem(s.year.toLong(), s.formName.trim(), amount!!, s.formType)
+                BudgetRepository.addYearlyTransaction(s.year.toLong(), s.formName.trim(), amount!!, s.formType)
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
@@ -140,6 +139,7 @@ class YearlyBudgetViewModel() : UnifiedViewModel() {
                     )
                 }
             } catch (e: Exception) {
+                Log.e("YearlyBudgetVM", "Failed to add transaction", e)
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
@@ -162,14 +162,12 @@ class YearlyBudgetViewModel() : UnifiedViewModel() {
 
         viewModelScope.launch {
             try {
-                YearlyBudgetRepository.deleteLineItem(year.toLong(), tx.id)
+                BudgetRepository.deleteYearlyTransaction(year.toLong(), tx.id)
                 _state.update {
-                    it.copy(
-                        isDeletingTransactionId = null,
-                        message = "${tx.name} removed",
-                    )
+                    it.copy(isDeletingTransactionId = null, message = "${tx.name} removed")
                 }
             } catch (e: Exception) {
+                Log.e("YearlyBudgetVM", "Failed to delete transaction", e)
                 _state.update {
                     it.copy(isDeletingTransactionId = null, error = "Failed to delete transaction")
                 }

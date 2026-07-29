@@ -28,7 +28,12 @@ sealed class Routes(val route: String) {
     object Home : Routes("home")
 
     // Sub-screens
-    object AddTransaction : Routes("add_transaction")
+    object AddTransaction : Routes("add_transaction?channelId={channelId}") {
+        /** [channelId] pre-selects a channel (e.g. the "Add Transaction" pill on a channel
+         * card) — omit for the plain, empty-picker entry point used elsewhere. */
+        fun createRoute(channelId: String? = null): String =
+            if (channelId.isNullOrBlank()) "add_transaction" else "add_transaction?channelId=$channelId"
+    }
 //    object Accounts : Routes("accounts")
 //    object BudgetDetail : Routes("budget_detail")
 

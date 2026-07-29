@@ -30,7 +30,7 @@ const val DATABASE_NAME = "pesamind.db"
         OutboxEntry::class,
         Tombstone::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

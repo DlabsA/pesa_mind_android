@@ -199,6 +199,9 @@ internal fun ChannelDetails.toEntity(now: Long) =
         // not silently delete already-synced rows without a user-facing/logged confirmation
         // step" constraint. Left null; backfilling migrated rows safely is Phase 3's job.
         normalizedSenderKey = null,
+        // Cached pre-migration blobs predate this field (or default to 0.0) — harmless, the
+        // next server reconcile refreshes it like any other server-owned field.
+        availableBalance = availableBalance,
         smsNotificationEnabled = smsNotificationEnabled,
         syncStatus = SyncStatus.SYNCED,
         dirty = false,

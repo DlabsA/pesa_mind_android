@@ -79,8 +79,21 @@ fun PesaMindNavGraph(navController: NavHostController) {
             composable(Routes.Channels.route) { ChannelScreen(navController) }
 
 //        Adding Transaction routes
-            composable("add_transaction") {
-                AddTransactionScreen(navController)
+            composable(
+                route = Routes.AddTransaction.route,
+                arguments =
+                    listOf(
+                        navArgument("channelId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                    ),
+            ) { backStackEntry ->
+                AddTransactionScreen(
+                    navController,
+                    initialChannelId = backStackEntry.arguments?.getString("channelId"),
+                )
             }
             composable(Routes.TransactionList.route) { TransactionListScreen(navController) }
             composable(
