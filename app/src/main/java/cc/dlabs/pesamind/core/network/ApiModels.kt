@@ -462,14 +462,22 @@ data class BudgetVsActualResponse(
 // ─── Top-level response ───────────────────────────────────────────────────────
 
 data class AnalyticResponse(
-    @SerializedName("summary") val summary: SummarySection,
-    @SerializedName("monthly_trends") val monthlyTrends: MonthlyTrendsSection,
-    @SerializedName("spending_velocity") val spendingVelocity: SpendingVelocitySection,
-    @SerializedName("budget_vs_actual") val budgetVsActual: BudgetVsActualSection,
-    @SerializedName("expense_forecast") val expenseForecast: ExpenseForecastSection,
-    @SerializedName("cash_flow_waterfall") val cashFlowWaterfall: CashFlowWaterfallSection,
-    @SerializedName("anomalies") val anomalies: AnomalySection,
-    @SerializedName("budget_utilization") val budgetUtilization: Double,
+    // Every section field is nullable: the backend computes each of the 8 sections
+    // independently and always returns 200, so one section's genuine failure (or a
+    // legitimately-unavailable case, e.g. budget_vs_actual with no monthly budget set)
+    // never blanks out the others — see [errors] for which sections failed and why.
+    @SerializedName("summary") val summary: SummarySection? = null,
+    @SerializedName("monthly_trends") val monthlyTrends: MonthlyTrendsSection? = null,
+    @SerializedName("spending_velocity") val spendingVelocity: SpendingVelocitySection? = null,
+    @SerializedName("budget_vs_actual") val budgetVsActual: BudgetVsActualSection? = null,
+    @SerializedName("expense_forecast") val expenseForecast: ExpenseForecastSection? = null,
+    @SerializedName("cash_flow_waterfall") val cashFlowWaterfall: CashFlowWaterfallSection? = null,
+    @SerializedName("anomalies") val anomalies: AnomalySection? = null,
+    @SerializedName("budget_utilization") val budgetUtilization: Double = 0.0,
+    // Section name -> error message, only present for sections that failed server-side.
+    // A section absent from both this map and its own field simply has no data yet
+    // (e.g. no monthly budget), not an error.
+    @SerializedName("errors") val errors: Map<String, String> = emptyMap(),
 )
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
