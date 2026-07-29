@@ -79,6 +79,7 @@ class SyncWorker
         /** @return true if every pending row either succeeded, permanently failed (4xx), or
          * was legitimately skipped — false if any row hit a transient (network/5xx) failure. */
         private suspend fun pushOutbox(): Boolean {
+            resurrectFailedRows()
             // Channels before transactions: a transaction create needs its channel's
             // *serverId* to populate `channel_details_id` — that only exists once the
             // channel's own outbox entry has drained. See OutboxPusher.pushTransactionEntry's
@@ -108,6 +109,23 @@ class SyncWorker
                     Log.w(TAG, "Reclaiming outbox row ${it.id} left SYNCING by a prior run")
                     outboxDao.update(it.copy(status = SyncStatus.PENDING, updatedAt = now))
                 }
+        }
+
+        /**
+         * A FAILED outbox row has no other path back to PENDING — [reclaimStaleSyncingRows]
+         * only rescues SYNCING (mid-push process death), not FAILED (a completed, terminal
+         * decision). [SyncScheduler.triggerSyncNow] fires this worker the instant connectivity
+         * comes back, so that's the natural moment to give every FAILED row one more shot: the
+         * condition that failed it (an expired token, a claim race — see
+         * [cc.dlabs.pesamind.core.database.dao.OutboxDao.claimIfPending]'s doc comment) may no
+         * longer hold. A row that's FAILED for a genuinely permanent reason (bad data, an
+         * unsupported operation) just fails again on the next attempt — this only runs once per
+         * [SyncWorker] invocation, not a tight loop, so that's a wasted request, not runaway
+         * retries.
+         */
+        private suspend fun resurrectFailedRows() {
+            val count = database.outboxDao().resetFailedToPending(System.currentTimeMillis())
+            if (count > 0) Log.i(TAG, "Resurrected $count FAILED outbox row(s) for retry")
         }
 
         private suspend fun pushChannelOutbox(): Boolean {

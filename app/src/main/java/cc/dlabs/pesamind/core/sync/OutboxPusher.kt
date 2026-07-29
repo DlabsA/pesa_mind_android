@@ -104,10 +104,12 @@ class OutboxPusher(
         }
 
         val now = System.currentTimeMillis()
-        // Claim the row: any repository write that lands after this point sees status=SYNCING
-        // and coalesces via LeaveInFlight, leaving this outbox row alone so the updatedAt
-        // comparison below stays meaningful.
-        outboxDao.update(current.copy(status = SyncStatus.SYNCING, updatedAt = now))
+        // Atomically claim the row (see OutboxDao.claimIfPending's doc comment) — a concurrent
+        // caller that loses the race observes 0 rows affected and skips instead of also
+        // dispatching this same row. Any repository write that lands after this point sees
+        // status=SYNCING and coalesces via LeaveInFlight, leaving this outbox row alone so the
+        // updatedAt comparison below stays meaningful.
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
 
         return try {
@@ -260,7 +262,22 @@ class OutboxPusher(
             return PushResult.Skipped
         }
         if (current.operation != OutboxOperation.CREATE) {
-            // No update/delete transaction endpoint exists yet — defensive only.
+            if (entity.serverId != null) {
+                // The CREATE already succeeded (this row has a serverId) — a stray UPDATE/
+                // DELETE here is [OutboxDao.claimIfPending]'s now-closed double-dispatch race
+                // misfiring PushCompletionResolver's CREATE->UPDATE requeue (the only way this
+                // was ever reachable: no UI lets a user edit a transaction today, and no
+                // update/delete transaction endpoint exists to send one to regardless). The
+                // data that matters is already correctly on the server, so resolve this as
+                // synced instead of surfacing a permanent "sync failed" for a row that isn't
+                // actually missing anything.
+                val now = System.currentTimeMillis()
+                transactionDao.update(entity.copy(dirty = false, syncStatus = SyncStatus.SYNCED, updatedAt = now))
+                outboxDao.delete(current.id)
+                return PushResult.Success(entity.serverId)
+            }
+            // No update/delete transaction endpoint exists, and this row was never even
+            // created server-side — an outbox invariant broke somewhere upstream; fail loudly.
             markTransactionPermanentFailure(
                 current,
                 entity,
@@ -295,7 +312,7 @@ class OutboxPusher(
         val channelServerId = channelEntity?.serverId
 
         val now = System.currentTimeMillis()
-        outboxDao.update(current.copy(status = SyncStatus.SYNCING, updatedAt = now))
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
 
         return try {
@@ -419,7 +436,7 @@ class OutboxPusher(
         }
 
         val now = System.currentTimeMillis()
-        outboxDao.update(current.copy(status = SyncStatus.SYNCING, updatedAt = now))
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
         val requestTransactions =
             BudgetRepository.parseTransactions(entity.transactionsJson).map {
@@ -579,7 +596,7 @@ class OutboxPusher(
         }
 
         val now = System.currentTimeMillis()
-        outboxDao.update(current.copy(status = SyncStatus.SYNCING, updatedAt = now))
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
         val requestTransactions =
             BudgetRepository.parseTransactions(entity.transactionsJson).map {
