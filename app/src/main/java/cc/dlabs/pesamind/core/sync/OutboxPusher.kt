@@ -63,6 +63,18 @@ class OutboxPusher(
         object Skipped : PushResult()
     }
 
+    /**
+     * 401 must never be lumped in with genuine 4xx data-rejections (400/404/422/...): by the
+     * time a response reaches here, [cc.dlabs.pesamind.core.network.TokenRefreshInterceptor]
+     * has already tried exactly one token refresh + retry, so a 401 here means either the
+     * refresh token was also invalid (the interceptor already logged the user out) or a
+     * transient race — in both cases the *data* was never actually rejected. Treating it as
+     * permanent stranded rows in FAILED forever, even past a fresh re-login, since neither
+     * [SyncWorker] nor the eager-push callers ever re-drain a FAILED row. 401 falls through to
+     * the transient branch instead, so it naturally retries once a valid token exists again.
+     */
+    private fun isPermanentFailureCode(code: Int): Boolean = code in 400..499 && code != 401
+
     // ── Channels ────────────────────────────────────────────────────────────
 
     suspend fun pushChannelEntry(entityId: String): PushResult {
@@ -115,7 +127,7 @@ class OutboxPusher(
                     when {
                         response.isSuccessful ->
                             finishChannelPush(current, channelDao, outboxDao, dispatchUpdatedAt, response.body()?.id?.ifBlank { null })
-                        response.code() in 400..499 -> {
+                        isPermanentFailureCode(response.code()) -> {
                             markChannelPermanentFailure(
                                 current,
                                 entity,
@@ -136,7 +148,7 @@ class OutboxPusher(
                         api.updateChannel(entity.serverId!!, UpdateChannelRequest(entity.name, entity.description, entity.status))
                     when {
                         response.isSuccessful -> finishChannelPush(current, channelDao, outboxDao, dispatchUpdatedAt, null)
-                        response.code() in 400..499 -> {
+                        isPermanentFailureCode(response.code()) -> {
                             markChannelPermanentFailure(
                                 current,
                                 entity,
@@ -163,7 +175,7 @@ class OutboxPusher(
                             outboxDao.delete(current.id)
                             PushResult.Success(null)
                         }
-                        response.code() in 400..499 -> {
+                        isPermanentFailureCode(response.code()) -> {
                             markChannelPermanentFailure(
                                 current,
                                 entity,
@@ -300,7 +312,7 @@ class OutboxPusher(
             when {
                 response.isSuccessful ->
                     finishTransactionPush(current, transactionDao, outboxDao, dispatchUpdatedAt, response.body()?.id?.ifBlank { null })
-                response.code() in 400..499 -> {
+                isPermanentFailureCode(response.code()) -> {
                     markTransactionPermanentFailure(
                         current,
                         entity,
@@ -427,7 +439,7 @@ class OutboxPusher(
             when {
                 response.isSuccessful ->
                     finishYearlyBudgetPush(current, yearlyBudgetDao, outboxDao, dispatchUpdatedAt, response.body()!!)
-                response.code() in 400..499 -> {
+                isPermanentFailureCode(response.code()) -> {
                     markYearlyBudgetPermanentFailure(
                         current,
                         entity,
@@ -593,7 +605,7 @@ class OutboxPusher(
             when {
                 response.isSuccessful ->
                     finishMonthlyBudgetPush(current, monthlyBudgetDao, outboxDao, dispatchUpdatedAt, response.body()!!)
-                response.code() in 400..499 -> {
+                isPermanentFailureCode(response.code()) -> {
                     markMonthlyBudgetPermanentFailure(
                         current,
                         entity,
