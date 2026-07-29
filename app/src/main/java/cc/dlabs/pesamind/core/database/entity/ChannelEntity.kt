@@ -39,6 +39,7 @@ data class ChannelEntity(
     val status: Boolean,
     val channelDesc: String,
     val normalizedSenderKey: String?,
+    val availableBalance: Double,
     val smsNotificationEnabled: Boolean,
     val syncStatus: SyncStatus,
     val dirty: Boolean,

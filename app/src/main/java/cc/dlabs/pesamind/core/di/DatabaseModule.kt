@@ -12,6 +12,7 @@ import cc.dlabs.pesamind.core.database.dao.TombstoneDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
 import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_1_2
+import cc.dlabs.pesamind.core.database.migration.MIGRATION_2_3
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +29,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
     ): PesaMindDatabase =
         Room.databaseBuilder(context, PesaMindDatabase::class.java, DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     @Provides

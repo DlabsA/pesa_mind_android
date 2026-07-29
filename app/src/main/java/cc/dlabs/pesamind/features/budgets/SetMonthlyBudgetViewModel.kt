@@ -1,8 +1,9 @@
 package cc.dlabs.pesamind.features.budgets
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
-import cc.dlabs.pesamind.core.data.MonthlyBudgetRepository
+import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,7 @@ data class SetMonthlyBudgetUiState(
     val year: Int = 0,
     // Budget data
     val budget: MonthlyBudgetResponse? = null,
+    val yearlyBudgetId: String = "",
     // Loading / saving
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
@@ -81,11 +83,10 @@ data class SetMonthlyBudgetUiState(
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
 /**
- * Room-backed (ADR-0006) — reads/writes go through [MonthlyBudgetRepository], never
- * `ApiClient`/`BudgetManager` directly. `budget` in [state] is kept live by
- * [MonthlyBudgetRepository.observeMonthlyBudget] below; [addTransaction]/[deleteTransaction]
- * don't splice a result into state by hand — the repository's Room write triggers that same
- * Flow to re-emit, exactly like `ChannelViewModel`/`TransactionViewModel`.
+ * Room-backed (ADR-0004 Slice B) — reads/writes go through [BudgetRepository], never
+ * `ApiClient`/`BudgetManager` directly. `state.budget` is kept live by the
+ * [BudgetRepository.observeMonthlyBudget] collector below, same "Room write-then-Flow-reemit"
+ * pattern as [YearlyBudgetViewModel]/`ChannelViewModel`.
  */
 class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
     private val _state = MutableStateFlow(SetMonthlyBudgetUiState())
@@ -97,22 +98,21 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
         month: Int,
         year: Int,
     ) {
-        _state.update { it.copy(month = month, year = year) }
-        observeBudget(month, year)
-    }
-
-    private fun observeBudget(
-        month: Int,
-        year: Int,
-    ) {
+        _state.update { it.copy(month = month, year = year, isLoading = true) }
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
             try {
-                MonthlyBudgetRepository.observeMonthlyBudget(month, year.toLong()).collect { budget ->
-                    _state.update { it.copy(budget = budget, isLoading = false) }
+                BudgetRepository.observeMonthlyBudget(month, year.toLong()).collect { budget ->
+                    _state.update {
+                        it.copy(
+                            budget = budget,
+                            yearlyBudgetId = budget?.yearlyBudgetId ?: "",
+                            isLoading = false,
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = "Couldn't load budget data") }
+                Log.e("SetMonthlyBudgetVM", "Failed to observe budget for $month/$year", e)
+                _state.update { it.copy(isLoading = false, error = "Error: ${e.message}") }
             }
         }
     }
@@ -155,7 +155,7 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(isAddingTransaction = true) }
             try {
-                MonthlyBudgetRepository.addLineItem(s.month, s.year.toLong(), s.formName.trim(), amount!!, s.formType)
+                BudgetRepository.addMonthlyTransaction(s.month, s.year.toLong(), s.formName.trim(), amount!!, s.formType)
                 _state.update {
                     it.copy(
                         isAddingTransaction = false,
@@ -166,11 +166,9 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
                     )
                 }
             } catch (e: Exception) {
+                Log.e("SetMonthlyBudgetVM", "Failed to add transaction", e)
                 _state.update {
-                    it.copy(
-                        isAddingTransaction = false,
-                        error = "Failed to add transaction",
-                    )
+                    it.copy(isAddingTransaction = false, error = e.message ?: "Failed to add transaction")
                 }
             }
         }
@@ -190,14 +188,12 @@ class SetMonthlyBudgetViewModel() : UnifiedViewModel() {
 
         viewModelScope.launch {
             try {
-                MonthlyBudgetRepository.deleteLineItem(s.month, s.year.toLong(), tx.id)
+                BudgetRepository.deleteMonthlyTransaction(s.month, s.year.toLong(), tx.id)
                 _state.update {
-                    it.copy(
-                        isDeletingTransactionId = null,
-                        message = "${tx.name} removed",
-                    )
+                    it.copy(isDeletingTransactionId = null, message = "${tx.name} removed")
                 }
             } catch (e: Exception) {
+                Log.e("SetMonthlyBudgetVM", "Failed to delete transaction", e)
                 _state.update {
                     it.copy(isDeletingTransactionId = null, error = "Failed to delete transaction")
                 }

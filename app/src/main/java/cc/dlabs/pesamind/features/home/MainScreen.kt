@@ -72,7 +72,7 @@ fun MainScreen(rootNav: NavHostController) {
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { rootNav.navigate(Routes.AddTransaction.route) },
+                onClick = { rootNav.navigate(Routes.AddTransaction.createRoute()) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 modifier =
                     Modifier

@@ -20,6 +20,12 @@ interface YearlyBudgetDao {
     @Query("SELECT * FROM yearly_budgets WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): YearlyBudgetEntity?
 
+    /** Deliberately includes soft-deleted rows — pull-reconciliation
+     * ([cc.dlabs.pesamind.core.data.BudgetRepository.reconcileFromServer]) must see a
+     * tombstoned row here to avoid resurrecting it as a duplicate live row. */
+    @Query("SELECT * FROM yearly_budgets WHERE serverId = :serverId LIMIT 1")
+    suspend fun findByServerId(serverId: String): YearlyBudgetEntity?
+
     @Query("SELECT * FROM yearly_budgets WHERE year = :year AND deletedAt IS NULL LIMIT 1")
     suspend fun getByYear(year: Long): YearlyBudgetEntity?
 

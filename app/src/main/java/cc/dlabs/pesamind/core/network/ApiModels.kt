@@ -262,6 +262,11 @@ data class ChannelDetails(
     val status: Boolean = true,
     @SerializedName("channel_desc")
     val channelDesc: String = "",
+    // Server-computed running balance (derived from transactions) — read-only from the
+    // client's perspective, so it flows in on every sync/reconcile but is never part of the
+    // dirty/outbox write path the way name/status/etc. are.
+    @SerializedName("available_balance")
+    val availableBalance: Double = 0.0,
     // Local-only field: SMS notification flag (not sent to backend)
     @Transient
     val smsNotificationEnabled: Boolean = true,
@@ -339,6 +344,9 @@ data class BudgetTransactionResponse(
 
 // Monthly Budget Models
 data class CreateMonthlyBudgetRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004) — see
+    // CreateYearlyBudgetRequest.id for the same caveat/rationale.
+    val id: String? = null,
     @SerializedName("yearly_budget_id")
     val yearlyBudgetId: String = "",
     val month: Int = 0,
@@ -380,6 +388,11 @@ data class UpdateMonthlyBudgetRequest(
 
 // Yearly Budget Models
 data class CreateYearlyBudgetRequest(
+    // Client-generated UUID sent as the create idempotency key (ADR-0004, same pattern as
+    // CreateChannelRequest/TransactionRequest) — see TransactionRequest.id for the same
+    // caveat. Nullable, not empty-string: Gson omits a null field, but the backend's
+    // *uuid.UUID would fail to parse an explicit "" and reject the whole request.
+    val id: String? = null,
     val year: Long = 0,
     val transactions: List<BudgetTransactionRequest> = emptyList(),
 )

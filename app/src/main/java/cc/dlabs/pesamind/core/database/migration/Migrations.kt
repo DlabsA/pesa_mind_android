@@ -32,3 +32,16 @@ val MIGRATION_1_2 =
             )
         }
     }
+
+/**
+ * v2 -> v3: surfaces the backend's per-channel `available_balance` (server-computed from
+ * transactions) in the channels UI. Every existing local row defaults to 0.0 — the next full
+ * pull ([cc.dlabs.pesamind.core.data.ChannelRepository.reconcileFromServer]) overwrites it with
+ * the real server value, same as any other server-owned field.
+ */
+val MIGRATION_2_3 =
+    object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `channels` ADD COLUMN `availableBalance` REAL NOT NULL DEFAULT 0.0")
+        }
+    }
