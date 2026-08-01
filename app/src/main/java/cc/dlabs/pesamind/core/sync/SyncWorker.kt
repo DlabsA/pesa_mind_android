@@ -17,6 +17,7 @@ import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.migration.resolveUniqueChannelIdsByName
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.storage.SyncMetadataManager
+import cc.dlabs.pesamind.core.storage.TokenManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.io.IOException
@@ -61,6 +62,13 @@ class SyncWorker
         private val justSyncedMonthlyBudgetServerIds = mutableSetOf<String>()
 
         override suspend fun doWork(): Result {
+            // Early auth check: if user is not logged in, fail gracefully
+            // Don't attempt sync without valid credentials — prevents 401 cascade crashes
+            if (!TokenManager.isLoggedIn()) {
+                Log.w(TAG, "User is not logged in, skipping sync. Worker will retry once re-authenticated.")
+                return Result.failure()
+            }
+
             val pushClean = pushOutbox()
             val pullClean = pullChanges()
             // Published unconditionally, not just on full success: a transient failure only

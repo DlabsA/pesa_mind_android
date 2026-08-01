@@ -99,7 +99,13 @@ class OutboxPusher(
             // UPDATE/DELETE only ever coalesce from a prior UPDATE, which itself only exists
             // once a CREATE has synced. A null serverId here means that invariant broke; fail
             // loudly but don't crash the caller.
-            markChannelPermanentFailure(current, entity, channelDao, outboxDao, "Invariant violation: ${current.operation} with no serverId")
+            markChannelPermanentFailure(
+                current,
+                entity,
+                channelDao,
+                outboxDao,
+                "Invariant violation: ${current.operation} with no serverId",
+            )
             return PushResult.PermanentFailure
         }
 
@@ -209,7 +215,15 @@ class OutboxPusher(
     ): PushResult {
         val now = System.currentTimeMillis()
         val latest = channelDao.getById(current.entityId) ?: return PushResult.Skipped
-        return when (val decision = PushCompletionResolver.resolve(current.operation, dispatchUpdatedAt, latest.updatedAt, responseServerId)) {
+        return when (
+            val decision =
+                PushCompletionResolver.resolve(
+                    current.operation,
+                    dispatchUpdatedAt,
+                    latest.updatedAt,
+                    responseServerId,
+                )
+        ) {
             is PushCompletionDecision.ClearAndSync -> {
                 val resolvedServerId = decision.serverId ?: latest.serverId
                 channelDao.update(latest.copy(serverId = resolvedServerId, dirty = false, syncStatus = SyncStatus.SYNCED, updatedAt = now))
@@ -217,7 +231,9 @@ class OutboxPusher(
                 PushResult.Success(resolvedServerId)
             }
             is PushCompletionDecision.RequeueDirty -> {
-                channelDao.update(latest.copy(serverId = decision.serverId ?: latest.serverId, syncStatus = SyncStatus.PENDING, updatedAt = now))
+                channelDao.update(
+                    latest.copy(serverId = decision.serverId ?: latest.serverId, syncStatus = SyncStatus.PENDING, updatedAt = now),
+                )
                 outboxDao.update(
                     current.copy(
                         operation = decision.nextOperation,
@@ -359,7 +375,15 @@ class OutboxPusher(
     ): PushResult {
         val now = System.currentTimeMillis()
         val latest = transactionDao.getById(current.entityId) ?: return PushResult.Skipped
-        return when (val decision = PushCompletionResolver.resolve(current.operation, dispatchUpdatedAt, latest.updatedAt, responseServerId)) {
+        return when (
+            val decision =
+                PushCompletionResolver.resolve(
+                    current.operation,
+                    dispatchUpdatedAt,
+                    latest.updatedAt,
+                    responseServerId,
+                )
+        ) {
             is PushCompletionDecision.ClearAndSync -> {
                 val resolvedServerId = decision.serverId ?: latest.serverId
                 transactionDao.update(
@@ -431,7 +455,13 @@ class OutboxPusher(
         if (current.operation == OutboxOperation.DELETE) {
             // No delete flow exists from the app's UI for yearly budgets today — defensive
             // only, mirroring pushTransactionEntry's "unsupported operation" guard.
-            markYearlyBudgetPermanentFailure(current, entity, yearlyBudgetDao, outboxDao, "Unsupported yearly budget outbox operation: DELETE")
+            markYearlyBudgetPermanentFailure(
+                current,
+                entity,
+                yearlyBudgetDao,
+                outboxDao,
+                "Unsupported yearly budget outbox operation: DELETE",
+            )
             return PushResult.PermanentFailure
         }
 
@@ -569,7 +599,13 @@ class OutboxPusher(
             return PushResult.PermanentFailure
         }
         if (current.operation == OutboxOperation.DELETE) {
-            markMonthlyBudgetPermanentFailure(current, entity, monthlyBudgetDao, outboxDao, "Unsupported monthly budget outbox operation: DELETE")
+            markMonthlyBudgetPermanentFailure(
+                current,
+                entity,
+                monthlyBudgetDao,
+                outboxDao,
+                "Unsupported monthly budget outbox operation: DELETE",
+            )
             return PushResult.PermanentFailure
         }
 
