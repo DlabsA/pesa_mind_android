@@ -30,6 +30,7 @@ fun DetailScreenTopBar(
     badge: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -88,6 +89,8 @@ fun DetailScreenTopBar(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }
+
+            trailingContent?.invoke()
         }
     }
 }

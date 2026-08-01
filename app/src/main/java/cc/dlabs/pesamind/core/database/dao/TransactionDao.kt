@@ -20,6 +20,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE deletedAt IS NULL ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
 
+    /** Live, channel-scoped list for [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen]. */
+    @Query("SELECT * FROM transactions WHERE channelId = :channelId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    fun observeByChannel(channelId: String): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): TransactionEntity?
 

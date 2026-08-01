@@ -15,7 +15,6 @@ data class ChannelState(
     val channels: List<ChannelDetails> = emptyList(),
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
-    val isDeleting: Boolean = false,
     val error: String? = null,
     val message: String? = null,
 )
@@ -196,25 +195,6 @@ class ChannelViewModel : UnifiedViewModel() {
                     _state.value.copy(isSaving = false, message = "Channel updated successfully")
                 } else {
                     _state.value.copy(isSaving = false, error = "Channel not found")
-                }
-        }
-    }
-
-    fun deleteChannel(id: String) {
-        if (id.isBlank()) {
-            _state.value = _state.value.copy(error = "Invalid channel id")
-            return
-        }
-
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isDeleting = true, error = null)
-            val deleted = ChannelRepository.deleteChannel(id)
-            _state.value =
-                if (deleted) {
-                    publishEvent(StateEvent.ChannelDeleted(channelId = id))
-                    _state.value.copy(isDeleting = false, message = "Channel deleted successfully")
-                } else {
-                    _state.value.copy(isDeleting = false, error = "Channel not found")
                 }
         }
     }

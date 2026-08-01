@@ -129,6 +129,10 @@ object ChannelRepository {
      * prefer [observeChannels] for live updates. */
     suspend fun getAllChannels(): List<ChannelDetails> = channelDao.getAllActive().map { it.toDetails() }
 
+    /** One-shot single-channel lookup for `ChannelDetailViewModel` — there's no
+     * `GET /categories/:id` on the backend, so this is Room-only, no network fallback needed. */
+    suspend fun getById(id: String): ChannelDetails? = channelDao.getById(id)?.toDetails()
+
     suspend fun getByChannelType(channelType: String): List<ChannelDetails> =
         channelDao.getByChannelType(
             channelType,

@@ -131,6 +131,11 @@ interface ApiService {
     @GET("transactions")
     suspend fun getTransactions(): Response<List<TransactionDetails>>
 
+    @GET("transactions/by-channel")
+    suspend fun getTransactionsByChannel(
+        @Query("channelID") channelId: String,
+    ): Response<List<TransactionDetails>>
+
     @POST("transactions")
     suspend fun createTransaction(
         @Body body: TransactionRequest,

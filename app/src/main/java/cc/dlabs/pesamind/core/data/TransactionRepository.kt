@@ -97,6 +97,26 @@ object TransactionRepository {
 
     fun observeTransactions(): Flow<List<TransactionDetails>> = transactionDao.observeAll().map { list -> list.map { it.toDetails() } }
 
+    /** Live, offline-first list for one channel — instant from Room, refreshed by [refreshByChannel]. */
+    fun observeByChannel(channelId: String): Flow<List<TransactionDetails>> =
+        transactionDao.observeByChannel(channelId).map { list -> list.map { it.toDetails() } }
+
+    /**
+     * Targeted pull, scoped to one channel — a cheaper alternative to a full-list pull for
+     * [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen], reusing
+     * [reconcileFromServer] per row. [channelId] is passed straight through as
+     * `resolvedChannelId`: unlike the full-pull case that primitive was built for, there's no
+     * name-matching ambiguity here — every row in this response belongs to the channel we asked
+     * for. Failures are left for the caller to surface; the local (possibly stale) list from
+     * [observeByChannel] still renders regardless.
+     */
+    suspend fun refreshByChannel(channelId: String) {
+        val response = ApiClient.api.getTransactionsByChannel(channelId)
+        if (response.isSuccessful) {
+            response.body()?.forEach { reconcileFromServer(it, resolvedChannelId = channelId) }
+        }
+    }
+
     /** One-shot read of the current list — used by `loadTransactions()`/`refresh()`, which
      * screens should otherwise prefer [observeTransactions] over for live updates. */
     suspend fun getAllTransactions(): List<TransactionDetails> = transactionDao.getAllActive().map { it.toDetails() }
