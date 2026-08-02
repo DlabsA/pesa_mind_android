@@ -255,9 +255,8 @@ private fun ChannelSummaryCard(
                     modifier = Modifier.size(46.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = channelTypeIcon(channel.channelType),
-                            contentDescription = null,
+                        ChannelTypeIconView(
+                            icon = channelTypeIcon(channel.channelType, channel.channelDesc),
                             tint = typeColor,
                             modifier = Modifier.size(22.dp),
                         )
