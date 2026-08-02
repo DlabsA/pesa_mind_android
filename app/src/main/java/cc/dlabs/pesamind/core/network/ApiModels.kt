@@ -215,6 +215,33 @@ data class TransactionDetails(
     val syncStatus: SyncStatus = SyncStatus.SYNCED,
 )
 
+data class ProcessedMessageRequest(
+    @SerializedName("sender_id")
+    val senderId: String = "",
+    val content: String = "",
+    val timestamp: Long = 0,
+    @SerializedName("sim_info")
+    val simInfo: Int = 0,
+    @SerializedName("receiving_sim_number")
+    val receivingSimNumber: String = "",
+)
+
+data class ProcessedMessageResponse(
+    val id: String = "",
+    @SerializedName("sender_id")
+    val senderId: String = "",
+    val content: String = "",
+    val timestamp: Long = 0,
+    @SerializedName("sim_info")
+    val simInfo: Int = 0,
+    @SerializedName("receiving_sim_number")
+    val receivingSimNumber: String = "",
+    @SerializedName("created_at")
+    val createdAt: String = "",
+    @SerializedName("was_duplicate")
+    val wasDuplicate: Boolean = false,
+)
+
 data class AnalyticsResponse(
     val totalIncome: Double = 0.0,
     val totalExpense: Double = 0.0,

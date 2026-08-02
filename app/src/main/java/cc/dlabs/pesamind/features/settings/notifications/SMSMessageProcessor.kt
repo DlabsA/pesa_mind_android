@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import cc.dlabs.pesamind.R
+import cc.dlabs.pesamind.core.data.ProcessedMessageRepository
 import cc.dlabs.pesamind.core.network.models.SMSMessage
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
@@ -56,6 +57,23 @@ class SMSMessageProcessor(
         simInfo: Int,
         receivingSimNumber: String,
     ) = withContext(Dispatchers.IO) {
+        // Backend audit trail (offline-first, background-only — see ProcessedMessageRepository)
+        // of every message this pipeline sees, regardless of what happens below. Own try/catch:
+        // a failure recording it must never block the transaction-creation logic that follows.
+        try {
+            ProcessedMessageRepository.init(context)
+            ProcessedMessageRepository.record(
+                senderId = senderId,
+                content = content,
+                timestamp = timestamp,
+                simInfo = simInfo,
+                receivingSimNumber = receivingSimNumber,
+                dedupeKey = "$senderId:$timestamp:${content.trim().hashCode()}",
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to record processed message (non-fatal)", e)
+        }
+
         try {
             if (senderId.isBlank() || content.isBlank()) {
                 Log.w(TAG, "Empty sender or content")

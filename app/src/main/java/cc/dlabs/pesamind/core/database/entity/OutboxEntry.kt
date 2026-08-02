@@ -11,6 +11,7 @@ enum class OutboxEntityType {
     PROFILE,
     MONTHLY_BUDGET,
     YEARLY_BUDGET,
+    PROCESSED_MESSAGE,
 }
 
 enum class OutboxOperation {

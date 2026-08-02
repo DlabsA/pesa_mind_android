@@ -45,3 +45,36 @@ val MIGRATION_2_3 =
             db.execSQL("ALTER TABLE `channels` ADD COLUMN `availableBalance` REAL NOT NULL DEFAULT 0.0")
         }
     }
+
+/**
+ * v3 -> v4: adds `processed_messages` — the first migration in this codebase to create a new
+ * table rather than alter an existing one. Backs
+ * [cc.dlabs.pesamind.core.database.entity.ProcessedMessageEntity], a write-once local-first
+ * audit record pushed to the backend's `POST /processed-messages` via the outbox; no backfill
+ * needed since it's a brand-new, previously nonexistent table.
+ */
+val MIGRATION_3_4 =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `processed_messages` (
+                    `id` TEXT NOT NULL, `serverId` TEXT, `senderId` TEXT NOT NULL,
+                    `content` TEXT NOT NULL, `timestamp` INTEGER NOT NULL,
+                    `simInfo` INTEGER NOT NULL, `receivingSimNumber` TEXT NOT NULL,
+                    `dedupeKey` TEXT NOT NULL, `syncStatus` TEXT NOT NULL,
+                    `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_processed_messages_dedupeKey` " +
+                    "ON `processed_messages` (`dedupeKey`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_processed_messages_syncStatus` " +
+                    "ON `processed_messages` (`syncStatus`)",
+            )
+        }
+    }

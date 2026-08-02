@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.work.Configuration
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.ProcessedMessageRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
@@ -66,6 +67,7 @@ class PesaMindApp : Application(), Configuration.Provider {
         ChannelRepository.init(this)
         TransactionRepository.init(this)
         BudgetRepository.init(this)
+        ProcessedMessageRepository.init(this)
 
         // One-time prefs-blob -> Room import (idempotent, safe to fire on every launch).
         // See docs/decisions/ADR-0004-offline-first.md. Caught, not propagated: this runs

@@ -28,6 +28,8 @@ import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninRequest
 import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninResponse
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
+import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
+import cc.dlabs.pesamind.core.network.models.ProcessedMessageResponse
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
@@ -140,6 +142,11 @@ interface ApiService {
     suspend fun createTransaction(
         @Body body: TransactionRequest,
     ): Response<TransactionDetails>
+
+    @POST("processed-messages")
+    suspend fun createProcessedMessage(
+        @Body body: ProcessedMessageRequest,
+    ): Response<ProcessedMessageResponse>
 
     // Budget endpoints
     @GET("budgets/monthly")
