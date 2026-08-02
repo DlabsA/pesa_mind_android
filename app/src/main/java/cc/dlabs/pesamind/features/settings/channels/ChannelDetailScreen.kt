@@ -2,7 +2,6 @@ package cc.dlabs.pesamind.features.settings.channels
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -55,6 +53,7 @@ import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
+import cc.dlabs.pesamind.core.theme.Radius
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
@@ -250,17 +249,15 @@ private fun ChannelSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(Radius.Medium.dp),
                     color = typeColor.copy(alpha = 0.16f),
                     modifier = Modifier.size(46.dp),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        ChannelTypeIconView(
-                            icon = channelTypeIcon(channel.channelType, channel.channelDesc),
-                            tint = typeColor,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                    ChannelTypeIconView(
+                        icon = channelTypeIcon(channel.channelType, channel.channelDesc),
+                        tint = typeColor,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
 
                 Spacer(Modifier.width(10.dp))

@@ -203,10 +203,17 @@ object ChannelRepository {
         return outcome
     }
 
+    /**
+     * [channelDesc]'s [ChannelEntity.normalizedSenderKey] is recomputed here the same way
+     * [createChannel]/[reconcileFromServer] derive it, so correcting a provider doesn't leave
+     * a stale dedup key pointing at the old one behind — see [isProviderChannelType]'s doc
+     * comment for why that derivation must stay automatic rather than caller-supplied.
+     */
     suspend fun updateChannel(
         id: String,
         name: String,
         description: String,
+        channelDesc: String,
         status: Boolean,
     ): ChannelDetails? {
         val updated =
@@ -217,6 +224,9 @@ object ChannelRepository {
                     existing.copy(
                         name = name,
                         description = description,
+                        channelDesc = channelDesc,
+                        normalizedSenderKey =
+                            if (isProviderChannelType(existing.channelType)) normalizeSenderKey(channelDesc) else null,
                         status = status,
                         dirty = true,
                         syncStatus = SyncStatus.PENDING,

@@ -156,7 +156,10 @@ class OutboxPusher(
                 }
                 OutboxOperation.UPDATE -> {
                     val response =
-                        api.updateChannel(entity.serverId!!, UpdateChannelRequest(entity.name, entity.description, entity.status))
+                        api.updateChannel(
+                            entity.serverId!!,
+                            UpdateChannelRequest(entity.name, entity.description, entity.channelDesc, entity.status),
+                        )
                     when {
                         response.isSuccessful -> finishChannelPush(current, channelDao, outboxDao, dispatchUpdatedAt, null)
                         isPermanentFailureCode(response.code()) -> {

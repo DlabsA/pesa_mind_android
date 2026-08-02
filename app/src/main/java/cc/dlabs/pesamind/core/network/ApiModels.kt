@@ -320,6 +320,8 @@ data class CreateChannelRequest(
 data class UpdateChannelRequest(
     val name: String,
     val description: String,
+    @SerializedName("channel_desc")
+    val channelDesc: String,
     val status: Boolean,
 )
 

@@ -179,6 +179,7 @@ class ChannelViewModel : UnifiedViewModel() {
         id: String,
         name: String,
         description: String,
+        channelDescription: String,
         status: Boolean,
     ) {
         if (id.isBlank()) {
@@ -188,14 +189,22 @@ class ChannelViewModel : UnifiedViewModel() {
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
-            val updated = ChannelRepository.updateChannel(id, name.trim(), description.trim(), status)
-            _state.value =
-                if (updated != null) {
-                    publishEvent(StateEvent.ChannelUpdated(channelId = id, channelName = updated.name))
-                    _state.value.copy(isSaving = false, message = "Channel updated successfully")
-                } else {
-                    _state.value.copy(isSaving = false, error = "Channel not found")
-                }
+            try {
+                val updated =
+                    ChannelRepository.updateChannel(id, name.trim(), description.trim(), channelDescription.trim(), status)
+                _state.value =
+                    if (updated != null) {
+                        publishEvent(StateEvent.ChannelUpdated(channelId = id, channelName = updated.name))
+                        _state.value.copy(isSaving = false, message = "Channel updated successfully")
+                    } else {
+                        _state.value.copy(isSaving = false, error = "Channel not found")
+                    }
+            } catch (e: Exception) {
+                // New failure mode since normalizedSenderKey is unique-indexed: picking a
+                // provider that collides with another existing channel's dedup key throws.
+                _state.value =
+                    _state.value.copy(isSaving = false, error = "Couldn't save changes: ${e.message ?: "unknown error"}")
+            }
         }
     }
 

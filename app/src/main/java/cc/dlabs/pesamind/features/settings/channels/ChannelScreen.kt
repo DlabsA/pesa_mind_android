@@ -106,6 +106,7 @@ import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.theme.Radius
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
@@ -472,6 +473,7 @@ fun ChannelScreen(
                     id = channel.id,
                     name = name,
                     description = description,
+                    channelDescription = channelDescription,
                     status = status,
                 )
                 editingChannel = null
@@ -651,8 +653,14 @@ internal fun channelTypeIcon(
         else -> ChannelIcon.Vector(Icons.Outlined.Payments)
     }
 
-/** Renders whichever icon kind [channelTypeIcon] returned — a drawable resource (ID cast to
- * `ImageVector` would crash; it needs the `painter` `Icon` overload instead) or a vector. */
+/**
+ * Renders whichever icon kind [channelTypeIcon] returned — a drawable resource (ID cast to
+ * `ImageVector` would crash; it needs the `painter` `Icon` overload instead) or a vector.
+ * [modifier] sizes the badge itself (e.g. `Modifier.fillMaxSize()` to match its containing
+ * `Surface`) — only brand-logo [ChannelIcon.Drawable] images actually fill that bounds; the
+ * generic outlined [ChannelIcon.Vector] fallback icons stay their original small, centered
+ * size regardless, matching how they always looked before this badge got resized for logos.
+ */
 @Composable
 internal fun ChannelTypeIconView(
     icon: ChannelIcon,
@@ -661,7 +669,9 @@ internal fun ChannelTypeIconView(
 ) {
     when (icon) {
         is ChannelIcon.Vector ->
-            Icon(imageVector = icon.icon, contentDescription = null, tint = tint, modifier = modifier)
+            Box(modifier = modifier, contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            }
         is ChannelIcon.Drawable ->
             // Brand logos (Airtel/MTN) render in their own colors, not typeColor-tinted.
             Icon(
@@ -737,17 +747,15 @@ fun ChannelCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(Radius.Medium.dp),
                     color = typeColor.copy(alpha = 0.16f),
                     modifier = Modifier.size(46.dp),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        ChannelTypeIconView(
-                            icon = channelTypeIcon(item.channelType, item.channelDesc),
-                            tint = typeColor,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                    ChannelTypeIconView(
+                        icon = channelTypeIcon(item.channelType, item.channelDesc),
+                        tint = typeColor,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
 
                 Spacer(Modifier.width(10.dp))
@@ -1199,28 +1207,19 @@ private fun ChannelFormDialog(
                         }
                     }
 
-                    // Provider (non-cash only, shown only if options exist)
+                    // Provider (non-cash only, shown only if options exist) — always editable,
+                    // even when the channel type itself (isTypeEditable) is locked on edit.
                     if (providerShown && providerOptions.isNotEmpty()) {
                         FieldSection(
                             label = "Provider",
                             errorText = if (formState.attemptedSave && providerMissing) "Select a provider" else null,
                         ) {
-                            if (isTypeEditable) {
-                                ProviderDropdown(
-                                    options = providerOptions,
-                                    selected = formState.channelDescription,
-                                    onSelect = { formState = formState.copy(channelDescription = it) },
-                                    isError = formState.attemptedSave && providerMissing,
-                                )
-                            } else {
-                                ReadOnlyPill(
-                                    text =
-                                        displayChannelTypeDescription(
-                                            formState.type,
-                                            formState.channelDescription,
-                                        ),
-                                )
-                            }
+                            ProviderDropdown(
+                                options = providerOptions,
+                                selected = formState.channelDescription,
+                                onSelect = { formState = formState.copy(channelDescription = it) },
+                                isError = formState.attemptedSave && providerMissing,
+                            )
                         }
                     }
 
