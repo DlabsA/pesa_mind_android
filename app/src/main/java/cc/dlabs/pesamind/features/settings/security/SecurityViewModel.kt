@@ -21,10 +21,17 @@ class SecurityViewModel : UnifiedViewModel() {
     val state: StateFlow<SecurityState> = _state.asStateFlow()
 
     init {
-        loadCurrentMode()
+        refresh()
     }
 
-    private fun loadCurrentMode() {
+    /**
+     * Re-reads the current lock state from [TokenManager]. Public, not just called from
+     * [init] — this ViewModel is scoped to the Security route's `NavBackStackEntry`, so
+     * navigating to `SetPinScreen`/`SetPatternScreen` and popping back returns the *same*
+     * instance (init never re-runs); the screen calls this again on every re-entry so a
+     * newly-set PIN/pattern actually shows up (e.g. the "Remove Lock" row).
+     */
+    fun refresh() {
         viewModelScope.launch {
             val mode =
                 when {
@@ -32,7 +39,7 @@ class SecurityViewModel : UnifiedViewModel() {
                     TokenManager.isPatternEnabled() -> LockMode.PATTERN
                     else -> LockMode.NONE
                 }
-            _state.value = SecurityState(currentMode = mode, isLoading = false)
+            _state.value = _state.value.copy(currentMode = mode, isLoading = false)
         }
     }
 

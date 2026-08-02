@@ -14,15 +14,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
+import cc.dlabs.pesamind.core.utils.BiometricAuthResult
+import cc.dlabs.pesamind.core.utils.authenticateWithBiometrics
+import cc.dlabs.pesamind.core.utils.isBiometricAvailable
 import cc.dlabs.pesamind.features.common.PatternGrid
+import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------------------
 // State
@@ -42,6 +48,10 @@ fun PatternUnlockScreen(
 ) {
     val haptic = LocalHapticFeedback.current
     val vmState by vm.state.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val biometricAvailable = remember { (context as? FragmentActivity)?.let(::isBiometricAvailable) ?: false }
 
     // Pattern drawing state
     val selectedDots = remember { mutableStateListOf<Int>() }
@@ -218,11 +228,28 @@ fun PatternUnlockScreen(
             // ----------------------------------------------------------------
             // Biometric shortcut (unlock mode only)
             // ----------------------------------------------------------------
-            if (!isSetup) {
+            if (!isSetup && biometricAvailable) {
                 Spacer(Modifier.height(32.dp))
 
                 TextButton(
-                    onClick = { /* vm.unlockWithBiometric() */ },
+                    onClick = {
+                        val activity = context as? FragmentActivity ?: return@TextButton
+                        scope.launch {
+                            when (val result = authenticateWithBiometrics(activity)) {
+                                BiometricAuthResult.Success ->
+                                    vm.unlockWithBiometric(
+                                        onSuccess = {
+                                            navController.navigate(Routes.Dashboard.route) {
+                                                popUpTo(Routes.PatternUnlock.route) { inclusive = true }
+                                            }
+                                        },
+                                        onError = { err -> feedbackMessage = err },
+                                    )
+                                is BiometricAuthResult.Error -> feedbackMessage = result.message
+                                BiometricAuthResult.Cancelled -> Unit // user backed out — no error noise
+                            }
+                        }
+                    },
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 ) {
                     Icon(

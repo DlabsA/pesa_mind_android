@@ -131,6 +131,22 @@ class UnlockViewModel : UnifiedViewModel() {
     }
 
     /**
+     * Called after the OS BiometricPrompt (triggered from the UI layer — see
+     * `core/utils/BiometricAuthHelper.kt`) reports success. Unlike [unlockWithPin]/
+     * [unlockWithPattern], there's no local secret to compare — the OS authentication itself
+     * is the check — so this goes straight to the same [refreshJWT] tail both of those use.
+     */
+    fun unlockWithBiometric(
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+            refreshJWT(onSuccess, onError)
+        }
+    }
+
+    /**
      * Refresh JWT using the stored refresh token
      */
     private suspend fun refreshJWT(

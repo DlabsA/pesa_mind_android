@@ -9,12 +9,12 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.navigation.compose.rememberNavController
 import androidx.work.Configuration
 import cc.dlabs.pesamind.core.data.BudgetRepository
@@ -96,7 +96,7 @@ class PesaMindApp : Application(), Configuration.Provider {
 }
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "PESAMIND"
     }

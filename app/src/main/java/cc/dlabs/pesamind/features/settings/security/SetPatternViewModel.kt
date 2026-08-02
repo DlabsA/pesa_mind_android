@@ -59,8 +59,19 @@ class SetPatternViewModel : UnifiedViewModel() {
             PatternStep.CONFIRM -> {
                 if (dots == current.firstPattern) {
                     viewModelScope.launch {
-                        TokenManager.savePattern(dots.joinToString(","))
-                        _state.value = current.copy(success = true)
+                        try {
+                            TokenManager.savePattern(dots.joinToString(","))
+                            _state.value = _state.value.copy(success = true)
+                        } catch (e: Exception) {
+                            _state.value =
+                                current.copy(
+                                    step = PatternStep.DRAW,
+                                    selectedDots = emptyList(),
+                                    firstPattern = emptyList(),
+                                    error = "Couldn't save pattern: ${e.message ?: "unknown error"}",
+                                    hint = "Draw a pattern",
+                                )
+                        }
                     }
                 } else {
                     _state.value =
