@@ -234,99 +234,111 @@ private fun AnalyticsScrollBody(
                     )
                 }
 
-                // Summary Metrics
-                if (a.summary != null) {
+                // Transaction-based cards depend on state.period — while a period switch is
+                // in flight, show a scoped skeleton here instead of swapping the whole screen
+                // (the Budget-based insights section below is period-independent and stays put).
+                if (state.isPeriodChanging) {
                     item {
-                        StaggeredCard(index = 1, visible = cardsVisible) {
-                            SummaryMetricsCard(
-                                data = a.summary,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
+                        SkeletonColumn(
+                            blockHeights = listOf(90.dp, 140.dp, 160.dp, 120.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                        )
                     }
                 } else {
-                    a.errors["summary"]?.let { err ->
+                    // Summary Metrics
+                    if (a.summary != null) {
                         item {
                             StaggeredCard(index = 1, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Summary unavailable",
-                                    message = err,
+                                SummaryMetricsCard(
+                                    data = a.summary,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
                             }
                         }
-                    }
-                }
-
-                // Monthly Trends
-                if (a.monthlyTrends != null) {
-                    item {
-                        StaggeredCard(index = 2, visible = cardsVisible) {
-                            MonthlyTrendsCard(
-                                section = a.monthlyTrends,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
+                    } else {
+                        a.errors["summary"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 1, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Summary unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
+                            }
                         }
                     }
-                } else {
-                    a.errors["monthly_trends"]?.let { err ->
+
+                    // Monthly Trends
+                    if (a.monthlyTrends != null) {
                         item {
                             StaggeredCard(index = 2, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Monthly trends unavailable",
-                                    message = err,
+                                MonthlyTrendsCard(
+                                    section = a.monthlyTrends,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
                             }
                         }
-                    }
-                }
-
-                // Cash Flow Waterfall
-                if (a.cashFlowWaterfall != null) {
-                    item {
-                        StaggeredCard(index = 3, visible = cardsVisible) {
-                            CashFlowCard(
-                                section = a.cashFlowWaterfall,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
+                    } else {
+                        a.errors["monthly_trends"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 2, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Monthly trends unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
+                            }
                         }
                     }
-                } else {
-                    a.errors["cash_flow_waterfall"]?.let { err ->
+
+                    // Cash Flow Waterfall
+                    if (a.cashFlowWaterfall != null) {
                         item {
                             StaggeredCard(index = 3, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Cash flow unavailable",
-                                    message = err,
+                                CashFlowCard(
+                                    section = a.cashFlowWaterfall,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
                             }
                         }
-                    }
-                }
-
-                // Anomalies
-                val anomalyData = a.anomalies?.data
-                if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
-                    item {
-                        StaggeredCard(index = 4, visible = cardsVisible) {
-                            AnomaliesCard(
-                                // Now safely smart-cast to non-null 'AnomalyData'
-                                section = a.anomalies,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
+                    } else {
+                        a.errors["cash_flow_waterfall"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 3, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Cash flow unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
+                            }
                         }
                     }
-                } else if (a.anomalies == null) {
-                    a.errors["anomalies"]?.let { err ->
+
+                    // Anomalies
+                    val anomalyData = a.anomalies?.data
+                    if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
                         item {
                             StaggeredCard(index = 4, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Anomaly detection unavailable",
-                                    message = err,
+                                AnomaliesCard(
+                                    // Now safely smart-cast to non-null 'AnomalyData'
+                                    section = a.anomalies,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
+                            }
+                        }
+                    } else if (a.anomalies == null) {
+                        a.errors["anomalies"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 4, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Anomaly detection unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
                             }
                         }
                     }

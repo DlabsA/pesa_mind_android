@@ -52,6 +52,7 @@ data class AnalyticsUiState(
     val streakCount: Int = 0,
     val streakLastActiveDate: String? = null,
     val period: AnalyticsPeriod = AnalyticsPeriod.MONTH,
+    val isPeriodChanging: Boolean = false,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────
@@ -146,10 +147,19 @@ class AnalyticsViewModel
 
         // Switching periods re-fetches from scratch every time (no local dual-cache of both
         // Month and Lifetime responses) — a deliberate simplification for v1, not an oversight.
+        // Uses its own isPeriodChanging flag rather than refresh()'s isRefreshing so the screen
+        // can scope the loading UI to just the transaction-based-insights section instead of
+        // swapping the whole page to a skeleton (period doesn't affect budget-based cards).
         fun setPeriod(period: AnalyticsPeriod) {
-            if (_state.value.period == period) return
-            _state.value = _state.value.copy(period = period)
-            refresh()
+            if (_state.value.period == period || _state.value.isPeriodChanging) return
+            _state.value = _state.value.copy(period = period, isPeriodChanging = true)
+            viewModelScope.launch {
+                try {
+                    fetchFromNetwork()
+                } finally {
+                    _state.value = _state.value.copy(isPeriodChanging = false)
+                }
+            }
         }
 
         // ── Network ───────────────────────────────────────────────────────────────
