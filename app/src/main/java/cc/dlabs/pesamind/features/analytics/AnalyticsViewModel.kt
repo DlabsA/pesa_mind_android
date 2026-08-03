@@ -30,6 +30,16 @@ sealed interface AnalyticsPhase {
     data class Error(val message: String) : AnalyticsPhase
 }
 
+// ─── Period ───────────────────────────────────────────────────────────────────
+// Applies only to the Transaction-based insights section — Budget-based cards always compute
+// for the current month server-side regardless of this toggle (budgets don't have a lifetime
+// analog), so the backend ignores `period` entirely for those.
+
+enum class AnalyticsPeriod(val queryValue: String) {
+    MONTH("month"),
+    LIFETIME("lifetime"),
+}
+
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
 data class AnalyticsUiState(
@@ -41,6 +51,7 @@ data class AnalyticsUiState(
     val lastUpdated: Long? = null,
     val streakCount: Int = 0,
     val streakLastActiveDate: String? = null,
+    val period: AnalyticsPeriod = AnalyticsPeriod.MONTH,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────
@@ -133,11 +144,19 @@ class AnalyticsViewModel
             }
         }
 
+        // Switching periods re-fetches from scratch every time (no local dual-cache of both
+        // Month and Lifetime responses) — a deliberate simplification for v1, not an oversight.
+        fun setPeriod(period: AnalyticsPeriod) {
+            if (_state.value.period == period) return
+            _state.value = _state.value.copy(period = period)
+            refresh()
+        }
+
         // ── Network ───────────────────────────────────────────────────────────────
 
         private suspend fun fetchFromNetwork() {
             try {
-                val response = ApiClient.api.getAnalytics()
+                val response = ApiClient.api.getAnalytics(period = _state.value.period.queryValue)
                 if (response.isSuccessful) {
                     val body = response.body()!!
                     val cachedStreak = StreakSessionCache.get()
@@ -179,13 +198,14 @@ class AnalyticsViewModel
                     }
                 }
             } catch (e: Exception) {
+                Log.e("AnalyticsViewModel", "fetchFromNetwork failed", e)
                 if (_state.value.analytics == null) {
                     _state.value =
                         _state.value.copy(
                             phase = AnalyticsPhase.Error(friendlyErrorMessage(e)),
                         )
                 }
-                _state.value = _state.value.copy(isOffline = true)
+                _state.value = _state.value.copy(isOffline = e is java.io.IOException)
             }
         }
 
@@ -202,19 +222,6 @@ class AnalyticsViewModel
             }
 
         // ── Computed helpers ──────────────────────────────────────────────────────
-
-        val overallHealthScore: Int get() {
-            val a = _state.value.analytics ?: return 75
-
-            val scores = mutableListOf<Int>()
-
-            a.summary?.health?.score?.let { scores.add(it) }
-            a.monthlyTrends?.health?.score?.let { scores.add(it) }
-            a.budgetVsActual?.health?.score?.let { scores.add(it) }
-            a.spendingVelocity?.health?.score?.let { scores.add(it) }
-
-            return if (scores.isEmpty()) 75 else scores.sum() / scores.size
-        }
 
         val currentPeriodLabel: String get() {
             val raw = _state.value.analytics?.summary?.data?.currentMonth ?: return "This Month"

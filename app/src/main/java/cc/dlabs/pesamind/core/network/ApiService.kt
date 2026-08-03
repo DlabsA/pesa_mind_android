@@ -253,5 +253,7 @@ interface ApiService {
     suspend fun getDashboard(): Response<DashboardResponse>
 
     @GET("data/analytics")
-    suspend fun getAnalytics(): Response<AnalyticResponse>
+    suspend fun getAnalytics(
+        @Query("period") period: String = "month",
+    ): Response<AnalyticResponse>
 }

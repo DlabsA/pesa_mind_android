@@ -1,7 +1,6 @@
 package cc.dlabs.pesamind.core.network.models
 
 import cc.dlabs.pesamind.core.database.SyncStatus
-import cc.dlabs.pesamind.core.network.analytics.Health
 import com.google.gson.annotations.SerializedName
 
 data class RegisterRequest(
@@ -502,6 +501,11 @@ data class AnalyticResponse(
     @SerializedName("expense_forecast") val expenseForecast: ExpenseForecastSection? = null,
     @SerializedName("cash_flow_waterfall") val cashFlowWaterfall: CashFlowWaterfallSection? = null,
     @SerializedName("anomalies") val anomalies: AnomalySection? = null,
+    // Same shape as the Dashboard screen's financial_health (from GET data/dashboard) —
+    // reuses that type so FinancialHealthCard can be shared with zero adaptation. Null
+    // without a monthly budget, same absent-not-error semantics as budget_vs_actual etc.
+    @SerializedName("financial_health")
+    val financialHealth: cc.dlabs.pesamind.core.network.analytics.FinancialHealthResponse? = null,
     @SerializedName("budget_utilization") val budgetUtilization: Double = 0.0,
     // Section name -> error message, only present for sections that failed server-side.
     // A section absent from both this map and its own field simply has no data yet
@@ -689,7 +693,11 @@ data class BudgetVsActualSection(
     val data: BvaData,
     val metadata: BvaMetadata,
     val health: BvaHealth,
-    val recommendations: List<String> = emptyList(),
+    // Backend returns full Recommendation objects here (type/title/message/confidence/severity),
+    // same as every other section — not bare strings. This field was empty in practice until the
+    // GetBudgetVsActual status bug fix started producing real recommendations, which is when the
+    // List<String> mismatch first surfaced as a Gson JsonSyntaxException.
+    val recommendations: List<AnalyticsRecommendation> = emptyList(),
 )
 
 data class BudgetVsActualData(
