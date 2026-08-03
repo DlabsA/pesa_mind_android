@@ -68,8 +68,8 @@ android {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "21"
+        versionCode = 25
+        versionName = "25"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -104,6 +104,15 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
+            // SYMBOL_TABLE (not FULL): enough for Play Console to symbolicate native crashes/ANRs
+            // from a dependency's bundled .so (this app has no first-party NDK/JNI code of its
+            // own) without the larger size of full native debug info. Requires an NDK component
+            // to be installed locally/in CI — AGP uses its objcopy/llvm-strip to extract the
+            // symbol table; run `./gradlew bundleRelease` and follow the version it reports if
+            // one isn't installed yet.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
         debug {
             // Debug builds sign with the default debug keystore — do not reuse release signing.

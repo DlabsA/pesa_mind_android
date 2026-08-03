@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.StreakSessionCache
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -191,11 +192,12 @@ class BudgetViewModel
 
         // ── Refresh ───────────────────────────────────────────────────────────────
 
-        /** One-shot Room re-read, kept for the pull-to-refresh UI action — mirrors
-         * `ChannelViewModel`/`TransactionViewModel.refresh()`'s "redundant alongside a live
-         * Flow, kept for the affordance" role rather than doing a network fetch: [observeBudgets]
-         * already keeps [state] current. */
+        /** Triggers the actual server pull ([SyncScheduler.triggerSyncNow]); the Room re-read
+         * below is kept for the pull-to-refresh UI action's immediate feedback, mirroring
+         * `ChannelViewModel`/`TransactionViewModel.refresh()` — [observeBudgets]'s live Flow
+         * already picks up the sync worker's write-back once it completes. */
         fun refresh() {
+            SyncScheduler.triggerSyncNow()
             viewModelScope.launch {
                 _state.update { it.copy(isRefreshing = true) }
                 try {

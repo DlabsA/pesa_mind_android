@@ -58,6 +58,7 @@ class PesaMindApp : Application(), Configuration.Provider {
         TokenManager.init(this)
         AccountManager.init(this)
         ChannelManager.init(this)
+        SyncScheduler.init(this)
         NotificationStorage.init(this)
         ThemeManager.init(this)
         SyncMetadataManager.init(this)
@@ -86,10 +87,10 @@ class PesaMindApp : Application(), Configuration.Provider {
         // Outbox drain + pull worker (ADR-0004 Slice A2): periodic background cadence, plus
         // an expedited run the moment connectivity comes back (this flow also seeds with the
         // current state on collection, so a cold start that's already online triggers one too).
-        SyncScheduler.schedulePeriodic(this)
+        SyncScheduler.schedulePeriodic()
         CoroutineScope(Dispatchers.IO).launch {
             NetworkMonitor(this@PesaMindApp).isConnected.collect { connected ->
-                if (connected) SyncScheduler.triggerSyncNow(this@PesaMindApp)
+                if (connected) SyncScheduler.triggerSyncNow()
             }
         }
     }

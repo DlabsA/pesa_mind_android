@@ -62,10 +62,14 @@ class SyncWorker
         private val justSyncedMonthlyBudgetServerIds = mutableSetOf<String>()
 
         override suspend fun doWork(): Result {
-            // Early auth check: if user is not logged in, fail gracefully
-            // Don't attempt sync without valid credentials — prevents 401 cascade crashes
+            // Early auth check: if user is not logged in, fail gracefully.
+            // Result.failure() is terminal — WorkManager does NOT retry this specific run.
+            // A logged-out device just has nothing to sync; the next periodic run (<=30 min)
+            // re-checks on its own, and AuthViewModel/TokenRefreshInterceptor explicitly call
+            // SyncScheduler.triggerSyncNow() the moment a valid token exists again, so this
+            // isn't relying on retry semantics to recover.
             if (!TokenManager.isLoggedIn()) {
-                Log.w(TAG, "User is not logged in, skipping sync. Worker will retry once re-authenticated.")
+                Log.w(TAG, "User is not logged in, skipping sync.")
                 return Result.failure()
             }
 

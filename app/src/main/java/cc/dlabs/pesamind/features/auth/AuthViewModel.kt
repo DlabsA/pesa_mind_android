@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.storage.TokenManager.LockState
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -136,6 +137,7 @@ class AuthViewModel : UnifiedViewModel() {
                         Log.d("AuthVM", "Login successful — saving tokens")
 
                         TokenManager.saveTokens(body.accessToken, body.refreshToken)
+                        SyncScheduler.triggerSyncNow()
 
                         body.profile?.let { profile ->
                             AccountManager.saveAccount(
@@ -284,6 +286,7 @@ class AuthViewModel : UnifiedViewModel() {
                     if (response.accessToken != null && response.refreshToken != null) {
                         Log.d("AuthVM", "Saving tokens and account info")
                         TokenManager.saveTokens(response.accessToken, response.refreshToken)
+                        SyncScheduler.triggerSyncNow()
 
                         response.profile?.let { profile ->
                             AccountManager.saveAccount(
@@ -364,6 +367,7 @@ class AuthViewModel : UnifiedViewModel() {
                     Log.d("AuthVM", "Google signup completed, saving tokens")
                     if (response.accessToken != null && response.refreshToken != null) {
                         TokenManager.saveTokens(response.accessToken, response.refreshToken)
+                        SyncScheduler.triggerSyncNow()
 
                         response.profile?.let { profile ->
                             AccountManager.saveAccount(

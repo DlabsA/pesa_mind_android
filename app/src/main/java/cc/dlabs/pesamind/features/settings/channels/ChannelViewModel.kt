@@ -6,6 +6,7 @@ import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
 import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,12 +67,15 @@ class ChannelViewModel : UnifiedViewModel() {
         }
 
     /** Resets out of a `loadChannelsByType`/`loadChannelsByStatus` filtered view back to the
-     * full list, and satisfies the existing "refresh" icon/pull-to-refresh call sites. Local
-     * data is already live via [ChannelRepository.observeChannels] — this is a one-shot Room
-     * read, not a network call; there is no sync worker to trigger yet (ADR-0004 Slice A2). */
+     * full list, and satisfies the existing "refresh" icon/pull-to-refresh call sites. The
+     * `getAllChannels()` call itself is a one-shot Room read, not a network call — freshness
+     * against the server comes from [SyncScheduler.triggerSyncNow] below, whose pull writes
+     * back into Room and reaches this screen via [ChannelRepository.observeChannels] once it
+     * completes. */
     fun loadChannels() {
         activeTypeFilter = null
         activeStatusFilter = null
+        SyncScheduler.triggerSyncNow()
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             val channels = ChannelRepository.getAllChannels()

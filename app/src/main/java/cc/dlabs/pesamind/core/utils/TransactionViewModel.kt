@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.data.details
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,10 +75,12 @@ class TransactionViewModel : UnifiedViewModel() {
         }
     }
 
-    /** One-shot re-read, kept for existing pull-to-refresh call sites. Local data is already
-     * live via [TransactionRepository.observeTransactions] — this is a Room read, not a
-     * network call; there is no sync worker to trigger yet (ADR-0004 Slice A2). */
+    /** One-shot re-read, kept for existing pull-to-refresh call sites. The `getAllTransactions()`
+     * call itself is a Room read, not a network call — freshness against the server comes from
+     * [SyncScheduler.triggerSyncNow] below, whose pull writes back into Room and reaches this
+     * screen via [TransactionRepository.observeTransactions] once it completes. */
     fun loadTransactions() {
+        SyncScheduler.triggerSyncNow()
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             val transactions = TransactionRepository.getAllTransactions()

@@ -4,6 +4,7 @@ import cc.dlabs.pesamind.core.network.ApiClient.BASE_URL
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.TokenManager
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import okhttp3.Interceptor
@@ -142,6 +143,9 @@ class TokenRefreshInterceptor : Interceptor {
                     // This prevents a race condition window where other threads see null tokens
                     TokenManager.saveTokens(authResponse.accessToken, authResponse.refreshToken)
                     Log.d(TAG, "✓ New tokens saved successfully")
+                    // A fresh token is worth a pull — the outbox/periodic pull may have been
+                    // silently failing on the now-expired token for a while.
+                    SyncScheduler.triggerSyncNow()
                     true
                 } else {
                     // Refresh failed - clear the invalid refresh token
