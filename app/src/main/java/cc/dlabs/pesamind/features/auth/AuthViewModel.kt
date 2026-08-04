@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.network.models.BatchCreateChannelsRequest
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
@@ -148,12 +149,7 @@ class AuthViewModel : UnifiedViewModel() {
                                 type = profile.type ?: "",
                             )
                         }
-                        // Server-true-wins: only ever flips the local flag true, never clears an
-                        // already-true local flag back to false (covers finishing onboarding
-                        // offline before this sync, and reinstall-on-already-onboarded-account).
-                        if (body.profile?.channelsOnboarded == true) {
-                            TokenManager.setChannelsOnboarded(true)
-                        }
+                        syncChannelsOnboardedFlag(body.profile?.channelsOnboarded == true)
 
                         _authState.value = AuthUiState.LoginSuccess(resolvePostAuthDestination())
                     } else {
@@ -296,10 +292,7 @@ class AuthViewModel : UnifiedViewModel() {
                                 type = profile.type ?: "",
                             )
                         }
-                        // Server-true-wins — see login()'s identical comment.
-                        if (response.profile?.channelsOnboarded == true) {
-                            TokenManager.setChannelsOnboarded(true)
-                        }
+                        syncChannelsOnboardedFlag(response.profile?.channelsOnboarded == true)
 
                         val destination = resolvePostAuthDestination()
 
@@ -375,9 +368,7 @@ class AuthViewModel : UnifiedViewModel() {
                                 type = profile.type ?: "",
                             )
                         }
-                        if (response.profile?.channelsOnboarded == true) {
-                            TokenManager.setChannelsOnboarded(true)
-                        }
+                        syncChannelsOnboardedFlag(response.profile?.channelsOnboarded == true)
 
                         _authState.value = AuthUiState.GoogleSignupSuccess(resolvePostAuthDestination())
                     } else {
@@ -461,6 +452,27 @@ class AuthViewModel : UnifiedViewModel() {
             LockState.PIN -> Routes.PinUnlock.route
             LockState.PATTERN -> Routes.PatternUnlock.route
         }
+
+    /**
+     * Server-true-wins: only ever flips the local flag true, never clears an already-true
+     * local flag back to false (covers reinstall-on-already-onboarded-account). The reverse
+     * case — locally onboarded but the server hasn't heard yet — happens when the onboarding
+     * flow's own fire-and-forget flag-sync call (see ChannelOnboardingViewModel.finish) failed
+     * while offline; retry it here on the next successful login now that a fresh token exists.
+     * Empty payload is enough — the actual channels already synced via their own outbox
+     * entries independently of this call, whose only remaining job is flipping the flag.
+     */
+    private suspend fun syncChannelsOnboardedFlag(serverOnboarded: Boolean) {
+        if (serverOnboarded) {
+            TokenManager.setChannelsOnboarded(true)
+        } else if (TokenManager.isChannelsOnboarded()) {
+            try {
+                ApiClient.api.batchCreateChannels(BatchCreateChannelsRequest(emptyList()))
+            } catch (e: Exception) {
+                Log.w("AuthVM", "Retry of onboarding flag-sync failed; will retry on next login", e)
+            }
+        }
+    }
 
     /** Clear error state when the user starts typing after a failure. */
     private fun resetErrorIfActive() {

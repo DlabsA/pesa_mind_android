@@ -39,7 +39,10 @@ fun OnboardingBankScreen(
             navController.navigate(Routes.OnboardingReview.route)
         },
         onNext = { navController.navigate(Routes.OnboardingReview.route) },
-        nextEnabled = !draft.included || (draft.provider.isNotBlank() && draft.accountNumber.isNotBlank()),
+        // account_number is optional for every channel type (matches
+        // category.ValidateChannelFields backend-side) — only the provider is required here,
+        // since channel_desc is required for Bank.
+        nextEnabled = !draft.included || draft.provider.isNotBlank(),
         nextLabel = "Review",
     ) {
         Row(
@@ -65,7 +68,7 @@ fun OnboardingBankScreen(
             OutlinedTextField(
                 value = draft.accountNumber,
                 onValueChange = vm::setBankAccountNumber,
-                label = { Text("Account number") },
+                label = { Text("Account number (optional)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )

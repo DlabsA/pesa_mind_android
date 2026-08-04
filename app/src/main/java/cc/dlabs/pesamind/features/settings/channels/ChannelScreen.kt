@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.settings.channels
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -45,7 +46,6 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Payments
-import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.rounded.Close
@@ -93,6 +93,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -101,6 +102,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.theme.Spacing
@@ -636,12 +638,50 @@ private fun channelTypeColor(type: String): Color =
         else -> getPrimaryColor()
     }
 
-private fun channelTypeIcon(type: String): ImageVector =
+private sealed class ChannelIcon {
+    data class Vector(val icon: ImageVector) : ChannelIcon()
+
+    data class Drawable(
+        @DrawableRes val resId: Int,
+    ) : ChannelIcon()
+}
+
+private fun channelTypeIcon(
+    type: String,
+    subtype: String,
+): ChannelIcon =
     when (type) {
-        ChannelTypes.MOBILE_MONEY -> Icons.Outlined.PhoneAndroid
-        ChannelTypes.BANK -> Icons.Outlined.AccountBalance
-        else -> Icons.Outlined.Payments
+        ChannelTypes.MOBILE_MONEY ->
+            when (subtype) {
+                ChannelDescMobileMoney.AIRTELMONEY -> ChannelIcon.Drawable(R.drawable.airtel)
+                ChannelDescMobileMoney.MTNMOBILEMONEY -> ChannelIcon.Drawable(R.drawable.momo)
+                else -> ChannelIcon.Vector(Icons.Outlined.Payments)
+            }
+        ChannelTypes.BANK -> ChannelIcon.Vector(Icons.Outlined.AccountBalance)
+        else -> ChannelIcon.Vector(Icons.Outlined.Payments)
     }
+
+/** Renders whichever icon kind [channelTypeIcon] returned — a drawable resource (ID cast to
+ * `ImageVector` would crash; it needs the `painter` `Icon` overload instead) or a vector. */
+@Composable
+private fun ChannelTypeIconView(
+    icon: ChannelIcon,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    when (icon) {
+        is ChannelIcon.Vector ->
+            Icon(imageVector = icon.icon, contentDescription = null, tint = tint, modifier = modifier)
+        is ChannelIcon.Drawable ->
+            // Brand logos (Airtel/MTN) render in their own colors, not typeColor-tinted.
+            Icon(
+                painter = painterResource(id = icon.resId),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = modifier,
+            )
+    }
+}
 
 // ─── Balance formatting ───────────────────────────────────────────────────────
 // Mirrors the "UGX 1,234,567" convention already used across DashboardScreen,
@@ -714,9 +754,8 @@ fun ChannelCard(
                     modifier = Modifier.size(46.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = channelTypeIcon(item.channelType),
-                            contentDescription = null,
+                        ChannelTypeIconView(
+                            icon = channelTypeIcon(item.channelType, item.channelDesc),
                             tint = typeColor,
                             modifier = Modifier.size(22.dp),
                         )

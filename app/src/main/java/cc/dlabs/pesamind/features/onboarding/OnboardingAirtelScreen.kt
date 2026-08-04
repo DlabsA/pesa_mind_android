@@ -37,7 +37,6 @@ fun OnboardingAirtelScreen(
             navController.navigate(Routes.OnboardingBank.route)
         },
         onNext = { navController.navigate(Routes.OnboardingBank.route) },
-        nextEnabled = !draft.included || draft.accountNumber.isNotBlank(),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -57,7 +56,7 @@ fun OnboardingAirtelScreen(
             OutlinedTextField(
                 value = draft.accountNumber,
                 onValueChange = vm::setAirtelPhone,
-                label = { Text("Phone number") },
+                label = { Text("Phone number (optional)") },
                 placeholder = { Text("0750000000") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth(),

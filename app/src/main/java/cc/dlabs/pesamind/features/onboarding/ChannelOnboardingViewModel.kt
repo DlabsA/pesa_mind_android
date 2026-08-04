@@ -115,7 +115,11 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
                 val outcome =
                     ChannelRepository.createChannel(
                         name = draft.name,
-                        description = "",
+                        // The single-create endpoint (used by the outbox's eager/retry push)
+                        // still requires a non-blank description, unlike the batch endpoint's
+                        // DTO below — this flow doesn't ask the user for one, so mirror the
+                        // name rather than sending "" and permanently failing that push.
+                        description = draft.name,
                         channelType = channelType,
                         channelDesc = draft.provider,
                         status = true,

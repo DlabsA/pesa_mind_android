@@ -37,7 +37,6 @@ fun OnboardingMoMoScreen(
             navController.navigate(Routes.OnboardingAirtel.route)
         },
         onNext = { navController.navigate(Routes.OnboardingAirtel.route) },
-        nextEnabled = !draft.included || draft.accountNumber.isNotBlank(),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -57,7 +56,7 @@ fun OnboardingMoMoScreen(
             OutlinedTextField(
                 value = draft.accountNumber,
                 onValueChange = vm::setMomoPhone,
-                label = { Text("Phone number") },
+                label = { Text("Phone number (optional)") },
                 placeholder = { Text("0770000000") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth(),
