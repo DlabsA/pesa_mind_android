@@ -45,3 +45,15 @@ val MIGRATION_2_3 =
             db.execSQL("ALTER TABLE `channels` ADD COLUMN `availableBalance` REAL NOT NULL DEFAULT 0.0")
         }
     }
+
+/**
+ * v3 -> v4: adds the channel-onboarding batch flow's account-number field — a phone number
+ * for MobileMoney/Airtel channels, a bank account number for Bank channels. Nullable, no
+ * backfill; existing rows default to NULL.
+ */
+val MIGRATION_3_4 =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `channels` ADD COLUMN `accountNumber` TEXT DEFAULT NULL")
+        }
+    }

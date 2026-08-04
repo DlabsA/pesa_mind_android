@@ -149,6 +149,8 @@ object ChannelRepository {
         channelType: String,
         channelDesc: String,
         status: Boolean,
+        accountNumber: String? = null,
+        openingBalance: Double = 0.0,
     ): ChannelCreateOutcome {
         val now = System.currentTimeMillis()
         val normalizedKey = if (isProviderChannelType(channelType)) normalizeSenderKey(channelDesc) else null
@@ -175,7 +177,8 @@ object ChannelRepository {
                         status = status,
                         channelDesc = channelDesc,
                         normalizedSenderKey = normalizedKey,
-                        availableBalance = 0.0,
+                        availableBalance = openingBalance,
+                        accountNumber = accountNumber,
                         smsNotificationEnabled = true,
                         syncStatus = SyncStatus.PENDING,
                         dirty = true,
@@ -338,6 +341,7 @@ object ChannelRepository {
                             channelDesc = details.channelDesc,
                             // Server-computed, never written locally — always refreshed here.
                             availableBalance = details.availableBalance,
+                            accountNumber = details.accountNumber,
                             // Not backfilled here — see this method's doc comment for why an
                             // already-known row's normalizedSenderKey is left exactly as-is.
                             syncStatus = SyncStatus.SYNCED,
@@ -370,6 +374,7 @@ object ChannelRepository {
                             channelDesc = details.channelDesc,
                             normalizedSenderKey = normalizedKey,
                             availableBalance = details.availableBalance,
+                            accountNumber = details.accountNumber,
                             smsNotificationEnabled = details.smsNotificationEnabled,
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
@@ -463,6 +468,7 @@ internal fun ChannelEntity.toDetails() =
         status = status,
         channelDesc = channelDesc,
         availableBalance = availableBalance,
+        accountNumber = accountNumber,
         smsNotificationEnabled = smsNotificationEnabled,
         syncStatus = syncStatus,
     )

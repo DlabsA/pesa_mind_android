@@ -202,6 +202,8 @@ internal fun ChannelDetails.toEntity(now: Long) =
         // Cached pre-migration blobs predate this field (or default to 0.0) — harmless, the
         // next server reconcile refreshes it like any other server-owned field.
         availableBalance = availableBalance,
+        // Predates this field too — same story as availableBalance above.
+        accountNumber = null,
         smsNotificationEnabled = smsNotificationEnabled,
         syncStatus = SyncStatus.SYNCED,
         dirty = false,

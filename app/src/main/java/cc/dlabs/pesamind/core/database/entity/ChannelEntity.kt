@@ -40,6 +40,9 @@ data class ChannelEntity(
     val channelDesc: String,
     val normalizedSenderKey: String?,
     val availableBalance: Double,
+    // Optional, shared across channel types: a phone number for MobileMoney/Airtel
+    // channels, a bank account number for Bank channels.
+    val accountNumber: String?,
     val smsNotificationEnabled: Boolean,
     val syncStatus: SyncStatus,
     val dirty: Boolean,

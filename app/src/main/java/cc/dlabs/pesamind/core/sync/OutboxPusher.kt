@@ -124,6 +124,8 @@ class OutboxPusher(
                                 description = entity.description,
                                 channelDesc = entity.channelDesc,
                                 status = entity.status,
+                                accountNumber = entity.accountNumber,
+                                openingBalance = entity.availableBalance,
                             ),
                         )
                     when {
