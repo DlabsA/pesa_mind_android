@@ -3,6 +3,7 @@ package cc.dlabs.pesamind.features.auth
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
@@ -31,7 +32,7 @@ sealed interface AuthUiState {
     // Google OAuth states
     data class GoogleSignInNeeded(val message: String = "") : AuthUiState
 
-    data object GoogleSignupSuccess : AuthUiState
+    data class GoogleSignupSuccess(val destination: String) : AuthUiState
 }
 
 data class LoginFormState(
@@ -147,14 +148,14 @@ class AuthViewModel : UnifiedViewModel() {
                                 type = profile.type ?: "",
                             )
                         }
+                        // Server-true-wins: only ever flips the local flag true, never clears an
+                        // already-true local flag back to false (covers finishing onboarding
+                        // offline before this sync, and reinstall-on-already-onboarded-account).
+                        if (body.profile?.channelsOnboarded == true) {
+                            TokenManager.setChannelsOnboarded(true)
+                        }
 
-                        val destination =
-                            when (TokenManager.getLockState()) {
-                                LockState.NONE -> "lock_setup"
-                                LockState.PIN -> "pin_unlock"
-                                LockState.PATTERN -> "pattern_unlock"
-                            }
-                        _authState.value = AuthUiState.LoginSuccess(destination)
+                        _authState.value = AuthUiState.LoginSuccess(resolvePostAuthDestination())
                     } else {
                         _authState.value = AuthUiState.Error(body?.error ?: "Invalid email or password")
                     }
@@ -295,18 +296,17 @@ class AuthViewModel : UnifiedViewModel() {
                                 type = profile.type ?: "",
                             )
                         }
+                        // Server-true-wins — see login()'s identical comment.
+                        if (response.profile?.channelsOnboarded == true) {
+                            TokenManager.setChannelsOnboarded(true)
+                        }
 
-                        val destination =
-                            when (TokenManager.getLockState()) {
-                                LockState.NONE -> "lock_setup"
-                                LockState.PIN -> "pin_unlock"
-                                LockState.PATTERN -> "pattern_unlock"
-                            }
+                        val destination = resolvePostAuthDestination()
 
                         // Both new users and returning users are logged in successfully
                         if (response.isNewUser) {
                             Log.d("AuthVM", "New user created with auto-generated username")
-                            _authState.value = AuthUiState.GoogleSignupSuccess
+                            _authState.value = AuthUiState.GoogleSignupSuccess(destination)
                         } else {
                             Log.d("AuthVM", "Existing user logged in")
                             _authState.value = AuthUiState.LoginSuccess(destination)
@@ -375,8 +375,11 @@ class AuthViewModel : UnifiedViewModel() {
                                 type = profile.type ?: "",
                             )
                         }
+                        if (response.profile?.channelsOnboarded == true) {
+                            TokenManager.setChannelsOnboarded(true)
+                        }
 
-                        _authState.value = AuthUiState.GoogleSignupSuccess
+                        _authState.value = AuthUiState.GoogleSignupSuccess(resolvePostAuthDestination())
                     } else {
                         _authState.value = AuthUiState.Error("No tokens received from server")
                     }
@@ -442,6 +445,22 @@ class AuthViewModel : UnifiedViewModel() {
         }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Single source of truth for post-auth routing, called from every success path (email
+     * login, Google sign-in of an existing user, Google sign-up of a new user) instead of each
+     * one independently duplicating the same `when` — the duplication previously let the
+     * channel-onboarding gate get added to some call sites and not others. A brand-new Google
+     * signup can never already be onboarded, so this still returns the correct destination for
+     * that case without a special-cased shortcut.
+     */
+    private suspend fun resolvePostAuthDestination(): String =
+        when (TokenManager.getLockState()) {
+            LockState.NONE ->
+                if (!TokenManager.isChannelsOnboarded()) Routes.ChannelOnboardingIntro.route else Routes.Dashboard.route
+            LockState.PIN -> Routes.PinUnlock.route
+            LockState.PATTERN -> Routes.PatternUnlock.route
+        }
 
     /** Clear error state when the user starts typing after a failure. */
     private fun resetErrorIfActive() {
