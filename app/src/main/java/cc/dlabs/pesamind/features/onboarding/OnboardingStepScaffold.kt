@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.onboarding
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -45,7 +46,11 @@ fun OnboardingStepScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(Spacing.Space6.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(Spacing.Space6.dp),
     ) {
         LinearProgressIndicator(
             progress = { stepIndex / totalSteps.toFloat() },
@@ -60,7 +65,12 @@ fun OnboardingStepScaffold(
         )
 
         Spacer(Modifier.height(Spacing.Space6.dp))
-        Text(text = title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
         Spacer(Modifier.height(Spacing.Space2.dp))
         Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 

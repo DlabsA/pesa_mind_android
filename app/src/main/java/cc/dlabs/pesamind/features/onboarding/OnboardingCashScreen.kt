@@ -43,7 +43,12 @@ fun OnboardingCashScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = "Add a Cash wallet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "Add a Cash wallet",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
             Switch(checked = draft.included, onCheckedChange = { vm.setCashIncluded(it) })
         }
 

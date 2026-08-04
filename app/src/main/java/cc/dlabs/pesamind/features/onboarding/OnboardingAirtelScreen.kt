@@ -44,7 +44,12 @@ fun OnboardingAirtelScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = "Add Airtel Money", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "Add Airtel Money",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
             Switch(checked = draft.included, onCheckedChange = { vm.setAirtelIncluded(it) })
         }
 

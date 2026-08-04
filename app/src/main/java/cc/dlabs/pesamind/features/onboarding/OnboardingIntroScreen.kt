@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.onboarding
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +43,11 @@ fun OnboardingIntroScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(Spacing.Space6.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(Spacing.Space6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -50,6 +55,7 @@ fun OnboardingIntroScreen(
             text = "Let's set up your money sources",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(Modifier.height(Spacing.Space2.dp))
         Text(

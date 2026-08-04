@@ -59,7 +59,13 @@ fun PesaMindNavGraph(navController: NavHostController) {
                 LockState.NONE ->
                     when {
                         !TokenManager.isLoggedIn() -> Routes.Login.route
-                        !TokenManager.isChannelsOnboarded() -> Routes.ChannelOnboardingIntro.route
+                        // NavHost's own startDestination must be a direct child of the root
+                        // graph — it can't point straight at a screen nested inside the
+                        // onboarding sub-graph, only at the sub-graph's own route. Regular
+                        // navController.navigate(Routes.ChannelOnboardingIntro.route) calls
+                        // elsewhere (AuthViewModel, popUpTo targets) don't have this
+                        // restriction and are unaffected.
+                        !TokenManager.isChannelsOnboarded() -> ONBOARDING_GRAPH_ROUTE
                         else -> Routes.Dashboard.route
                     }
                 LockState.PIN -> Routes.PinUnlock.route
