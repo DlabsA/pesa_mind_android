@@ -16,12 +16,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,7 +48,6 @@ import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -61,7 +57,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -93,7 +88,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -113,7 +107,9 @@ import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
+import cc.dlabs.pesamind.core.ui.ChoiceChipGroup
 import cc.dlabs.pesamind.core.ui.EmptyState
+import cc.dlabs.pesamind.core.ui.ProviderDropdown
 import cc.dlabs.pesamind.core.ui.SkeletonCard
 import cc.dlabs.pesamind.core.ui.SyncStatusBadge
 import java.text.NumberFormat
@@ -1394,150 +1390,6 @@ private fun FieldSection(
     }
 }
 
-/** Wrapping row of selectable chips, used for both channel type and provider. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ChoiceChipGroup(
-    options: List<String>,
-    selected: String,
-    onSelect: (String) -> Unit,
-    optionLabel: (String) -> String = { it },
-    isError: Boolean = false,
-) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { option ->
-            val isSelected = option == selected
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelect(option) },
-                label = { Text(optionLabel(option)) },
-                leadingIcon =
-                    if (isSelected) {
-                        { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                    } else {
-                        null
-                    },
-                shape = RoundedCornerShape(10.dp),
-                colors =
-                    FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = getPrimaryColor().copy(alpha = 0.14f),
-                        selectedLabelColor = getPrimaryColor(),
-                        selectedLeadingIconColor = getPrimaryColor(),
-                    ),
-                // Material3 < 1.2: filterChipBorder takes different params — drop enabled/selected.
-                border =
-                    FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor =
-                            if (isError) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                            },
-                        selectedBorderColor = getPrimaryColor().copy(alpha = 0.5f),
-                    ),
-            )
-        }
-    }
-}
-
-/** Dropdown menu for selecting a provider (bank or mobile money). */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ProviderDropdown(
-    options: List<String>,
-    selected: String,
-    onSelect: (String) -> Unit,
-    isError: Boolean = false,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(if (expanded) 180f else 0f),
-                )
-            },
-            modifier =
-                Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-            placeholder = { Text("Select a provider") },
-            isError = isError,
-            shape = RoundedCornerShape(14.dp),
-            colors =
-                OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor =
-                        if (isError) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            getPrimaryColor()
-                        },
-                    unfocusedBorderColor =
-                        if (isError) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                        },
-                    errorBorderColor = MaterialTheme.colorScheme.error,
-                ),
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.93f)
-                    .heightIn(max = 300.dp),
-        ) {
-            if (options.isEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("No options available", style = MaterialTheme.typography.bodySmall) },
-                    onClick = {},
-                    enabled = false,
-                )
-            } else {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = {
-                            onSelect(option)
-                            expanded = false
-                        },
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (option == selected) {
-                                        getPrimaryColor().copy(alpha = 0.08f)
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                ),
-                    )
-                }
-            }
-        }
-    }
-}
-
 /** Static tinted pill for non-editable type/provider values. */
 @Composable
 private fun ReadOnlyPill(text: String) {
@@ -1681,11 +1533,4 @@ private fun displayChannelTypeDescription(
         ChannelTypes.MOBILE_MONEY -> ChannelDescMobileMoney.normalizeOrNull(desc) ?: desc
         ChannelTypes.BANK -> ChannelDescBank.normalizeOrNull(desc) ?: desc
         else -> desc
-    }
-
-private fun getDescriptionOptionsForType(type: String): List<String> =
-    when (type) {
-        ChannelTypes.MOBILE_MONEY -> ChannelDescMobileMoney.valid
-        ChannelTypes.BANK -> ChannelDescBank.valid
-        else -> emptyList()
     }
