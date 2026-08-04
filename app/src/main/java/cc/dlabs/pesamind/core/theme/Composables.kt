@@ -67,39 +67,6 @@ fun PrimaryButton(
 }
 
 // ============================================================================
-// SECONDARY BUTTON
-// ============================================================================
-@Composable
-fun SecondaryButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    Box(
-        modifier =
-            modifier
-                .clickable(
-                    enabled = enabled,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { onClick() }
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(9999.dp),
-                )
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-// ============================================================================
 // CATEGORY BADGE (Income/Expense/Savings)
 // ============================================================================
 @Composable
@@ -169,110 +136,6 @@ fun CurrencyAmount(
         color = color,
         modifier = modifier,
     )
-}
-
-// ============================================================================
-// BALANCE CARD (Hero)
-// ============================================================================
-@Composable
-fun BalanceCard(
-    balance: String,
-    income: String,
-    expense: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .background(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(28.dp),
-                )
-                .padding(24.dp),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(bottom = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Total Balance",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
-            )
-        }
-
-        CurrencyAmount(
-            amount = balance,
-            style = AmountXLarge,
-            type = TransactionType.SAVINGS,
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 24.dp),
-        )
-
-        Row(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(top = 32.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Income block
-            Box(
-                modifier =
-                    Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(10.dp),
-                        )
-                        .padding(16.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "↑",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                    Text(
-                        text = income,
-                        style = AmountSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-            }
-
-            // Expense block
-            Box(
-                modifier =
-                    Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(10.dp),
-                        )
-                        .padding(16.dp)
-                        .padding(start = 16.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "↓",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                    Text(
-                        text = expense,
-                        style = AmountSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-            }
-        }
-    }
 }
 
 // ============================================================================
@@ -395,28 +258,5 @@ fun TransactionRow(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun PesaMindTextField(
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(10.dp),
-                )
-                .padding(16.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
     }
 }

@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.data.details
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,10 +75,12 @@ class TransactionViewModel : UnifiedViewModel() {
         }
     }
 
-    /** One-shot re-read, kept for existing pull-to-refresh call sites. Local data is already
-     * live via [TransactionRepository.observeTransactions] — this is a Room read, not a
-     * network call; there is no sync worker to trigger yet (ADR-0004 Slice A2). */
+    /** One-shot re-read, kept for existing pull-to-refresh call sites. The `getAllTransactions()`
+     * call itself is a Room read, not a network call — freshness against the server comes from
+     * [SyncScheduler.triggerSyncNow] below, whose pull writes back into Room and reaches this
+     * screen via [TransactionRepository.observeTransactions] once it completes. */
     fun loadTransactions() {
+        SyncScheduler.triggerSyncNow()
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             val transactions = TransactionRepository.getAllTransactions()
@@ -86,6 +89,26 @@ class TransactionViewModel : UnifiedViewModel() {
     }
 
     fun refresh() = loadTransactions()
+
+    /**
+     * Best-effort background pull scoped to a date range (`yyyy-MM-dd`), fired when the
+     * transaction list's date-range filter is applied — a network gap-filler, not a loading
+     * gate: the screen's local filter over [state]'s already-live [TransactionState.transactions]
+     * (via [TransactionRepository.observeTransactions]) renders immediately regardless of this
+     * call's outcome, so a failure here (e.g. offline) is only logged, never surfaced as [error].
+     */
+    fun refreshDateRange(
+        startDate: String,
+        endDate: String,
+    ) {
+        viewModelScope.launch {
+            try {
+                TransactionRepository.refreshByDateRange(startDate, endDate)
+            } catch (e: Exception) {
+                Log.w("TransactionViewModel", "refreshByDateRange failed for $startDate..$endDate", e)
+            }
+        }
+    }
 
     fun createTransaction(
         channelID: String,
@@ -174,6 +197,14 @@ class TransactionViewModel : UnifiedViewModel() {
                     providerTransactionId = providerTransactionId,
                 )
             if (outcome is TransactionInsertOutcome.Inserted) {
+                // Trigger a real SyncWorker run (push-then-pull) so StateEvent.SyncCompleted
+                // is genuinely published as a consequence of this create — Dashboard/Analytics
+                // ViewModels treat SyncCompleted as the accurate correction after this event's
+                // own (possibly-stale) refresh below. Safe to call unconditionally: the
+                // WorkRequest carries a NetworkType.CONNECTED constraint, so it's a no-op until
+                // connectivity exists, and repeated calls coalesce via ExistingWorkPolicy.KEEP.
+                SyncScheduler.triggerSyncNow()
+
                 // 🔥 Publish event so Dashboard and Analytics refresh automatically — a
                 // discarded duplicate must not re-publish a create event for a row nothing new
                 // actually happened to.

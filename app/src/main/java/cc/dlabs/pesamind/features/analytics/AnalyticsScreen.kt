@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.analytics.*
+import cc.dlabs.pesamind.core.network.models.AnalyticsRecommendation
 import cc.dlabs.pesamind.core.network.models.AnomalyData
 import cc.dlabs.pesamind.core.network.models.AnomalyItem
 import cc.dlabs.pesamind.core.network.models.AnomalyRecommendation
@@ -59,7 +60,9 @@ import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
+import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
+import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
 import java.util.Locale
@@ -214,82 +217,145 @@ private fun AnalyticsScrollBody(
             }
 
             state.analytics?.let { a ->
-                // Summary Metrics
-                if (a.summary != null) {
+                // ── Section: Transaction-based insights (work from transactions alone) ──
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Space4.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        PeriodToggle(
+                            period = state.period,
+                            onPeriodChange = viewModel::setPeriod,
+                        )
+                    }
+                    SectionHeader(
+                        title = "Transaction-based insights",
+                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                    )
+                }
+
+                // Transaction-based cards depend on state.period — while a period switch is
+                // in flight, show a scoped skeleton here instead of swapping the whole screen
+                // (the Budget-based insights section below is period-independent and stays put).
+                if (state.isPeriodChanging) {
                     item {
-                        StaggeredCard(index = 1, visible = cardsVisible) {
-                            SummaryMetricsCard(
-                                data = a.summary,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
+                        SkeletonColumn(
+                            blockHeights = listOf(90.dp, 140.dp, 160.dp, 120.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                        )
                     }
                 } else {
-                    a.errors["summary"]?.let { err ->
+                    // Summary Metrics
+                    if (a.summary != null) {
                         item {
                             StaggeredCard(index = 1, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Summary unavailable",
-                                    message = err,
+                                SummaryMetricsCard(
+                                    data = a.summary,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
                             }
                         }
-                    }
-                }
-
-                // Spending Velocity
-                if (a.spendingVelocity != null) {
-                    item {
-                        StaggeredCard(index = 2, visible = cardsVisible) {
-                            SpendingVelocityCard(
-                                section = a.spendingVelocity,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
+                    } else {
+                        a.errors["summary"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 1, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Summary unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
+                            }
                         }
                     }
-                } else {
-                    a.errors["spending_velocity"]?.let { err ->
+
+                    // Monthly Trends
+                    if (a.monthlyTrends != null) {
                         item {
                             StaggeredCard(index = 2, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Spending velocity unavailable",
-                                    message = err,
+                                MonthlyTrendsCard(
+                                    section = a.monthlyTrends,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
+                            }
+                        }
+                    } else {
+                        a.errors["monthly_trends"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 2, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Monthly trends unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Cash Flow Waterfall
+                    if (a.cashFlowWaterfall != null) {
+                        item {
+                            StaggeredCard(index = 3, visible = cardsVisible) {
+                                CashFlowCard(
+                                    section = a.cashFlowWaterfall,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        a.errors["cash_flow_waterfall"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 3, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Cash flow unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Anomalies
+                    val anomalyData = a.anomalies?.data
+                    if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
+                        item {
+                            StaggeredCard(index = 4, visible = cardsVisible) {
+                                AnomaliesCard(
+                                    // Now safely smart-cast to non-null 'AnomalyData'
+                                    section = a.anomalies,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
+                        }
+                    } else if (a.anomalies == null) {
+                        a.errors["anomalies"]?.let { err ->
+                            item {
+                                StaggeredCard(index = 4, visible = cardsVisible) {
+                                    SectionErrorCard(
+                                        title = "Anomaly detection unavailable",
+                                        message = err,
+                                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Monthly Trends
-                if (a.monthlyTrends != null) {
-                    item {
-                        StaggeredCard(index = 3, visible = cardsVisible) {
-                            MonthlyTrendsCard(
-                                section = a.monthlyTrends,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
-                    }
-                } else {
-                    a.errors["monthly_trends"]?.let { err ->
-                        item {
-                            StaggeredCard(index = 3, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Monthly trends unavailable",
-                                    message = err,
-                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                                )
-                            }
-                        }
-                    }
+                // ── Section: Budget-based insights (need a monthly budget set) ──────────
+                item {
+                    SectionHeader(
+                        title = "Budget-based insights",
+                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                    )
                 }
 
                 // Budget vs Actual
                 if (a.budgetVsActual != null) {
                     item {
-                        StaggeredCard(index = 4, visible = cardsVisible) {
+                        StaggeredCard(index = 5, visible = cardsVisible) {
                             BudgetVsActualCard(
                                 section = a.budgetVsActual,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
@@ -302,9 +368,33 @@ private fun AnalyticsScrollBody(
                     // show a card here when the backend actually recorded a failure.
                     a.errors["budget_vs_actual"]?.let { err ->
                         item {
-                            StaggeredCard(index = 4, visible = cardsVisible) {
+                            StaggeredCard(index = 5, visible = cardsVisible) {
                                 SectionErrorCard(
                                     title = "Budget vs actual unavailable",
+                                    message = err,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Spending Velocity
+                if (a.spendingVelocity != null) {
+                    item {
+                        StaggeredCard(index = 6, visible = cardsVisible) {
+                            SpendingVelocityCard(
+                                section = a.spendingVelocity,
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
+                } else {
+                    a.errors["spending_velocity"]?.let { err ->
+                        item {
+                            StaggeredCard(index = 6, visible = cardsVisible) {
+                                SectionErrorCard(
+                                    title = "Spending velocity unavailable",
                                     message = err,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
@@ -316,7 +406,7 @@ private fun AnalyticsScrollBody(
                 // Expense Forecast
                 if (a.expenseForecast != null) {
                     item {
-                        StaggeredCard(index = 5, visible = cardsVisible) {
+                        StaggeredCard(index = 7, visible = cardsVisible) {
                             ExpenseForecastCard(
                                 section = a.expenseForecast,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
@@ -326,7 +416,7 @@ private fun AnalyticsScrollBody(
                 } else {
                     a.errors["expense_forecast"]?.let { err ->
                         item {
-                            StaggeredCard(index = 5, visible = cardsVisible) {
+                            StaggeredCard(index = 7, visible = cardsVisible) {
                                 SectionErrorCard(
                                     title = "Expense forecast unavailable",
                                     message = err,
@@ -337,48 +427,24 @@ private fun AnalyticsScrollBody(
                     }
                 }
 
-                // Cash Flow Waterfall
-                if (a.cashFlowWaterfall != null) {
+                // Financial Health (composite score)
+                if (a.financialHealth != null) {
                     item {
-                        StaggeredCard(index = 6, visible = cardsVisible) {
-                            CashFlowCard(
-                                section = a.cashFlowWaterfall,
+                        StaggeredCard(index = 8, visible = cardsVisible) {
+                            FinancialHealthCard(
+                                health = a.financialHealth.data,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
                     }
                 } else {
-                    a.errors["cash_flow_waterfall"]?.let { err ->
+                    // Same "absent, no error = no budget yet" pattern as the other three
+                    // budget-dependent cards above.
+                    a.errors["financial_health"]?.let { err ->
                         item {
-                            StaggeredCard(index = 6, visible = cardsVisible) {
+                            StaggeredCard(index = 8, visible = cardsVisible) {
                                 SectionErrorCard(
-                                    title = "Cash flow unavailable",
-                                    message = err,
-                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Anomalies
-                val anomalyData = a.anomalies?.data
-                if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
-                    item {
-                        StaggeredCard(index = 7, visible = cardsVisible) {
-                            AnomaliesCard(
-                                // Now safely smart-cast to non-null 'AnomalyData'
-                                section = a.anomalies,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
-                    }
-                } else if (a.anomalies == null) {
-                    a.errors["anomalies"]?.let { err ->
-                        item {
-                            StaggeredCard(index = 7, visible = cardsVisible) {
-                                SectionErrorCard(
-                                    title = "Anomaly detection unavailable",
+                                    title = "Financial health unavailable",
                                     message = err,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
@@ -418,6 +484,27 @@ private fun StaggeredCard(
     ) { content() }
 }
 
+// ─── Period toggle ────────────────────────────────────────────────────────────
+
+@Composable
+private fun PeriodToggle(
+    period: AnalyticsPeriod,
+    onPeriodChange: (AnalyticsPeriod) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val options = listOf(AnalyticsPeriod.MONTH to "Month", AnalyticsPeriod.LIFETIME to "Lifetime")
+    SingleChoiceSegmentedButtonRow(modifier = modifier) {
+        options.forEachIndexed { index, (value, label) ->
+            SegmentedButton(
+                selected = period == value,
+                onClick = { onPeriodChange(value) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+            )
+        }
+    }
+}
+
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 @Composable
@@ -436,8 +523,6 @@ private fun AnalyticsHeader(
         modifier = modifier,
     )
 }
-
-// ─── Health Score Card ────────────────────────────────────────────────────────
 
 // ─── Summary Metrics Card ─────────────────────────────────────────────────────
 
@@ -1766,7 +1851,7 @@ private fun BvaComponentRow(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun BvaRecommendations(items: List<String>) {
+private fun BvaRecommendations(items: List<AnalyticsRecommendation>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = "Recommendations",
@@ -1788,7 +1873,7 @@ private fun BvaRecommendations(items: List<String>) {
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f),
                 )
                 Text(
-                    text = rec,
+                    text = rec.message,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
                 )

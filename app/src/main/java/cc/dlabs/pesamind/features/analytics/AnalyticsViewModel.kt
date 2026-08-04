@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -30,6 +32,16 @@ sealed interface AnalyticsPhase {
     data class Error(val message: String) : AnalyticsPhase
 }
 
+// ─── Period ───────────────────────────────────────────────────────────────────
+// Applies only to the Transaction-based insights section — Budget-based cards always compute
+// for the current month server-side regardless of this toggle (budgets don't have a lifetime
+// analog), so the backend ignores `period` entirely for those.
+
+enum class AnalyticsPeriod(val queryValue: String) {
+    MONTH("month"),
+    LIFETIME("lifetime"),
+}
+
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
 data class AnalyticsUiState(
@@ -41,6 +53,8 @@ data class AnalyticsUiState(
     val lastUpdated: Long? = null,
     val streakCount: Int = 0,
     val streakLastActiveDate: String? = null,
+    val period: AnalyticsPeriod = AnalyticsPeriod.MONTH,
+    val isPeriodChanging: Boolean = false,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────
@@ -58,7 +72,7 @@ class AnalyticsViewModel
                 is StateEvent.TransactionCreated -> {
                     viewModelScope.launch {
                         try {
-                            refresh()
+                            refreshSuspend()
                             publishEvent(StateEvent.AnalyticsRefreshed)
                         } catch (e: Exception) {
                             Log.e("AnalyticsViewModel", "❌ Analytics refresh failed", e)
@@ -80,12 +94,12 @@ class AnalyticsViewModel
                 }
 
                 // SyncWorker just finished a push+pull cycle — the accurate correction after
-                // TransactionCreated's immediate (possibly-stale) refresh above. refresh()
+                // TransactionCreated's immediate (possibly-stale) refresh above. refreshSuspend()
                 // already has no isConnectedNow guard to bypass (unlike Dashboard's).
                 is StateEvent.SyncCompleted -> {
                     viewModelScope.launch {
                         try {
-                            refresh()
+                            refreshSuspend()
                         } catch (e: Exception) {
                         }
                     }
@@ -118,11 +132,19 @@ class AnalyticsViewModel
             }
         }
 
-        fun refresh() {
-            if (_state.value.isRefreshing) {
-                return
-            }
-            viewModelScope.launch {
+        /** Serializes [refreshSuspend] so two overlapping callers (e.g. a manual
+         * pull-to-refresh racing the [StateEvent.TransactionCreated] handler) both
+         * genuinely wait for a real fetch to finish, rather than a plain `isRefreshing`
+         * boolean letting the second caller skip work and return instantly with stale
+         * data. */
+        private val refreshMutex = Mutex()
+
+        /** Suspend core of [refresh] — awaits the actual network refetch before returning,
+         * so a caller that needs to know a refresh has genuinely *finished* (not just
+         * started) can await this directly. `internal`, not `private`, so a JVM test can
+         * call it without going through the event bus. */
+        internal suspend fun refreshSuspend() {
+            refreshMutex.withLock {
                 try {
                     _state.value = _state.value.copy(isRefreshing = true)
                     fetchFromNetwork()
@@ -133,11 +155,33 @@ class AnalyticsViewModel
             }
         }
 
+        fun refresh() {
+            if (_state.value.isRefreshing) return
+            viewModelScope.launch { refreshSuspend() }
+        }
+
+        // Switching periods re-fetches from scratch every time (no local dual-cache of both
+        // Month and Lifetime responses) — a deliberate simplification for v1, not an oversight.
+        // Uses its own isPeriodChanging flag rather than refresh()'s isRefreshing so the screen
+        // can scope the loading UI to just the transaction-based-insights section instead of
+        // swapping the whole page to a skeleton (period doesn't affect budget-based cards).
+        fun setPeriod(period: AnalyticsPeriod) {
+            if (_state.value.period == period || _state.value.isPeriodChanging) return
+            _state.value = _state.value.copy(period = period, isPeriodChanging = true)
+            viewModelScope.launch {
+                try {
+                    fetchFromNetwork()
+                } finally {
+                    _state.value = _state.value.copy(isPeriodChanging = false)
+                }
+            }
+        }
+
         // ── Network ───────────────────────────────────────────────────────────────
 
         private suspend fun fetchFromNetwork() {
             try {
-                val response = ApiClient.api.getAnalytics()
+                val response = ApiClient.api.getAnalytics(period = _state.value.period.queryValue)
                 if (response.isSuccessful) {
                     val body = response.body()!!
                     val cachedStreak = StreakSessionCache.get()
@@ -146,7 +190,12 @@ class AnalyticsViewModel
                             cachedStreak
                         } else {
                             try {
-                                val dashboardStreak = ApiClient.api.getDashboard().body()?.streak
+                                val now = Calendar.getInstance()
+                                val dashboardStreak =
+                                    ApiClient.api.getDashboard(
+                                        month = now.get(Calendar.MONTH) + 1,
+                                        year = now.get(Calendar.YEAR),
+                                    ).body()?.streak
                                 if (dashboardStreak != null) {
                                     StreakSessionCache.set(
                                         count = dashboardStreak.currentStreak,
@@ -179,13 +228,14 @@ class AnalyticsViewModel
                     }
                 }
             } catch (e: Exception) {
+                Log.e("AnalyticsViewModel", "fetchFromNetwork failed", e)
                 if (_state.value.analytics == null) {
                     _state.value =
                         _state.value.copy(
                             phase = AnalyticsPhase.Error(friendlyErrorMessage(e)),
                         )
                 }
-                _state.value = _state.value.copy(isOffline = true)
+                _state.value = _state.value.copy(isOffline = e is java.io.IOException)
             }
         }
 
@@ -202,19 +252,6 @@ class AnalyticsViewModel
             }
 
         // ── Computed helpers ──────────────────────────────────────────────────────
-
-        val overallHealthScore: Int get() {
-            val a = _state.value.analytics ?: return 75
-
-            val scores = mutableListOf<Int>()
-
-            a.summary?.health?.score?.let { scores.add(it) }
-            a.monthlyTrends?.health?.score?.let { scores.add(it) }
-            a.budgetVsActual?.health?.score?.let { scores.add(it) }
-            a.spendingVelocity?.health?.score?.let { scores.add(it) }
-
-            return if (scores.isEmpty()) 75 else scores.sum() / scores.size
-        }
 
         val currentPeriodLabel: String get() {
             val raw = _state.value.analytics?.summary?.data?.currentMonth ?: return "This Month"

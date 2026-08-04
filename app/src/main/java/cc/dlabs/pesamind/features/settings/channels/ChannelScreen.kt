@@ -10,13 +10,13 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,14 +40,13 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.NotificationsActive
-import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -105,6 +104,7 @@ import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.theme.Radius
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
@@ -136,7 +136,6 @@ fun ChannelScreen(
     var showTypeFilterDialog by remember { mutableStateOf(false) }
     var activeFilter by remember { mutableStateOf(FilterType.ALL) }
     var currentTypeFilter by remember { mutableStateOf("") }
-    var pendingDelete by remember { mutableStateOf<ChannelDetails?>(null) }
     var editingChannel by remember { mutableStateOf<ChannelDetails?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -424,8 +423,9 @@ fun ChannelScreen(
                             ChannelCard(
                                 item = channel,
                                 onEdit = { editingChannel = channel },
-                                onDelete = { pendingDelete = channel },
-                                onToggleSms = { vm.toggleSmsNotification(channel.id) },
+                                onView = {
+                                    navController.navigate(Routes.ChannelDetail.createRoute(channel.id))
+                                },
                                 onAddTransaction = {
                                     navController.navigate(Routes.AddTransaction.createRoute(channel.id))
                                 },
@@ -442,6 +442,7 @@ fun ChannelScreen(
 
     if (showCreateDialog) {
         ChannelFormDialog(
+            channelKey = null,
             title = "New Channel",
             confirmLabel = "Create",
             initialStatus = true,
@@ -457,11 +458,13 @@ fun ChannelScreen(
 
     editingChannel?.let { channel ->
         ChannelFormDialog(
+            channelKey = channel.id,
             title = "Edit Channel",
             confirmLabel = "Save Changes",
             initialName = channel.name,
             initialDescription = channel.description,
             initialType = channel.channelType,
+            initialProvider = channel.channelDesc,
             initialStatus = channel.status,
             isSaving = state.isSaving,
             onDismiss = { editingChannel = null },
@@ -470,23 +473,12 @@ fun ChannelScreen(
                     id = channel.id,
                     name = name,
                     description = description,
+                    channelDescription = channelDescription,
                     status = status,
                 )
                 editingChannel = null
             },
             isTypeEditable = false,
-        )
-    }
-
-    pendingDelete?.let { channel ->
-        DeleteConfirmDialog(
-            channelName = channel.name,
-            isDeleting = state.isDeleting,
-            onConfirm = {
-                vm.deleteChannel(channel.id)
-                pendingDelete = null
-            },
-            onDismiss = { pendingDelete = null },
         )
     }
 
@@ -631,14 +623,14 @@ private fun ChannelNoMatchesState(onClear: () -> Unit) {
 // ─── Channel type → icon / color ──────────────────────────────────────────────
 
 @Composable
-private fun channelTypeColor(type: String): Color =
+internal fun channelTypeColor(type: String): Color =
     when (type) {
         ChannelTypes.MOBILE_MONEY -> getTertiaryColor()
         ChannelTypes.BANK -> MaterialTheme.colorScheme.secondary
         else -> getPrimaryColor()
     }
 
-private sealed class ChannelIcon {
+internal sealed class ChannelIcon {
     data class Vector(val icon: ImageVector) : ChannelIcon()
 
     data class Drawable(
@@ -646,7 +638,7 @@ private sealed class ChannelIcon {
     ) : ChannelIcon()
 }
 
-private fun channelTypeIcon(
+internal fun channelTypeIcon(
     type: String,
     subtype: String,
 ): ChannelIcon =
@@ -661,17 +653,25 @@ private fun channelTypeIcon(
         else -> ChannelIcon.Vector(Icons.Outlined.Payments)
     }
 
-/** Renders whichever icon kind [channelTypeIcon] returned — a drawable resource (ID cast to
- * `ImageVector` would crash; it needs the `painter` `Icon` overload instead) or a vector. */
+/**
+ * Renders whichever icon kind [channelTypeIcon] returned — a drawable resource (ID cast to
+ * `ImageVector` would crash; it needs the `painter` `Icon` overload instead) or a vector.
+ * [modifier] sizes the badge itself (e.g. `Modifier.fillMaxSize()` to match its containing
+ * `Surface`) — only brand-logo [ChannelIcon.Drawable] images actually fill that bounds; the
+ * generic outlined [ChannelIcon.Vector] fallback icons stay their original small, centered
+ * size regardless, matching how they always looked before this badge got resized for logos.
+ */
 @Composable
-private fun ChannelTypeIconView(
+internal fun ChannelTypeIconView(
     icon: ChannelIcon,
     tint: Color,
     modifier: Modifier = Modifier,
 ) {
     when (icon) {
         is ChannelIcon.Vector ->
-            Icon(imageVector = icon.icon, contentDescription = null, tint = tint, modifier = modifier)
+            Box(modifier = modifier, contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            }
         is ChannelIcon.Drawable ->
             // Brand logos (Airtel/MTN) render in their own colors, not typeColor-tinted.
             Icon(
@@ -698,8 +698,7 @@ internal fun Double.asUgx(): String = "UGX ${ugxFmt.format(this)}"
 fun ChannelCard(
     item: ChannelDetails,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onToggleSms: () -> Unit,
+    onView: () -> Unit,
     onAddTransaction: () -> Unit,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
@@ -718,6 +717,7 @@ fun ChannelCard(
     val typeColor = channelTypeColor(item.channelType)
 
     Card(
+        onClick = onView,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -749,17 +749,15 @@ fun ChannelCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(Radius.Medium.dp),
                     color = typeColor.copy(alpha = 0.16f),
                     modifier = Modifier.size(46.dp),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        ChannelTypeIconView(
-                            icon = channelTypeIcon(item.channelType, item.channelDesc),
-                            tint = typeColor,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                    ChannelTypeIconView(
+                        icon = channelTypeIcon(item.channelType, item.channelDesc),
+                        tint = typeColor,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
 
                 Spacer(Modifier.width(10.dp))
@@ -844,12 +842,9 @@ fun ChannelCard(
                     modifier = Modifier.weight(1f),
                 )
                 ChannelActionPill(
-                    icon = Icons.Outlined.Delete,
-                    label = "Delete",
-                    onClick = onDelete,
-                    // Delete keeps a restrained warm tint for destructive clarity;
-                    // swap to onSurface if you want it fully monochrome.
-                    tint = getErrorColor(),
+                    icon = Icons.Outlined.Visibility,
+                    label = "View",
+                    onClick = onView,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -875,15 +870,6 @@ fun ChannelCard(
                     )
                 }
             }
-
-            // ── SMS toggle (non-cash channels) ───────────────────────────────
-            if (item.channelType != ChannelTypes.CASH) {
-                Spacer(Modifier.height(12.dp))
-                SmsToggleRow(
-                    enabled = item.smsNotificationEnabled,
-                    onToggle = onToggleSms,
-                )
-            }
         }
     }
 }
@@ -893,7 +879,7 @@ fun ChannelCard(
  * matching the monochrome feel of the reference. Active dots pulse.
  */
 @Composable
-private fun StatusChip(
+internal fun StatusChip(
     active: Boolean,
     dotColor: Color,
     pulseAlpha: Float,
@@ -959,131 +945,32 @@ private fun ChannelActionPill(
     }
 }
 
-// ─── SMS Toggle Row ───────────────────────────────────────────────────────────
+// ─── Form State Holder ────────────────────────────────────────────────────────
 
-@Composable
-private fun SmsToggleRow(
-    enabled: Boolean,
-    onToggle: () -> Unit,
-) {
-    val tint = if (enabled) getPrimaryColor() else MaterialTheme.colorScheme.onSurfaceVariant
-    val containerColor =
-        if (enabled) {
-            // With the new muted forest primary, this tint reads as a soft
-            // on-brand wash rather than a bright highlight.
-            getPrimaryColor().copy(alpha = 0.10f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = if (enabled) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsOff,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "SMS Notifications",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = if (enabled) "Auto-detecting transactions" else "Manual entry only",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = enabled,
-                onCheckedChange = { onToggle() },
-                colors =
-                    SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = getPrimaryColor(),
-                        checkedBorderColor = Color.Transparent,
-                        uncheckedThumbColor = Color.White,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                        uncheckedBorderColor = Color.Transparent,
-                    ),
-            )
-        }
-    }
-}
-// ─── Delete Confirm Dialog ────────────────────────────────────────────────────
-
-@Composable
-private fun DeleteConfirmDialog(
-    channelName: String,
-    isDeleting: Boolean,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = getErrorColor().copy(alpha = 0.10f),
-                modifier = Modifier.size(48.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Outlined.Delete,
-                        contentDescription = null,
-                        tint = getErrorColor(),
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            }
-        },
-        title = {
-            Text(
-                "Delete Channel",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            )
-        },
-        text = {
-            Text(
-                text = "\"$channelName\" will be permanently removed. This cannot be undone.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                enabled = !isDeleting,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = getErrorColor()),
-            ) {
-                Text(if (isDeleting) "Deleting…" else "Delete")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
-}
+/**
+ * Consolidated form state for ChannelFormDialog, enabling testable rehydration,
+ * type-switching, and round-trip fidelity. Stores original values to restore
+ * when switching back to the initial type.
+ */
+private data class ChannelFormState(
+    val name: String = "",
+    val type: String = ChannelTypes.CASH,
+    // Free-text for bank/cash
+    val description: String = "",
+    // Provider selection
+    val channelDescription: String = "",
+    // Digits only for mobile money
+    val mobileNumber: String = "",
+    val selectedCountry: CountryCode = COUNTRY_CODES[0],
+    val status: Boolean = true,
+    val attemptedSave: Boolean = false,
+    // ---- Originals (for restoration on type switch back) ----
+    val originalType: String = ChannelTypes.CASH,
+    val originalDescription: String = "",
+    val originalChannelDescription: String = "",
+    val originalMobileNumber: String = "",
+    val originalSelectedCountry: CountryCode = COUNTRY_CODES[0],
+)
 
 // New imports for this version:
 //   androidx.compose.ui.window.Dialog
@@ -1102,11 +989,13 @@ private fun DeleteConfirmDialog(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChannelFormDialog(
+    channelKey: String?,
     title: String,
     confirmLabel: String,
     initialName: String = "",
     initialDescription: String = "",
     initialType: String = "",
+    initialProvider: String = "",
     initialStatus: Boolean = true,
     isSaving: Boolean,
     onDismiss: () -> Unit,
@@ -1115,51 +1004,119 @@ private fun ChannelFormDialog(
     showStatusField: Boolean = true,
     subtitle: String? = null,
 ) {
-    val normalizedInitialType =
-        remember(initialType) {
-            ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH
-        }
+    var formState by remember(channelKey) {
+        mutableStateOf(
+            ChannelFormState(
+                name = initialName,
+                type = ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH,
+                description = initialDescription,
+                channelDescription =
+                    displayChannelTypeDescription(
+                        ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH,
+                        initialProvider,
+                    ),
+                mobileNumber = "",
+                selectedCountry = COUNTRY_CODES[0],
+                status = initialStatus,
+                attemptedSave = false,
+                originalType = ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH,
+                originalDescription = initialDescription,
+                originalChannelDescription =
+                    displayChannelTypeDescription(
+                        ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH,
+                        initialProvider,
+                    ),
+                originalMobileNumber = "",
+                originalSelectedCountry = COUNTRY_CODES[0],
+            ),
+        )
+    }
 
-    // Rehydrate country + number from the stored description when editing mobile money.
-    val (initialCountry, initialNumber) =
-        remember(title, initialDescription, normalizedInitialType) {
-            if (normalizedInitialType == ChannelTypes.MOBILE_MONEY && initialDescription.isNotBlank()) {
-                val match = COUNTRY_CODES.firstOrNull { initialDescription.startsWith(it.code) }
-                if (match != null) {
-                    match to initialDescription.removePrefix(match.code).filter { it.isDigit() }
-                } else {
-                    COUNTRY_CODES[0] to initialDescription.filter { it.isDigit() }
-                }
+    // Parse mobile-money fields from initialDescription on mount.
+    LaunchedEffect(initialType, initialDescription) {
+        val normalizedType = ChannelTypes.normalizeOrNull(initialType) ?: ChannelTypes.CASH
+        if (normalizedType == ChannelTypes.MOBILE_MONEY && initialDescription.isNotBlank()) {
+            val match = COUNTRY_CODES.firstOrNull { initialDescription.startsWith(it.code) }
+            if (match != null) {
+                val digits = initialDescription.removePrefix(match.code).filter { it.isDigit() }
+                formState =
+                    formState.copy(
+                        mobileNumber = digits,
+                        selectedCountry = match,
+                        originalMobileNumber = digits,
+                        originalSelectedCountry = match,
+                    )
             } else {
-                COUNTRY_CODES[0] to ""
+                val digits = initialDescription.filter { it.isDigit() }
+                formState =
+                    formState.copy(
+                        mobileNumber = digits,
+                        originalMobileNumber = digits,
+                    )
             }
         }
+    }
 
-    var name by remember(title, initialName) { mutableStateOf(initialName) }
-    var description by remember(title, initialDescription) { mutableStateOf(initialDescription) }
-    var channelDescription by remember(title, initialDescription) { mutableStateOf("") }
-    var type by remember(title, normalizedInitialType) { mutableStateOf(normalizedInitialType) }
-    var status by remember(title, initialStatus) { mutableStateOf(initialStatus) }
-    var mobileNumber by remember(title, initialDescription) { mutableStateOf(initialNumber) }
-    var selectedCountry by remember(title, initialDescription) { mutableStateOf(initialCountry) }
-    var attemptedSave by remember(title) { mutableStateOf(false) }
+    val handleTypeChange: (String) -> Unit = { newType ->
+        if (newType != formState.type) {
+            formState =
+                if (newType == formState.originalType) {
+                    // Switching back to original type — restore all originals.
+                    formState.copy(
+                        type = newType,
+                        description = formState.originalDescription,
+                        channelDescription = formState.originalChannelDescription,
+                        mobileNumber = formState.originalMobileNumber,
+                        selectedCountry = formState.originalSelectedCountry,
+                        attemptedSave = false,
+                    )
+                } else {
+                    // Switching to a different type — reset irrelevant fields.
+                    formState.copy(
+                        type = newType,
+                        description =
+                            if (newType == ChannelTypes.CASH || newType == ChannelTypes.BANK) {
+                                ""
+                            } else {
+                                formState.description
+                            },
+                        mobileNumber =
+                            if (newType != ChannelTypes.MOBILE_MONEY) {
+                                ""
+                            } else {
+                                formState.mobileNumber
+                            },
+                        selectedCountry =
+                            if (newType != ChannelTypes.MOBILE_MONEY) {
+                                COUNTRY_CODES[0]
+                            } else {
+                                formState.selectedCountry
+                            },
+                        channelDescription = "",
+                        attemptedSave = false,
+                    )
+                }
+        }
+    }
 
-    // ---- Validation ------------------------------------------------------
-    val trimmedName = name.trim()
-    val providerShown = type != ChannelTypes.CASH && type.isNotBlank()
-    val digits = mobileNumber.filter { it.isDigit() }
+    // ---- Validation (computed, never written to state in composition) ----
+    val trimmedName = formState.name.trim()
+    val providerShown = formState.type != ChannelTypes.CASH && formState.type.isNotBlank()
+    val providerOptions = getDescriptionOptionsForType(formState.type)
+    val providerRequired = providerShown && providerOptions.isNotEmpty()
+    val digits = formState.mobileNumber.filter { it.isDigit() }
     val nameMissing = trimmedName.isBlank()
-    val providerMissing = providerShown && channelDescription.isBlank()
-    val mobileMissing = type == ChannelTypes.MOBILE_MONEY && digits.isBlank()
+    val providerMissing = providerRequired && formState.channelDescription.isBlank()
+    val mobileMissing = formState.type == ChannelTypes.MOBILE_MONEY && digits.isBlank()
     val isFormValid = !nameMissing && !providerMissing && !mobileMissing
 
     // ---- Derived values (computed, never written to state in composition) -
     val effectiveDescription =
-        when (type) {
-            ChannelTypes.MOBILE_MONEY -> "${selectedCountry.code}$digits"
-            else -> description
+        when (formState.type) {
+            ChannelTypes.MOBILE_MONEY -> "${formState.selectedCountry.code}$digits"
+            else -> formState.description
         }
-    val effectiveProvider = if (type == ChannelTypes.CASH) "" else channelDescription
+    val effectiveProvider = if (formState.type == ChannelTypes.CASH) "" else formState.channelDescription
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1223,13 +1180,13 @@ private fun ChannelFormDialog(
                 ) {
                     // Name
                     OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
+                        value = formState.name,
+                        onValueChange = { formState = formState.copy(name = it) },
                         label = { Text("Channel name") },
                         singleLine = true,
-                        isError = attemptedSave && nameMissing,
+                        isError = formState.attemptedSave && nameMissing,
                         supportingText =
-                            if (attemptedSave && nameMissing) {
+                            if (formState.attemptedSave && nameMissing) {
                                 { Text("Name is required") }
                             } else {
                                 null
@@ -1243,64 +1200,58 @@ private fun ChannelFormDialog(
                         if (isTypeEditable) {
                             ChoiceChipGroup(
                                 options = ChannelTypes.valid,
-                                selected = type,
+                                selected = formState.type,
                                 optionLabel = { displayChannelType(it) },
-                                onSelect = {
-                                    if (it != type) {
-                                        type = it
-                                        channelDescription = ""
-                                    }
-                                },
+                                onSelect = handleTypeChange,
                             )
                         } else {
-                            ReadOnlyPill(text = displayChannelType(type))
+                            ReadOnlyPill(text = displayChannelType(formState.type))
                         }
                     }
 
-                    // Provider (non-cash only)
-                    if (providerShown) {
+                    // Provider (non-cash only, shown only if options exist) — always editable,
+                    // even when the channel type itself (isTypeEditable) is locked on edit.
+                    if (providerShown && providerOptions.isNotEmpty()) {
                         FieldSection(
                             label = "Provider",
-                            errorText = if (attemptedSave && providerMissing) "Select a provider" else null,
+                            errorText = if (formState.attemptedSave && providerMissing) "Select a provider" else null,
                         ) {
-                            if (isTypeEditable) {
-                                ProviderDropdown(
-                                    options = getDescriptionOptionsForType(type),
-                                    selected = channelDescription,
-                                    onSelect = { channelDescription = it },
-                                    isError = attemptedSave && providerMissing,
-                                )
-                            } else {
-                                ReadOnlyPill(
-                                    text = displayChannelTypeDescription(type, channelDescription),
-                                )
-                            }
+                            ProviderDropdown(
+                                options = providerOptions,
+                                selected = formState.channelDescription,
+                                onSelect = { formState = formState.copy(channelDescription = it) },
+                                isError = formState.attemptedSave && providerMissing,
+                            )
                         }
                     }
 
                     // Number / free-text description
-                    if (type == ChannelTypes.MOBILE_MONEY) {
+                    if (formState.type == ChannelTypes.MOBILE_MONEY) {
                         FieldSection(
                             label = "Mobile money number",
                             errorText =
-                                if (attemptedSave && mobileMissing) {
+                                if (formState.attemptedSave && mobileMissing) {
                                     "Enter a valid number"
                                 } else {
                                     null
                                 },
                         ) {
                             MobileMoneyNumberField(
-                                phoneNumber = mobileNumber,
-                                onPhoneNumberChange = { mobileNumber = it },
-                                selectedCountry = selectedCountry,
-                                onCountryChange = { selectedCountry = it },
+                                phoneNumber = formState.mobileNumber,
+                                onPhoneNumberChange = {
+                                    formState = formState.copy(mobileNumber = it)
+                                },
+                                selectedCountry = formState.selectedCountry,
+                                onCountryChange = {
+                                    formState = formState.copy(selectedCountry = it)
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     } else {
                         OutlinedTextField(
-                            value = description,
-                            onValueChange = { description = it },
+                            value = formState.description,
+                            onValueChange = { formState = formState.copy(description = it) },
                             label = { Text("Description") },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 2,
@@ -1314,7 +1265,7 @@ private fun ChannelFormDialog(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color =
-                                if (status) {
+                                if (formState.status) {
                                     getPrimaryColor().copy(alpha = 0.06f)
                                 } else {
                                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -1322,7 +1273,7 @@ private fun ChannelFormDialog(
                             border =
                                 BorderStroke(
                                     1.dp,
-                                    if (status) {
+                                    if (formState.status) {
                                         getPrimaryColor().copy(alpha = 0.30f)
                                     } else {
                                         MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
@@ -1344,10 +1295,10 @@ private fun ChannelFormDialog(
                                             ),
                                     )
                                     Text(
-                                        text = if (status) "Channel is active" else "Channel is inactive",
+                                        text = if (formState.status) "Channel is active" else "Channel is inactive",
                                         style = MaterialTheme.typography.labelSmall,
                                         color =
-                                            if (status) {
+                                            if (formState.status) {
                                                 getTertiaryColor()
                                             } else {
                                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -1355,8 +1306,8 @@ private fun ChannelFormDialog(
                                     )
                                 }
                                 Switch(
-                                    checked = status,
-                                    onCheckedChange = { status = it },
+                                    checked = formState.status,
+                                    onCheckedChange = { formState = formState.copy(status = it) },
                                     colors =
                                         SwitchDefaults.colors(
                                             checkedThumbColor = Color.White,
@@ -1384,14 +1335,14 @@ private fun ChannelFormDialog(
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     Button(
                         onClick = {
-                            attemptedSave = true
+                            formState = formState.copy(attemptedSave = true)
                             if (isFormValid) {
                                 onConfirm(
                                     trimmedName,
                                     effectiveDescription.trim(),
-                                    type.trim(),
+                                    formState.type.trim(),
                                     effectiveProvider.trim(),
-                                    status,
+                                    formState.status,
                                 )
                             }
                         },
@@ -1558,7 +1509,7 @@ private fun FormSectionLabel(text: String) {
     )
 }
 
-private fun displayChannelType(type: String): String =
+internal fun displayChannelType(type: String): String =
     when (type) {
         ChannelTypes.MOBILE_MONEY -> "Mobile Money"
         ChannelTypes.CASH -> "Cash"

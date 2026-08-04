@@ -27,6 +27,12 @@ fun SecuritySettingsScreen(
     val state by vm.state.collectAsState()
     val teal = Color(0xFF1A9E8F)
 
+    // Re-reads lock state on every fresh composition of this screen — including when
+    // Navigation Compose recomposes it after popBackStack() returns from
+    // SetPinScreen/SetPatternScreen, since this screen's ViewModel instance (scoped to the
+    // NavBackStackEntry) persists across that round trip and its `init` won't re-run.
+    LaunchedEffect(Unit) { vm.refresh() }
+
     // Show snackbar on message
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {

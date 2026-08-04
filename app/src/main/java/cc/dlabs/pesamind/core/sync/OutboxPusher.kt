@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
 import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
+import cc.dlabs.pesamind.core.database.dao.ProcessedMessageDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
 import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
 import cc.dlabs.pesamind.core.database.entity.ChannelEntity
@@ -16,6 +17,7 @@ import cc.dlabs.pesamind.core.database.entity.MonthlyBudgetEntity
 import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.OutboxOperation
+import cc.dlabs.pesamind.core.database.entity.ProcessedMessageEntity
 import cc.dlabs.pesamind.core.database.entity.TransactionEntity
 import cc.dlabs.pesamind.core.database.entity.YearlyBudgetEntity
 import cc.dlabs.pesamind.core.network.ApiService
@@ -24,6 +26,7 @@ import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
+import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
 import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
@@ -155,7 +158,10 @@ class OutboxPusher(
                 }
                 OutboxOperation.UPDATE -> {
                     val response =
-                        api.updateChannel(entity.serverId!!, UpdateChannelRequest(entity.name, entity.description, entity.status))
+                        api.updateChannel(
+                            entity.serverId!!,
+                            UpdateChannelRequest(entity.name, entity.description, entity.channelDesc, entity.status),
+                        )
                     when {
                         response.isSuccessful -> finishChannelPush(current, channelDao, outboxDao, dispatchUpdatedAt, null)
                         isPermanentFailureCode(response.code()) -> {
@@ -741,6 +747,96 @@ class OutboxPusher(
         val now = System.currentTimeMillis()
         Log.w(TAG, "Monthly budget ${entity.id} push permanently failed: $error")
         monthlyBudgetDao.update(entity.copy(syncStatus = SyncStatus.FAILED, updatedAt = now))
+        outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
+    }
+
+    // ── Processed Messages ──────────────────────────────────────────────────
+
+    /**
+     * Write-once, CREATE-only — unlike [pushTransactionEntry]/[pushChannelEntry] there is no
+     * local edit path once a [ProcessedMessageEntity] exists, so a success here never needs
+     * [PushCompletionResolver]'s "requeue if a newer edit landed mid-flight" branch: it just
+     * marks SYNCED and deletes the outbox row directly.
+     */
+    suspend fun pushProcessedMessageEntry(entityId: String): PushResult {
+        val outboxDao = database.outboxDao()
+        val processedMessageDao = database.processedMessageDao()
+
+        val current = outboxDao.findFor(OutboxEntityType.PROCESSED_MESSAGE, entityId) ?: return PushResult.Skipped
+        if (current.status != SyncStatus.PENDING) return PushResult.Skipped
+
+        val entity = processedMessageDao.getById(entityId)
+        if (entity == null) {
+            outboxDao.delete(current.id)
+            return PushResult.Skipped
+        }
+        if (current.operation != OutboxOperation.CREATE) {
+            // No update/delete flow exists for processed messages anywhere in the app —
+            // defensive only, mirroring pushTransactionEntry's "unsupported operation" guard.
+            markProcessedMessagePermanentFailure(
+                current,
+                entity,
+                processedMessageDao,
+                outboxDao,
+                "Unsupported processed message outbox operation: ${current.operation}",
+            )
+            return PushResult.PermanentFailure
+        }
+
+        val now = System.currentTimeMillis()
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
+
+        return try {
+            val response =
+                api.createProcessedMessage(
+                    ProcessedMessageRequest(
+                        senderId = entity.senderId,
+                        content = entity.content,
+                        timestamp = entity.timestamp,
+                        simInfo = entity.simInfo,
+                        receivingSimNumber = entity.receivingSimNumber,
+                    ),
+                )
+            when {
+                response.isSuccessful -> {
+                    val serverId = response.body()?.id?.ifBlank { null }
+                    processedMessageDao.update(
+                        entity.copy(serverId = serverId, syncStatus = SyncStatus.SYNCED, updatedAt = System.currentTimeMillis()),
+                    )
+                    outboxDao.delete(current.id)
+                    PushResult.Success(serverId)
+                }
+                isPermanentFailureCode(response.code()) -> {
+                    markProcessedMessagePermanentFailure(
+                        current,
+                        entity,
+                        processedMessageDao,
+                        outboxDao,
+                        "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                    )
+                    PushResult.PermanentFailure
+                }
+                else -> {
+                    markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
+                    PushResult.TransientFailure
+                }
+            }
+        } catch (e: IOException) {
+            markTransientFailure(current, outboxDao, e.message ?: "network error")
+            PushResult.TransientFailure
+        }
+    }
+
+    private suspend fun markProcessedMessagePermanentFailure(
+        current: OutboxEntry,
+        entity: ProcessedMessageEntity,
+        processedMessageDao: ProcessedMessageDao,
+        outboxDao: OutboxDao,
+        error: String,
+    ) {
+        val now = System.currentTimeMillis()
+        Log.w(TAG, "Processed message ${entity.id} push permanently failed: $error")
+        processedMessageDao.update(entity.copy(syncStatus = SyncStatus.FAILED, updatedAt = now))
         outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
     }
 

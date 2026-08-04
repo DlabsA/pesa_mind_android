@@ -6,6 +6,7 @@ import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
+import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,10 +92,10 @@ class YearlyBudgetViewModel() : UnifiedViewModel() {
         }
     }
 
-    /** Local data is already live via [BudgetRepository.observeYearlyBudget] — this exists
-     * only to satisfy the existing "refresh" pull-to-refresh call site; sync with the
-     * server happens independently via SyncScheduler/SyncWorker, not on demand here. */
-    fun refresh() = Unit
+    /** Local data is already live via [BudgetRepository.observeYearlyBudget] — this just
+     * triggers the actual server pull; the sync worker's write-back reaches [state] through
+     * that same Flow once it completes, no re-read needed here. */
+    fun refresh() = SyncScheduler.triggerSyncNow()
 
     fun onNameChange(v: String) =
         _state.update {

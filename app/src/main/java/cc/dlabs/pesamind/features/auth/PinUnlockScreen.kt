@@ -15,13 +15,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.utils.BiometricAuthResult
+import cc.dlabs.pesamind.core.utils.authenticateWithBiometrics
+import cc.dlabs.pesamind.core.utils.isBiometricAvailable
+import kotlinx.coroutines.launch
 
 @Composable
 fun PinUnlockScreen(
@@ -33,6 +39,29 @@ fun PinUnlockScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val state by vm.state.collectAsStateWithLifecycle()
     val maxPin = 4
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val biometricAvailable = remember { (context as? FragmentActivity)?.let(::isBiometricAvailable) ?: false }
+
+    fun onBiometricTap() {
+        val activity = context as? FragmentActivity ?: return
+        scope.launch {
+            when (val result = authenticateWithBiometrics(activity)) {
+                BiometricAuthResult.Success ->
+                    vm.unlockWithBiometric(
+                        onSuccess = {
+                            navController.navigate(Routes.Dashboard.route) {
+                                popUpTo(Routes.PinUnlock.route) { inclusive = true }
+                            }
+                        },
+                        onError = { err -> errorMessage = err },
+                    )
+                is BiometricAuthResult.Error -> errorMessage = result.message
+                BiometricAuthResult.Cancelled -> Unit // user backed out — no error noise
+            }
+        }
+    }
 
     LaunchedEffect(pin, state.isLoading) {
         if (pin.length == maxPin && !state.isLoading) {
@@ -168,7 +197,7 @@ fun PinUnlockScreen(
                                         errorMessage = null
                                         when (key) {
                                             "back" -> if (pin.isNotEmpty()) pin = pin.dropLast(1)
-                                            "face" -> Unit // Biometric placeholder
+                                            "face" -> if (!isSetup && biometricAvailable) onBiometricTap()
                                             else -> if (pin.length < maxPin) pin += key
                                         }
                                     },

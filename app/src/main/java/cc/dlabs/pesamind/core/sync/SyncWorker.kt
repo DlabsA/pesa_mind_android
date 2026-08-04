@@ -17,6 +17,7 @@ import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.migration.resolveUniqueChannelIdsByName
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.storage.SyncMetadataManager
+import cc.dlabs.pesamind.core.storage.TokenManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.io.IOException
@@ -61,6 +62,17 @@ class SyncWorker
         private val justSyncedMonthlyBudgetServerIds = mutableSetOf<String>()
 
         override suspend fun doWork(): Result {
+            // Early auth check: if user is not logged in, fail gracefully.
+            // Result.failure() is terminal — WorkManager does NOT retry this specific run.
+            // A logged-out device just has nothing to sync; the next periodic run (<=30 min)
+            // re-checks on its own, and AuthViewModel/TokenRefreshInterceptor explicitly call
+            // SyncScheduler.triggerSyncNow() the moment a valid token exists again, so this
+            // isn't relying on retry semantics to recover.
+            if (!TokenManager.isLoggedIn()) {
+                Log.w(TAG, "User is not logged in, skipping sync.")
+                return Result.failure()
+            }
+
             val pushClean = pushOutbox()
             val pullClean = pullChanges()
             // Published unconditionally, not just on full success: a transient failure only
@@ -89,7 +101,8 @@ class SyncWorker
             val transactionsClean = pushTransactionOutbox()
             val yearlyBudgetsClean = pushYearlyBudgetOutbox()
             val monthlyBudgetsClean = pushMonthlyBudgetOutbox()
-            return channelsClean && transactionsClean && yearlyBudgetsClean && monthlyBudgetsClean
+            val processedMessagesClean = pushProcessedMessageOutbox()
+            return channelsClean && transactionsClean && yearlyBudgetsClean && monthlyBudgetsClean && processedMessagesClean
         }
 
         /** A row a *previous* run's process death left claimed but unresolved is invisible
@@ -187,6 +200,29 @@ class SyncWorker
                     is OutboxPusher.PushResult.Success -> result.serverId?.let { justSyncedMonthlyBudgetServerIds.add(it) }
                     OutboxPusher.PushResult.TransientFailure -> clean = false
                     OutboxPusher.PushResult.PermanentFailure, OutboxPusher.PushResult.Skipped -> Unit
+                }
+            }
+            return clean
+        }
+
+        /** Write-once audit rows have no local edit path, so — unlike the other four
+         * `push*Outbox` methods — there's no `justSynced*ServerIds` set: that bookkeeping only
+         * exists to protect a *pulled* entity from being mistaken for a server-side deletion,
+         * and processed messages are never pulled back ([pullChanges] has no counterpart). */
+        private suspend fun pushProcessedMessageOutbox(): Boolean {
+            val outboxDao = database.outboxDao()
+            reclaimStaleSyncingRows(outboxDao, OutboxEntityType.PROCESSED_MESSAGE)
+            val pendingEntityIds =
+                outboxDao.getByStatus(SyncStatus.PENDING).filter { it.entityType == OutboxEntityType.PROCESSED_MESSAGE }
+                    .map { it.entityId }
+            var clean = true
+            for (entityId in pendingEntityIds) {
+                when (outboxPusher.pushProcessedMessageEntry(entityId)) {
+                    OutboxPusher.PushResult.TransientFailure -> clean = false
+                    is OutboxPusher.PushResult.Success,
+                    OutboxPusher.PushResult.PermanentFailure,
+                    OutboxPusher.PushResult.Skipped,
+                    -> Unit
                 }
             }
             return clean

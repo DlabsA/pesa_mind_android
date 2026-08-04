@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -106,7 +108,7 @@ class DashboardViewModel
                 is StateEvent.TransactionCreated -> {
                     viewModelScope.launch {
                         try {
-                            refresh()
+                            refreshSuspend()
                             publishEvent(StateEvent.DashboardRefreshed)
                         } catch (e: Exception) {
                         }
@@ -167,11 +169,20 @@ class DashboardViewModel
             }
         }
 
-        fun refresh() {
-            if (_state.value.isRefreshing) {
-                return
-            }
-            viewModelScope.launch {
+        /** Serializes [refreshSuspend]/[refreshAfterSyncSuspend] so two overlapping callers
+         * (e.g. a manual pull-to-refresh racing the [StateEvent.TransactionCreated] handler)
+         * both genuinely wait for a real fetch to finish, rather than a plain `isRefreshing`
+         * boolean letting the second caller skip work and return instantly with stale data —
+         * that would silently reintroduce the exact "refreshed signal fires before the fetch
+         * finishes" bug this split exists to fix. */
+        private val refreshMutex = Mutex()
+
+        /** Suspend core of [refresh] — awaits the actual network refetch (or the offline
+         * short-circuit) before returning, so a caller that needs to know a refresh has
+         * genuinely *finished* (not just started) can await this directly. `internal`, not
+         * `private`, so a JVM test can call it without going through the event bus. */
+        internal suspend fun refreshSuspend() {
+            refreshMutex.withLock {
                 _state.update { it.copy(isRefreshing = true) }
                 try {
                     if (networkMonitor.isConnectedNow) {
@@ -185,12 +196,16 @@ class DashboardViewModel
             }
         }
 
-        /** Same as [refresh] but skips the `isConnectedNow` guard — only called from
+        fun refresh() {
+            if (_state.value.isRefreshing) return
+            viewModelScope.launch { refreshSuspend() }
+        }
+
+        /** Same as [refreshSuspend] but skips the `isConnectedNow` guard — only called from
          * [StateEvent.SyncCompleted], where connectivity is already implied by a sync having
          * just completed, so that guard would only add a redundant, possibly-racy recheck. */
-        private fun refreshAfterSync() {
-            if (_state.value.isRefreshing) return
-            viewModelScope.launch {
+        internal suspend fun refreshAfterSyncSuspend() {
+            refreshMutex.withLock {
                 _state.update { it.copy(isRefreshing = true) }
                 try {
                     fetchFromNetwork()
@@ -200,11 +215,21 @@ class DashboardViewModel
             }
         }
 
+        private fun refreshAfterSync() {
+            if (_state.value.isRefreshing) return
+            viewModelScope.launch { refreshAfterSyncSuspend() }
+        }
+
         // ─── Network fetch (uses real ApiService.getDashboard()) ──────────────────
 
         private suspend fun fetchFromNetwork() {
             try {
-                val response = apiService.getDashboard()
+                val now = Calendar.getInstance()
+                val response =
+                    apiService.getDashboard(
+                        month = now.get(Calendar.MONTH) + 1,
+                        year = now.get(Calendar.YEAR),
+                    )
 
                 if (response.isSuccessful) {
                     val body =

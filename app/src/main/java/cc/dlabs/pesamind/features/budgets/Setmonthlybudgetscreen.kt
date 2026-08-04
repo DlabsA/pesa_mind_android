@@ -48,6 +48,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -154,95 +155,102 @@ fun SetMonthlyBudgetScreen(
             )
         },
     ) { padding ->
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = state.isLoading,
+            onRefresh = vm::refresh,
+            indicator = {},
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
-            contentPadding =
-                PaddingValues(
-                    start = 18.dp,
-                    end = 18.dp,
-                    top = 14.dp,
-                    bottom = Spacing.Space10.dp,
-                ),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Space5.dp),
         ) {
-            // ── Summary card
-            item {
-                BudgetSummaryCard(
-                    income = state.totalIncome,
-                    expenditure = state.totalExpenditures,
-                    savings = state.totalSavings,
-                    balance = state.balance,
-                    isDeficit = state.isDeficit,
-                    isLoading = state.isLoading,
-                )
-            }
-
-            // ── Add transaction form
-            item {
-                AddTransactionCard(
-                    name = state.formName,
-                    amount = state.formAmount,
-                    type = state.formType,
-                    nameError = state.formNameError,
-                    amountError = state.formAmountError,
-                    isSaving = state.isAddingTransaction,
-                    onNameChange = vm::onNameChange,
-                    onAmountChange = vm::onAmountChange,
-                    onTypeChange = vm::onTypeChange,
-                    onAdd = vm::addTransaction,
-                )
-            }
-
-            // ── Transactions section header
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Budgeted Transactions",
-                        style =
-                            MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.2).sp,
-                            ),
-                        color = MaterialTheme.colorScheme.onSurface,
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding =
+                    PaddingValues(
+                        start = 18.dp,
+                        end = 18.dp,
+                        top = 14.dp,
+                        bottom = Spacing.Space10.dp,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Space5.dp),
+            ) {
+                // ── Summary card
+                item {
+                    BudgetSummaryCard(
+                        income = state.totalIncome,
+                        expenditure = state.totalExpenditures,
+                        savings = state.totalSavings,
+                        balance = state.balance,
+                        isDeficit = state.isDeficit,
+                        isLoading = state.isLoading,
                     )
-                    if (state.transactions.isNotEmpty()) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                        ) {
-                            Text(
-                                text = "${state.transactions.size}",
-                                style =
-                                    MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                    ),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                            )
+                }
+
+                // ── Add transaction form
+                item {
+                    AddTransactionCard(
+                        name = state.formName,
+                        amount = state.formAmount,
+                        type = state.formType,
+                        nameError = state.formNameError,
+                        amountError = state.formAmountError,
+                        isSaving = state.isAddingTransaction,
+                        onNameChange = vm::onNameChange,
+                        onAmountChange = vm::onAmountChange,
+                        onTypeChange = vm::onTypeChange,
+                        onAdd = vm::addTransaction,
+                    )
+                }
+
+                // ── Transactions section header
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Budgeted Transactions",
+                            style =
+                                MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = (-0.2).sp,
+                                ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (state.transactions.isNotEmpty()) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                            ) {
+                                Text(
+                                    text = "${state.transactions.size}",
+                                    style =
+                                        MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // ── Transaction list or empty state
-            if (state.isLoading && state.transactions.isEmpty()) {
-                item { TransactionsSkeleton() }
-            } else if (state.transactions.isEmpty()) {
-                item { TransactionsEmptyState() }
-            } else {
-                items(state.transactions, key = { it.id }) { tx ->
-                    TransactionRow(
-                        tx = tx,
-                        isDeleting = state.isDeletingTransactionId == tx.id,
-                        onDelete = { vm.confirmDeleteTransaction(tx) },
-                    )
+                // ── Transaction list or empty state
+                if (state.isLoading && state.transactions.isEmpty()) {
+                    item { TransactionsSkeleton() }
+                } else if (state.transactions.isEmpty()) {
+                    item { TransactionsEmptyState() }
+                } else {
+                    items(state.transactions, key = { it.id }) { tx ->
+                        TransactionRow(
+                            tx = tx,
+                            isDeleting = state.isDeletingTransactionId == tx.id,
+                            onDelete = { vm.confirmDeleteTransaction(tx) },
+                        )
+                    }
                 }
             }
         }

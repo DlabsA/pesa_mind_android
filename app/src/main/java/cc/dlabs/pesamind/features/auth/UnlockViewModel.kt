@@ -66,8 +66,11 @@ class UnlockViewModel : UnifiedViewModel() {
                     return@launch
                 }
 
-                // PIN is correct, now refresh JWT
-                refreshJWT(onSuccess, onError)
+                // PIN is correct — unlock now, refresh the JWT best-effort in the background.
+                // Offline-first: local verification alone must be sufficient to enter the app.
+                _state.value = _state.value.copy(isLoading = false)
+                onSuccess()
+                refreshJWTBestEffort()
             } catch (e: Exception) {
                 onError("An error occurred: ${e.message}")
                 _state.value = _state.value.copy(isLoading = false)
@@ -121,8 +124,11 @@ class UnlockViewModel : UnifiedViewModel() {
                     return@launch
                 }
 
-                // Pattern is correct, now refresh JWT
-                refreshJWT(onSuccess, onError)
+                // Pattern is correct — unlock now, refresh the JWT best-effort in the background.
+                // Offline-first: local verification alone must be sufficient to enter the app.
+                _state.value = _state.value.copy(isLoading = false)
+                onSuccess()
+                refreshJWTBestEffort()
             } catch (e: Exception) {
                 onError("An error occurred: ${e.message}")
                 _state.value = _state.value.copy(isLoading = false)
@@ -131,44 +137,41 @@ class UnlockViewModel : UnifiedViewModel() {
     }
 
     /**
-     * Refresh JWT using the stored refresh token
+     * Called after the OS BiometricPrompt (triggered from the UI layer — see
+     * `core/utils/BiometricAuthHelper.kt`) reports success. Unlike [unlockWithPin]/
+     * [unlockWithPattern], there's no local secret to compare — the OS authentication itself
+     * is the check — so this unlocks immediately and refreshes the JWT best-effort afterward.
      */
-    private suspend fun refreshJWT(
+    fun unlockWithBiometric(
         onSuccess: () -> Unit,
         onError: (String) -> Unit,
     ) {
-        try {
-            val refreshToken = TokenManager.getRefreshToken()
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = false, errorMessage = null)
+            onSuccess()
+            refreshJWTBestEffort()
+        }
+    }
 
-            if (refreshToken.isNullOrBlank()) {
-                onError("Session expired. Please sign in again.")
-                _state.value = _state.value.copy(isLoading = false)
-                return
-            }
+    /**
+     * Best-effort JWT refresh after a local unlock has already succeeded and the caller has
+     * already navigated onward. Offline-first: unlocking must never depend on connectivity, so
+     * failures here (offline, expired refresh token, server error) are swallowed rather than
+     * surfaced — a stale access token is handled reactively by [TokenRefreshInterceptor] the
+     * next time an authenticated call is made, once connectivity is available.
+     */
+    private suspend fun refreshJWTBestEffort() {
+        try {
+            val refreshToken = TokenManager.getRefreshToken() ?: return
+            if (refreshToken.isBlank()) return
 
             val response = ApiClient.api.refresh(RefreshRequest(refreshToken))
-
-            if (response.isSuccessful) {
-                val body = response.body()
-
-                if (body?.accessToken != null && body.refreshToken != null) {
-                    TokenManager.saveTokens(body.accessToken, body.refreshToken)
-                    _state.value = _state.value.copy(isLoading = false)
-                    onSuccess()
-                } else {
-                    onError("Failed to refresh session. Please sign in again.")
-                    _state.value = _state.value.copy(isLoading = false)
-                }
-            } else {
-                when (response.code()) {
-                    401 -> onError("Session expired. Please sign in again.")
-                    else -> onError("Failed to refresh session (${response.code()})")
-                }
-                _state.value = _state.value.copy(isLoading = false)
+            val body = response.body()
+            if (response.isSuccessful && body?.accessToken != null && body.refreshToken != null) {
+                TokenManager.saveTokens(body.accessToken, body.refreshToken)
             }
         } catch (e: Exception) {
-            onError("Cannot reach server. Check your connection.")
-            _state.value = _state.value.copy(isLoading = false)
+            // Offline or unreachable — ignore, already unlocked locally.
         }
     }
 }

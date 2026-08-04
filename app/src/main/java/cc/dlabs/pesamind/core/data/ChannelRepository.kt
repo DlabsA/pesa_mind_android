@@ -129,6 +129,10 @@ object ChannelRepository {
      * prefer [observeChannels] for live updates. */
     suspend fun getAllChannels(): List<ChannelDetails> = channelDao.getAllActive().map { it.toDetails() }
 
+    /** One-shot single-channel lookup for `ChannelDetailViewModel` — there's no
+     * `GET /categories/:id` on the backend, so this is Room-only, no network fallback needed. */
+    suspend fun getById(id: String): ChannelDetails? = channelDao.getById(id)?.toDetails()
+
     suspend fun getByChannelType(channelType: String): List<ChannelDetails> =
         channelDao.getByChannelType(
             channelType,
@@ -202,10 +206,17 @@ object ChannelRepository {
         return outcome
     }
 
+    /**
+     * [channelDesc]'s [ChannelEntity.normalizedSenderKey] is recomputed here the same way
+     * [createChannel]/[reconcileFromServer] derive it, so correcting a provider doesn't leave
+     * a stale dedup key pointing at the old one behind — see [isProviderChannelType]'s doc
+     * comment for why that derivation must stay automatic rather than caller-supplied.
+     */
     suspend fun updateChannel(
         id: String,
         name: String,
         description: String,
+        channelDesc: String,
         status: Boolean,
     ): ChannelDetails? {
         val updated =
@@ -216,6 +227,9 @@ object ChannelRepository {
                     existing.copy(
                         name = name,
                         description = description,
+                        channelDesc = channelDesc,
+                        normalizedSenderKey =
+                            if (isProviderChannelType(existing.channelType)) normalizeSenderKey(channelDesc) else null,
                         status = status,
                         dirty = true,
                         syncStatus = SyncStatus.PENDING,

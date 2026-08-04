@@ -12,6 +12,7 @@ import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.OutboxOperation
 import cc.dlabs.pesamind.core.database.entity.TransactionEntity
+import cc.dlabs.pesamind.core.database.migration.resolveUniqueChannelIdsByName
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.NetworkMonitor
@@ -96,6 +97,49 @@ object TransactionRepository {
     }
 
     fun observeTransactions(): Flow<List<TransactionDetails>> = transactionDao.observeAll().map { list -> list.map { it.toDetails() } }
+
+    /** Live, offline-first list for one channel — instant from Room, refreshed by [refreshByChannel]. */
+    fun observeByChannel(channelId: String): Flow<List<TransactionDetails>> =
+        transactionDao.observeByChannel(channelId).map { list -> list.map { it.toDetails() } }
+
+    /**
+     * Targeted pull, scoped to one channel — a cheaper alternative to a full-list pull for
+     * [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen], reusing
+     * [reconcileFromServer] per row. [channelId] is passed straight through as
+     * `resolvedChannelId`: unlike the full-pull case that primitive was built for, there's no
+     * name-matching ambiguity here — every row in this response belongs to the channel we asked
+     * for. Failures are left for the caller to surface; the local (possibly stale) list from
+     * [observeByChannel] still renders regardless.
+     */
+    suspend fun refreshByChannel(channelId: String) {
+        val response = ApiClient.api.getTransactionsByChannel(channelId)
+        if (response.isSuccessful) {
+            response.body()?.forEach { reconcileFromServer(it, resolvedChannelId = channelId) }
+        }
+    }
+
+    /**
+     * Targeted pull scoped to a date range (`startDate`/`endDate` as `yyyy-MM-dd`, matching the
+     * backend's `/transactions/by-date-range` contract) — same shape as [refreshByChannel]
+     * above, but unlike that one the channel id isn't already known here, so this needs the
+     * same best-effort unique-name matching [SyncWorker.pullTransactions] already established
+     * (reused via [resolveUniqueChannelIdsByName] rather than reimplemented). Failures are left
+     * for the caller to surface; the local (possibly incomplete for this range) list from
+     * [observeTransactions] still renders regardless — this only backfills any rows Room didn't
+     * already have.
+     */
+    suspend fun refreshByDateRange(
+        startDate: String,
+        endDate: String,
+    ) {
+        val response = ApiClient.api.getTransactionsByDateRange(startDate, endDate)
+        if (response.isSuccessful) {
+            val channelIdByUniqueName = resolveUniqueChannelIdsByName(database.channelDao().getAllActive())
+            response.body()?.forEach {
+                reconcileFromServer(it, resolvedChannelId = channelIdByUniqueName[it.channelDetailsName])
+            }
+        }
+    }
 
     /** One-shot read of the current list — used by `loadTransactions()`/`refresh()`, which
      * screens should otherwise prefer [observeTransactions] over for live updates. */
@@ -288,6 +332,7 @@ internal fun TransactionEntity.toDetails() =
         channelDetailsName = channelDetailsName,
         username = username,
         syncStatus = syncStatus,
+        createdAt = createdAt,
     )
 
 /** [Pair.first] is the month's start (inclusive), [Pair.second] is the following month's start

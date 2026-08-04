@@ -7,6 +7,7 @@ import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
 import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
+import cc.dlabs.pesamind.core.database.dao.ProcessedMessageDao
 import cc.dlabs.pesamind.core.database.dao.ProfileDao
 import cc.dlabs.pesamind.core.database.dao.TombstoneDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
@@ -53,4 +54,7 @@ object DatabaseModule {
 
     @Provides
     fun provideTombstoneDao(db: PesaMindDatabase): TombstoneDao = db.tombstoneDao()
+
+    @Provides
+    fun provideProcessedMessageDao(db: PesaMindDatabase): ProcessedMessageDao = db.processedMessageDao()
 }

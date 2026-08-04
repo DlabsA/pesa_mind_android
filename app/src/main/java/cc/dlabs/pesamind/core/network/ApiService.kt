@@ -30,6 +30,8 @@ import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninRequest
 import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninResponse
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
+import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
+import cc.dlabs.pesamind.core.network.models.ProcessedMessageResponse
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
@@ -138,10 +140,26 @@ interface ApiService {
     @GET("transactions")
     suspend fun getTransactions(): Response<List<TransactionDetails>>
 
+    @GET("transactions/by-channel")
+    suspend fun getTransactionsByChannel(
+        @Query("channelID") channelId: String,
+    ): Response<List<TransactionDetails>>
+
+    @GET("transactions/by-date-range")
+    suspend fun getTransactionsByDateRange(
+        @Query("startDate") startDate: String,
+        @Query("endDate") endDate: String,
+    ): Response<List<TransactionDetails>>
+
     @POST("transactions")
     suspend fun createTransaction(
         @Body body: TransactionRequest,
     ): Response<TransactionDetails>
+
+    @POST("processed-messages")
+    suspend fun createProcessedMessage(
+        @Body body: ProcessedMessageRequest,
+    ): Response<ProcessedMessageResponse>
 
     // Budget endpoints
     @GET("budgets/monthly")
@@ -245,8 +263,13 @@ interface ApiService {
     suspend fun getFinancialHealth(): Response<FinancialHealthResponse>
 
     @GET("data/dashboard")
-    suspend fun getDashboard(): Response<DashboardResponse>
+    suspend fun getDashboard(
+        @Query("month") month: Int,
+        @Query("year") year: Int,
+    ): Response<DashboardResponse>
 
     @GET("data/analytics")
-    suspend fun getAnalytics(): Response<AnalyticResponse>
+    suspend fun getAnalytics(
+        @Query("period") period: String = "month",
+    ): Response<AnalyticResponse>
 }

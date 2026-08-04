@@ -56,8 +56,18 @@ class SetPinViewModel : UnifiedViewModel() {
                 if (pin == current.firstPin) {
                     // PINs match — save it
                     viewModelScope.launch {
-                        TokenManager.savePin(pin)
-                        _state.value = current.copy(success = true)
+                        try {
+                            TokenManager.savePin(pin)
+                            _state.value = _state.value.copy(success = true)
+                        } catch (e: Exception) {
+                            _state.value =
+                                current.copy(
+                                    step = PinStep.ENTER,
+                                    pin = "",
+                                    firstPin = "",
+                                    error = "Couldn't save PIN: ${e.message ?: "unknown error"}",
+                                )
+                        }
                     }
                 } else {
                     // No match — restart

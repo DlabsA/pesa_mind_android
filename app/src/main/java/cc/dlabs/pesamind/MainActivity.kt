@@ -9,16 +9,17 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.navigation.compose.rememberNavController
 import androidx.work.Configuration
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.ProcessedMessageRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
@@ -57,6 +58,7 @@ class PesaMindApp : Application(), Configuration.Provider {
         TokenManager.init(this)
         AccountManager.init(this)
         ChannelManager.init(this)
+        SyncScheduler.init(this)
         NotificationStorage.init(this)
         ThemeManager.init(this)
         SyncMetadataManager.init(this)
@@ -66,6 +68,7 @@ class PesaMindApp : Application(), Configuration.Provider {
         ChannelRepository.init(this)
         TransactionRepository.init(this)
         BudgetRepository.init(this)
+        ProcessedMessageRepository.init(this)
 
         // One-time prefs-blob -> Room import (idempotent, safe to fire on every launch).
         // See docs/decisions/ADR-0004-offline-first.md. Caught, not propagated: this runs
@@ -84,17 +87,17 @@ class PesaMindApp : Application(), Configuration.Provider {
         // Outbox drain + pull worker (ADR-0004 Slice A2): periodic background cadence, plus
         // an expedited run the moment connectivity comes back (this flow also seeds with the
         // current state on collection, so a cold start that's already online triggers one too).
-        SyncScheduler.schedulePeriodic(this)
+        SyncScheduler.schedulePeriodic()
         CoroutineScope(Dispatchers.IO).launch {
             NetworkMonitor(this@PesaMindApp).isConnected.collect { connected ->
-                if (connected) SyncScheduler.triggerSyncNow(this@PesaMindApp)
+                if (connected) SyncScheduler.triggerSyncNow()
             }
         }
     }
 }
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "PESAMIND"
     }
