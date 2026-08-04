@@ -16,6 +16,19 @@ sealed class Routes(val route: String) {
 
     object PatternSetup : Routes("pattern_setup")
 
+    // Post-signup channel onboarding (one-shot, skippable, batch-creates up to 4 channels)
+    object ChannelOnboardingIntro : Routes("onboarding_intro")
+
+    object OnboardingCash : Routes("onboarding_cash")
+
+    object OnboardingMoMo : Routes("onboarding_momo")
+
+    object OnboardingAirtel : Routes("onboarding_airtel")
+
+    object OnboardingBank : Routes("onboarding_bank")
+
+    object OnboardingReview : Routes("onboarding_review")
+
     // Main (bottom nav)
     object Dashboard : Routes("dashboard")
 

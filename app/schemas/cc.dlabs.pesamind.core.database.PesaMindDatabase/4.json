@@ -173,7 +173,7 @@
       },
       {
         "tableName": "channels",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `serverId` TEXT, `userId` TEXT NOT NULL, `name` TEXT NOT NULL, `channelType` TEXT NOT NULL, `description` TEXT NOT NULL, `status` INTEGER NOT NULL, `channelDesc` TEXT NOT NULL, `normalizedSenderKey` TEXT, `availableBalance` REAL NOT NULL, `smsNotificationEnabled` INTEGER NOT NULL, `syncStatus` TEXT NOT NULL, `dirty` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `serverId` TEXT, `userId` TEXT NOT NULL, `name` TEXT NOT NULL, `channelType` TEXT NOT NULL, `description` TEXT NOT NULL, `status` INTEGER NOT NULL, `channelDesc` TEXT NOT NULL, `normalizedSenderKey` TEXT, `availableBalance` REAL NOT NULL, `accountNumber` TEXT, `smsNotificationEnabled` INTEGER NOT NULL, `syncStatus` TEXT NOT NULL, `dirty` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -232,6 +232,11 @@
             "columnName": "availableBalance",
             "affinity": "REAL",
             "notNull": true
+          },
+          {
+            "fieldPath": "accountNumber",
+            "columnName": "accountNumber",
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "smsNotificationEnabled",

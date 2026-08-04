@@ -12,6 +12,8 @@ import cc.dlabs.pesamind.core.network.models.AnomalySection
 import cc.dlabs.pesamind.core.network.models.ApiMessageResponse
 import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
+import cc.dlabs.pesamind.core.network.models.BatchCreateChannelsRequest
+import cc.dlabs.pesamind.core.network.models.BatchCreateChannelsResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CheckUsernameRequest
@@ -108,6 +110,11 @@ interface ApiService {
     suspend fun createChannel(
         @Body body: CreateChannelRequest,
     ): Response<ChannelDetails>
+
+    @POST("categories/batch")
+    suspend fun batchCreateChannels(
+        @Body body: BatchCreateChannelsRequest,
+    ): Response<BatchCreateChannelsResponse>
 
     @GET("categories/channel-type")
     suspend fun getChannelsByType(

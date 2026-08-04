@@ -30,6 +30,7 @@ object TokenManager {
     private val PATTERN_KEY = stringPreferencesKey("user_pattern")
     private val PIN_ENABLED = booleanPreferencesKey("pin_enabled")
     private val PATTERN_ENABLED = booleanPreferencesKey("pattern_enabled")
+    private val CHANNELS_ONBOARDED = booleanPreferencesKey("channels_onboarded")
 
     lateinit var appContext: Context
 
@@ -139,6 +140,24 @@ object TokenManager {
     suspend fun hasAnyLock(): Boolean = getLockState() != LockState.NONE
 
     suspend fun requiresLockSetup(): Boolean = isLoggedIn() && !hasAnyLock()
+
+    // ── Channel onboarding ──────────────────────────────────
+    // Local gate for the post-signup channel-onboarding flow. Non-secret UI-gate state (unlike
+    // PIN_KEY/PATTERN_KEY above), so no TokenCryptoManager involvement — mirrors PIN_ENABLED's
+    // plain booleanPreferencesKey treatment. Never derived from local channel count: finishing
+    // onboarding with 0 channels is a valid completed state. Set to true locally as soon as the
+    // user finishes onboarding (before the batch necessarily syncs, for offline-first safety);
+    // only ever flipped true from a server response, never back to false — see AuthViewModel's
+    // server-true-wins sync on login.
+    suspend fun isChannelsOnboarded(): Boolean =
+        if (!isInitialized()) false else appContext.dataStore.data.first()[CHANNELS_ONBOARDED] ?: false
+
+    suspend fun setChannelsOnboarded(value: Boolean) {
+        if (!isInitialized()) return
+        appContext.dataStore.edit {
+            it[CHANNELS_ONBOARDED] = value
+        }
+    }
 
     // ── PIN ──────────────────────────────────────────────────
     suspend fun savePin(pin: String) {

@@ -117,7 +117,8 @@ fun RegisterScreen(
                 }
             }
             is AuthUiState.GoogleSignupSuccess -> {
-                navController.navigate(Routes.Dashboard.route) {
+                val destination = (authState as AuthUiState.GoogleSignupSuccess).destination
+                navController.navigate(destination) {
                     popUpTo(Routes.Register.route) { inclusive = true }
                 }
             }

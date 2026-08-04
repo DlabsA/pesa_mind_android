@@ -37,6 +37,8 @@ data class AuthProfile(
     val avatarUrl: String? = null,
     val type: String? = null,
     val balance: Double? = null,
+    @SerializedName("channels_onboarded")
+    val channelsOnboarded: Boolean = false,
 )
 
 data class AuthRegisterResponse(
@@ -297,6 +299,10 @@ data class ChannelDetails(
     // dirty/outbox write path the way name/status/etc. are.
     @SerializedName("available_balance")
     val availableBalance: Double = 0.0,
+    // Optional, shared across channel types: a phone number for MobileMoney/Airtel
+    // channels, a bank account number for Bank channels.
+    @SerializedName("account_number")
+    val accountNumber: String? = null,
     // Local-only field: SMS notification flag (not sent to backend)
     @Transient
     val smsNotificationEnabled: Boolean = true,
@@ -318,6 +324,12 @@ data class CreateChannelRequest(
     @SerializedName("channel_desc")
     val channelDesc: String,
     val status: Boolean,
+    // Optional for every channel type — a phone number for MobileMoney/Airtel, a
+    // bank account number for Bank.
+    @SerializedName("account_number")
+    val accountNumber: String? = null,
+    @SerializedName("opening_balance")
+    val openingBalance: Double? = null,
 )
 
 data class UpdateChannelRequest(
@@ -326,6 +338,31 @@ data class UpdateChannelRequest(
     @SerializedName("channel_desc")
     val channelDesc: String,
     val status: Boolean,
+)
+
+data class BatchCreateChannelItem(
+    val id: String? = null,
+    val name: String,
+    @SerializedName("channel_type")
+    val channelType: String,
+    val description: String = "",
+    @SerializedName("channel_desc")
+    val channelDesc: String = "",
+    val status: Boolean = true,
+    @SerializedName("account_number")
+    val accountNumber: String? = null,
+    @SerializedName("opening_balance")
+    val openingBalance: Double? = null,
+)
+
+data class BatchCreateChannelsRequest(
+    val channels: List<BatchCreateChannelItem>,
+)
+
+data class BatchCreateChannelsResponse(
+    @SerializedName("already_onboarded")
+    val alreadyOnboarded: Boolean = false,
+    val channels: List<ChannelDetails> = emptyList(),
 )
 
 data class ApiMessageResponse(

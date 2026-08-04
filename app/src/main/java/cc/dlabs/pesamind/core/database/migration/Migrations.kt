@@ -52,6 +52,9 @@ val MIGRATION_2_3 =
  * [cc.dlabs.pesamind.core.database.entity.ProcessedMessageEntity], a write-once local-first
  * audit record pushed to the backend's `POST /processed-messages` via the outbox; no backfill
  * needed since it's a brand-new, previously nonexistent table.
+ * v3 -> v4: adds the channel-onboarding batch flow's account-number field — a phone number
+ * for MobileMoney/Airtel channels, a bank account number for Bank channels. Nullable, no
+ * backfill; existing rows default to NULL.
  */
 val MIGRATION_3_4 =
     object : Migration(3, 4) {
@@ -76,5 +79,6 @@ val MIGRATION_3_4 =
                 "CREATE INDEX IF NOT EXISTS `index_processed_messages_syncStatus` " +
                     "ON `processed_messages` (`syncStatus`)",
             )
+            db.execSQL("ALTER TABLE `channels` ADD COLUMN `accountNumber` TEXT DEFAULT NULL")
         }
     }

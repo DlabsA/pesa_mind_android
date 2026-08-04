@@ -23,6 +23,15 @@ object ChannelDescMobileMoney {
     }
 }
 
+/** Provider-name options for a [ChannelTypes] value — used by both `ChannelScreen` and the
+ * channel-onboarding flow's provider pickers. */
+fun getDescriptionOptionsForType(type: String): List<String> =
+    when (type) {
+        ChannelTypes.MOBILE_MONEY -> ChannelDescMobileMoney.valid
+        ChannelTypes.BANK -> ChannelDescBank.valid
+        else -> emptyList()
+    }
+
 object ChannelDescBank {
     const val ABSA_BANK = "Absa Bank"
     const val BANK_OF_AFRICA = "Bank of Africa"

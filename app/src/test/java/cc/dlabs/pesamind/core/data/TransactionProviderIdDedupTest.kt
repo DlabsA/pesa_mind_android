@@ -58,6 +58,7 @@ class TransactionProviderIdDedupTest {
                     channelDesc = "Airtel Money",
                     normalizedSenderKey = "airtel money",
                     availableBalance = 0.0,
+                    accountNumber = null,
                     smsNotificationEnabled = true,
                     syncStatus = SyncStatus.SYNCED,
                     dirty = false,
