@@ -11,10 +11,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.storage.TokenManager.LockState
@@ -27,6 +29,13 @@ import cc.dlabs.pesamind.features.budgets.SetMonthlyBudgetScreen
 import cc.dlabs.pesamind.features.budgets.YearlyBudgetDetailScreen
 import cc.dlabs.pesamind.features.home.AddTransactionScreen
 import cc.dlabs.pesamind.features.home.MainScreen
+import cc.dlabs.pesamind.features.onboarding.ChannelOnboardingViewModel
+import cc.dlabs.pesamind.features.onboarding.OnboardingAirtelScreen
+import cc.dlabs.pesamind.features.onboarding.OnboardingBankScreen
+import cc.dlabs.pesamind.features.onboarding.OnboardingCashScreen
+import cc.dlabs.pesamind.features.onboarding.OnboardingIntroScreen
+import cc.dlabs.pesamind.features.onboarding.OnboardingMoMoScreen
+import cc.dlabs.pesamind.features.onboarding.OnboardingReviewScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
 import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
 import cc.dlabs.pesamind.features.settings.channels.ChannelScreen
@@ -36,6 +45,10 @@ import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
 import java.util.Calendar
 
+/** Route for the nested onboarding graph — screens within it share one
+ * [ChannelOnboardingViewModel] instance scoped to this graph's back stack entry. */
+private const val ONBOARDING_GRAPH_ROUTE = "onboarding_graph"
+
 @Composable
 fun PesaMindNavGraph(navController: NavHostController) {
     var startDestination by remember { mutableStateOf<String?>(null) }
@@ -43,7 +56,12 @@ fun PesaMindNavGraph(navController: NavHostController) {
     LaunchedEffect(Unit) {
         val destination =
             when (TokenManager.getLockState()) {
-                LockState.NONE -> if (TokenManager.isLoggedIn()) Routes.Dashboard.route else Routes.Login.route
+                LockState.NONE ->
+                    when {
+                        !TokenManager.isLoggedIn() -> Routes.Login.route
+                        !TokenManager.isChannelsOnboarded() -> Routes.ChannelOnboardingIntro.route
+                        else -> Routes.Dashboard.route
+                    }
                 LockState.PIN -> Routes.PinUnlock.route
                 LockState.PATTERN -> Routes.PatternUnlock.route
             }
@@ -69,6 +87,39 @@ fun PesaMindNavGraph(navController: NavHostController) {
             composable(Routes.PinUnlock.route) { PinUnlockScreen(navController) }
             composable(Routes.PatternUnlock.route) { PatternUnlockScreen(navController) }
             composable(Routes.Dashboard.route) { MainScreen(navController) }
+
+            navigation(startDestination = Routes.ChannelOnboardingIntro.route, route = ONBOARDING_GRAPH_ROUTE) {
+                composable(Routes.ChannelOnboardingIntro.route) { backStackEntry ->
+                    val vm: ChannelOnboardingViewModel =
+                        viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
+                    OnboardingIntroScreen(navController, vm)
+                }
+                composable(Routes.OnboardingCash.route) { backStackEntry ->
+                    val vm: ChannelOnboardingViewModel =
+                        viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
+                    OnboardingCashScreen(navController, vm)
+                }
+                composable(Routes.OnboardingMoMo.route) { backStackEntry ->
+                    val vm: ChannelOnboardingViewModel =
+                        viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
+                    OnboardingMoMoScreen(navController, vm)
+                }
+                composable(Routes.OnboardingAirtel.route) { backStackEntry ->
+                    val vm: ChannelOnboardingViewModel =
+                        viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
+                    OnboardingAirtelScreen(navController, vm)
+                }
+                composable(Routes.OnboardingBank.route) { backStackEntry ->
+                    val vm: ChannelOnboardingViewModel =
+                        viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
+                    OnboardingBankScreen(navController, vm)
+                }
+                composable(Routes.OnboardingReview.route) { backStackEntry ->
+                    val vm: ChannelOnboardingViewModel =
+                        viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
+                    OnboardingReviewScreen(navController, vm)
+                }
+            }
 
             composable(Routes.SecuritySettings.route) { SecuritySettingsScreen(navController) }
             composable(Routes.SetPin.route) { SetPinScreen(navController) }

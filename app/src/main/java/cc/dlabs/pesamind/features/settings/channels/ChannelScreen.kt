@@ -649,7 +649,9 @@ private fun channelTypeIcon(type: String): ImageVector =
 
 private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
 
-private fun Double.asUgx(): String = "UGX ${ugxFmt.format(this)}"
+// internal, not private: reused by the channel-onboarding flow's balance fields
+// (features/onboarding/) rather than duplicating a 4th UGX formatter.
+internal fun Double.asUgx(): String = "UGX ${ugxFmt.format(this)}"
 
 // ─── Channel Card ─────────────────────────────────────────────────────────────
 @Composable
