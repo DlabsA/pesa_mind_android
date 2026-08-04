@@ -230,7 +230,12 @@ class BudgetViewModel
             }
 
             try {
-                val response = api.getDashboard()
+                val now = Calendar.getInstance()
+                val response =
+                    api.getDashboard(
+                        month = now.get(Calendar.MONTH) + 1,
+                        year = now.get(Calendar.YEAR),
+                    )
                 if (response.isSuccessful) {
                     val streak = response.body()?.streak
                     if (streak != null) {

@@ -212,6 +212,10 @@ data class TransactionDetails(
     // @Transient pattern — never sent to or read from the server, populated from TransactionEntity.syncStatus.
     @Transient
     val syncStatus: SyncStatus = SyncStatus.SYNCED,
+    // Local-only field, same @Transient pattern as [syncStatus] above — populated from
+    // TransactionEntity.createdAt, used for client-side date-range filtering (TransactionListScreen).
+    @Transient
+    val createdAt: Long = 0L,
 )
 
 data class ProcessedMessageRequest(

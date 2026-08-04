@@ -138,6 +138,12 @@ interface ApiService {
         @Query("channelID") channelId: String,
     ): Response<List<TransactionDetails>>
 
+    @GET("transactions/by-date-range")
+    suspend fun getTransactionsByDateRange(
+        @Query("startDate") startDate: String,
+        @Query("endDate") endDate: String,
+    ): Response<List<TransactionDetails>>
+
     @POST("transactions")
     suspend fun createTransaction(
         @Body body: TransactionRequest,
@@ -250,7 +256,10 @@ interface ApiService {
     suspend fun getFinancialHealth(): Response<FinancialHealthResponse>
 
     @GET("data/dashboard")
-    suspend fun getDashboard(): Response<DashboardResponse>
+    suspend fun getDashboard(
+        @Query("month") month: Int,
+        @Query("year") year: Int,
+    ): Response<DashboardResponse>
 
     @GET("data/analytics")
     suspend fun getAnalytics(

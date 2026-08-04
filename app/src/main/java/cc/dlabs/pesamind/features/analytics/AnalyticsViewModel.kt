@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -70,7 +72,7 @@ class AnalyticsViewModel
                 is StateEvent.TransactionCreated -> {
                     viewModelScope.launch {
                         try {
-                            refresh()
+                            refreshSuspend()
                             publishEvent(StateEvent.AnalyticsRefreshed)
                         } catch (e: Exception) {
                             Log.e("AnalyticsViewModel", "❌ Analytics refresh failed", e)
@@ -92,12 +94,12 @@ class AnalyticsViewModel
                 }
 
                 // SyncWorker just finished a push+pull cycle — the accurate correction after
-                // TransactionCreated's immediate (possibly-stale) refresh above. refresh()
+                // TransactionCreated's immediate (possibly-stale) refresh above. refreshSuspend()
                 // already has no isConnectedNow guard to bypass (unlike Dashboard's).
                 is StateEvent.SyncCompleted -> {
                     viewModelScope.launch {
                         try {
-                            refresh()
+                            refreshSuspend()
                         } catch (e: Exception) {
                         }
                     }
@@ -130,11 +132,19 @@ class AnalyticsViewModel
             }
         }
 
-        fun refresh() {
-            if (_state.value.isRefreshing) {
-                return
-            }
-            viewModelScope.launch {
+        /** Serializes [refreshSuspend] so two overlapping callers (e.g. a manual
+         * pull-to-refresh racing the [StateEvent.TransactionCreated] handler) both
+         * genuinely wait for a real fetch to finish, rather than a plain `isRefreshing`
+         * boolean letting the second caller skip work and return instantly with stale
+         * data. */
+        private val refreshMutex = Mutex()
+
+        /** Suspend core of [refresh] — awaits the actual network refetch before returning,
+         * so a caller that needs to know a refresh has genuinely *finished* (not just
+         * started) can await this directly. `internal`, not `private`, so a JVM test can
+         * call it without going through the event bus. */
+        internal suspend fun refreshSuspend() {
+            refreshMutex.withLock {
                 try {
                     _state.value = _state.value.copy(isRefreshing = true)
                     fetchFromNetwork()
@@ -143,6 +153,11 @@ class AnalyticsViewModel
                     _state.value = _state.value.copy(isRefreshing = false)
                 }
             }
+        }
+
+        fun refresh() {
+            if (_state.value.isRefreshing) return
+            viewModelScope.launch { refreshSuspend() }
         }
 
         // Switching periods re-fetches from scratch every time (no local dual-cache of both
@@ -175,7 +190,12 @@ class AnalyticsViewModel
                             cachedStreak
                         } else {
                             try {
-                                val dashboardStreak = ApiClient.api.getDashboard().body()?.streak
+                                val now = Calendar.getInstance()
+                                val dashboardStreak =
+                                    ApiClient.api.getDashboard(
+                                        month = now.get(Calendar.MONTH) + 1,
+                                        year = now.get(Calendar.YEAR),
+                                    ).body()?.streak
                                 if (dashboardStreak != null) {
                                     StreakSessionCache.set(
                                         count = dashboardStreak.currentStreak,

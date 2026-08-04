@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.*
@@ -22,11 +24,14 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -41,13 +46,27 @@ import cc.dlabs.pesamind.core.ui.TransactionDetailSheet
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
 
 private fun Double.toUgx() = ugxFmt.format(this)
+
+// Material3's date/range pickers always report selections as UTC-midnight millis for the
+// calendar day picked, regardless of device timezone — so this formatter must read them back
+// in UTC too, or the displayed day can be off by one for non-UTC devices.
+private val rangeDateFmt =
+    SimpleDateFormat("MMM d", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+
+// Same UTC-day reading as [rangeDateFmt] above, formatted as the backend's
+// `/transactions/by-date-range?startDate=&endDate=` contract (yyyy-MM-dd).
+private val isoDateFmt =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
 // ─── Filter state ───────────────────────────────────────────────────────────────
 
@@ -73,6 +92,43 @@ private fun TransactionDetails.matchesQuery(query: String): Boolean {
         note.contains(query, ignoreCase = true)
 }
 
+/** [range] is a device-local `[start, end)` millis window (see [utcMillisToLocalDayRange]),
+ * matched against [TransactionDetails.createdAt] (also device-local, from `TransactionEntity`). */
+private fun TransactionDetails.matchesDateRange(range: Pair<Long, Long>?): Boolean {
+    if (range == null) return true
+    return createdAt >= range.first && createdAt < range.second
+}
+
+/**
+ * Converts a `DateRangePickerState`'s UTC-midnight-based selection into a device-local
+ * `[start, end)` millis window covering the whole of both calendar days (end date inclusive).
+ * Needed because Compose's date pickers always report selections in UTC regardless of device
+ * timezone, while [TransactionEntity.createdAt] (surfaced via [TransactionDetails.createdAt])
+ * is `System.currentTimeMillis()` — a raw device-local comparison against the picker's UTC
+ * millis would shift the filtered range by the device's UTC offset. Mirrors the local-calendar
+ * approach `TransactionRepository.monthRangeMillis` already uses for month boundaries.
+ */
+private fun utcMillisToLocalDayRange(
+    startUtcMillis: Long,
+    endUtcMillis: Long,
+): Pair<Long, Long> {
+    val utcCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+    val localCal = Calendar.getInstance()
+
+    utcCal.timeInMillis = startUtcMillis
+    localCal.clear()
+    localCal.set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH))
+    val start = localCal.timeInMillis
+
+    utcCal.timeInMillis = endUtcMillis
+    localCal.clear()
+    localCal.set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH))
+    localCal.add(Calendar.DAY_OF_MONTH, 1)
+    val end = localCal.timeInMillis
+
+    return start to end
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,7 +146,13 @@ fun TransactionListScreen(
     var typeFilter by remember { mutableStateOf(TxFilter.ALL) }
     var selectedTx by remember { mutableStateOf<TransactionDetails?>(null) }
 
-    val hasActiveFilter = searchQuery.isNotBlank() || typeFilter != TxFilter.ALL
+    // Raw UTC-midnight millis pair as reported by the DateRangePicker (kept separately from the
+    // derived local filter window so the dialog can be reopened with its own selection intact).
+    var selectedDates by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val dateRange = remember(selectedDates) { selectedDates?.let { utcMillisToLocalDayRange(it.first, it.second) } }
+
+    val hasActiveFilter = searchQuery.isNotBlank() || typeFilter != TxFilter.ALL || dateRange != null
 
     // Summary totals — always computed from the full unfiltered list
     val totalIncome =
@@ -112,8 +174,10 @@ fun TransactionListScreen(
         }
 
     val filteredTransactions =
-        remember(transactions, searchQuery, typeFilter) {
-            transactions.filter { it.matchesQuery(searchQuery) && it.matchesFilter(typeFilter) }
+        remember(transactions, searchQuery, typeFilter, dateRange) {
+            transactions.filter {
+                it.matchesQuery(searchQuery) && it.matchesFilter(typeFilter) && it.matchesDateRange(dateRange)
+            }
         }
 
     Scaffold(
@@ -267,6 +331,15 @@ fun TransactionListScreen(
                             )
                         }
 
+                        // Date range picker trigger
+                        item(key = "date_range") {
+                            TransactionDateRangeField(
+                                selectedDates = selectedDates,
+                                onClick = { showDatePicker = true },
+                                onClear = { selectedDates = null },
+                            )
+                        }
+
                         if (hasActiveFilter) {
                             item(key = "result_count") {
                                 Text(
@@ -296,6 +369,7 @@ fun TransactionListScreen(
                                         TextButton(onClick = {
                                             searchQuery = ""
                                             typeFilter = TxFilter.ALL
+                                            selectedDates = null
                                         }) {
                                             Text("Clear search & filters")
                                         }
@@ -343,6 +417,21 @@ fun TransactionListScreen(
                 },
             )
         }
+    }
+
+    // ── Date range picker ───────────────────────────────────────────────────
+    if (showDatePicker) {
+        TransactionDateRangePickerDialog(
+            initialDates = selectedDates,
+            onDismiss = { showDatePicker = false },
+            onConfirm = {
+                selectedDates = it
+                showDatePicker = false
+                // Best-effort backfill: local filtering above already renders instantly from
+                // the cached list, this just pulls in anything Room doesn't have for this range.
+                viewModel.refreshDateRange(isoDateFmt.format(it.first), isoDateFmt.format(it.second))
+            },
+        )
     }
 }
 
@@ -401,6 +490,102 @@ private fun TransactionFilterRow(
                 label = { Text(filter.label) },
                 colors = chipColors,
             )
+        }
+    }
+}
+
+@Composable
+private fun TransactionDateRangeField(
+    selectedDates: Pair<Long, Long>?,
+    onClick: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val label =
+        if (selectedDates == null) {
+            "All dates"
+        } else {
+            "${rangeDateFmt.format(selectedDates.first)} – ${rangeDateFmt.format(selectedDates.second)}"
+        }
+    FilterChip(
+        selected = selectedDates != null,
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = { Icon(Icons.Outlined.DateRange, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        trailingIcon =
+            if (selectedDates != null) {
+                {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Clear date range",
+                        modifier =
+                            Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .clickable(onClick = onClear),
+                    )
+                }
+            } else {
+                null
+            },
+        colors =
+            FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+    )
+}
+
+@Composable
+private fun TransactionDateRangePickerDialog(
+    initialDates: Pair<Long, Long>?,
+    onDismiss: () -> Unit,
+    onConfirm: (Pair<Long, Long>) -> Unit,
+) {
+    val pickerState =
+        rememberDateRangePickerState(
+            initialSelectedStartDateMillis = initialDates?.first,
+            initialSelectedEndDateMillis = initialDates?.second,
+        )
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.92f)
+                    .padding(Spacing.Space3.dp),
+            shape = RoundedCornerShape(Spacing.Space5.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                DateRangePicker(
+                    state = pickerState,
+                    modifier = Modifier.weight(1f),
+                    title = { Text("Select date range", modifier = Modifier.padding(horizontal = Spacing.Space5.dp)) },
+                )
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.Space4.dp, vertical = Spacing.Space3.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(Spacing.Space2.dp))
+                    TextButton(
+                        enabled = pickerState.selectedStartDateMillis != null && pickerState.selectedEndDateMillis != null,
+                        onClick = {
+                            val start = pickerState.selectedStartDateMillis
+                            val end = pickerState.selectedEndDateMillis
+                            if (start != null && end != null) onConfirm(start to end)
+                        },
+                    ) { Text("Apply") }
+                }
+            }
         }
     }
 }

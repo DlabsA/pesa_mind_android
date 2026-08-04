@@ -90,6 +90,26 @@ class TransactionViewModel : UnifiedViewModel() {
 
     fun refresh() = loadTransactions()
 
+    /**
+     * Best-effort background pull scoped to a date range (`yyyy-MM-dd`), fired when the
+     * transaction list's date-range filter is applied — a network gap-filler, not a loading
+     * gate: the screen's local filter over [state]'s already-live [TransactionState.transactions]
+     * (via [TransactionRepository.observeTransactions]) renders immediately regardless of this
+     * call's outcome, so a failure here (e.g. offline) is only logged, never surfaced as [error].
+     */
+    fun refreshDateRange(
+        startDate: String,
+        endDate: String,
+    ) {
+        viewModelScope.launch {
+            try {
+                TransactionRepository.refreshByDateRange(startDate, endDate)
+            } catch (e: Exception) {
+                Log.w("TransactionViewModel", "refreshByDateRange failed for $startDate..$endDate", e)
+            }
+        }
+    }
+
     fun createTransaction(
         channelID: String,
         amount: Double,
@@ -177,6 +197,14 @@ class TransactionViewModel : UnifiedViewModel() {
                     providerTransactionId = providerTransactionId,
                 )
             if (outcome is TransactionInsertOutcome.Inserted) {
+                // Trigger a real SyncWorker run (push-then-pull) so StateEvent.SyncCompleted
+                // is genuinely published as a consequence of this create — Dashboard/Analytics
+                // ViewModels treat SyncCompleted as the accurate correction after this event's
+                // own (possibly-stale) refresh below. Safe to call unconditionally: the
+                // WorkRequest carries a NetworkType.CONNECTED constraint, so it's a no-op until
+                // connectivity exists, and repeated calls coalesce via ExistingWorkPolicy.KEEP.
+                SyncScheduler.triggerSyncNow()
+
                 // 🔥 Publish event so Dashboard and Analytics refresh automatically — a
                 // discarded duplicate must not re-publish a create event for a row nothing new
                 // actually happened to.
