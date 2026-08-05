@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import cc.dlabs.pesamind.core.data.ChannelSpend
+import cc.dlabs.pesamind.core.data.DayOfWeekSpend
 import cc.dlabs.pesamind.core.network.analytics.*
 import cc.dlabs.pesamind.core.network.models.AnalyticsRecommendation
 import cc.dlabs.pesamind.core.network.models.AnomalyData
@@ -65,6 +67,7 @@ import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
+import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 
@@ -340,6 +343,26 @@ private fun AnalyticsScrollBody(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    // Spending by Day of Week — locally computed from Room, no backend call.
+                    item {
+                        StaggeredCard(index = 9, visible = cardsVisible) {
+                            DayOfWeekSpendCard(
+                                data = state.dayOfWeekSpend,
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
+
+                    // Top Channels by Spend — locally computed from Room, no backend call.
+                    item {
+                        StaggeredCard(index = 10, visible = cardsVisible) {
+                            TopChannelsCard(
+                                data = state.topChannels,
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
                         }
                     }
                 }
@@ -2457,8 +2480,17 @@ private fun CashFlowCard(
     val d = section.data
     val net = d.closingBalance - d.openingBalance
 
-    val allValues = listOf(d.openingBalance, d.income.total, d.expenses.total, d.savingsTransfers, d.closingBalance)
-    val maxVal = allValues.maxOrNull()?.takeIf { it > 0 } ?: 1.0
+    // Scaled by magnitude (not raw max) so a negative bar (e.g. an overdrawn Open/Close
+    // balance) gets the same visual weight as a positive one of equal size.
+    val bars =
+        listOf(
+            Triple("Open", d.openingBalance, LightColors.Savings),
+            Triple("+Income", d.income.total, LightColors.Income),
+            Triple("-Expense", d.expenses.total, LightColors.Expense),
+            Triple("-Savings", d.savingsTransfers, Color(0xFF5856D6)),
+            Triple("Close", d.closingBalance, LightColors.Savings),
+        )
+    val maxMagnitude = bars.maxOfOrNull { abs(it.second) }?.takeIf { it > 0 } ?: 1.0
 
     var animated by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { animated = true }
@@ -2478,54 +2510,105 @@ private fun CashFlowCard(
                 Text("Waterfall", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
             }
 
-            // Waterfall bars
-            Row(
-                modifier = Modifier.fillMaxWidth().height(90.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                val bars =
-                    listOf(
-                        Triple("Open", d.openingBalance, LightColors.Savings),
-                        Triple("+Income", d.income.total, LightColors.Income),
-                        Triple("-Expense", d.expenses.total, LightColors.Expense),
-                        Triple("-Savings", d.savingsTransfers, Color(0xFF5856D6)),
-                        Triple("Close", d.closingBalance, LightColors.Savings),
-                    )
-                bars.forEach { (label, value, color) ->
-                    val fraction = (value / maxVal).toFloat()
-                    val animFrac by animateFloatAsState(
-                        targetValue = if (animated) fraction else 0f,
-                        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
-                        label = "waterfall_$label",
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom,
-                    ) {
-                        Text(
-                            value.ugxShort(),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp, fontWeight = FontWeight.SemiBold),
-                            color = color,
-                            maxLines = 1,
+            // Waterfall bars — diverging around a shared zero line: a negative value (e.g. an
+            // overdrawn Open/Close balance) grows downward below the line, a positive one grows
+            // upward above it, both scaled against the same halfHeight so they're comparable.
+            val chartHeight = 90.dp
+            val halfHeight = chartHeight / 2
+            Box(modifier = Modifier.fillMaxWidth().height(chartHeight)) {
+                HorizontalDivider(
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
+                    thickness = 0.5.dp,
+                )
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    bars.forEach { (label, value, color) ->
+                        val fraction = (value / maxMagnitude).toFloat()
+                        val animFrac by animateFloatAsState(
+                            targetValue = if (animated) fraction else 0f,
+                            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
+                            label = "waterfall_$label",
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height((90 * animFrac).dp.coerceAtLeast(if (value > 0) 4.dp else 0.dp))
-                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(color),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp, fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        val barHeight = (abs(animFrac) * halfHeight.value).dp.coerceAtLeast(if (value != 0.0) 4.dp else 0.dp)
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            // Positive zone — bar grows up from the zero line at this Box's bottom edge.
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(halfHeight),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                if (value >= 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            value.ugxShort(),
+                                            style =
+                                                MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 7.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                ),
+                                            color = color,
+                                            maxLines = 1,
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .height(barHeight)
+                                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                                    .background(color),
+                                        )
+                                    }
+                                }
+                            }
+                            // Negative zone — bar grows down from the zero line at this Box's top edge.
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(halfHeight),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                if (value < 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .height(barHeight)
+                                                    .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
+                                                    .background(color),
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            value.ugxShort(),
+                                            style =
+                                                MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 7.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                ),
+                                            color = color,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                bars.forEach { (label, _, _) ->
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp, fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
 
@@ -3138,6 +3221,139 @@ private fun HealthScorePill(score: Int) {
             color = color,
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
         )
+    }
+}
+
+// ─── Locally-computed cards (Room only, no backend endpoint) ─────────────────
+
+private val weekdayShortLabels =
+    mapOf(
+        Calendar.SUNDAY to "Sun",
+        Calendar.MONDAY to "Mon",
+        Calendar.TUESDAY to "Tue",
+        Calendar.WEDNESDAY to "Wed",
+        Calendar.THURSDAY to "Thu",
+        Calendar.FRIDAY to "Fri",
+        Calendar.SATURDAY to "Sat",
+    )
+
+@Composable
+private fun DayOfWeekSpendCard(
+    data: List<DayOfWeekSpend>,
+    modifier: Modifier = Modifier,
+) {
+    AnalyticsCard(modifier = modifier) {
+        Text(
+            "Spending by Day of Week",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        val maxVal = data.maxOfOrNull { it.totalExpense } ?: 0.0
+        if (maxVal <= 0.0) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "No spending recorded yet — this fills in as you add transactions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().height(90.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                data.forEach { entry ->
+                    val fraction = (entry.totalExpense / maxVal).toFloat().coerceIn(0f, 1f)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height((70f * fraction).coerceAtLeast(3f).dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(LightColors.Expense.copy(alpha = 0.15f + 0.65f * fraction)),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            weekdayShortLabels[entry.dayOfWeek].orEmpty(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopChannelsCard(
+    data: List<ChannelSpend>,
+    modifier: Modifier = Modifier,
+) {
+    AnalyticsCard(modifier = modifier) {
+        Text(
+            "Top Channels by Spend",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        if (data.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "No spending recorded yet — this fills in as you add transactions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Spacer(Modifier.height(8.dp))
+            val maxVal = data.maxOf { it.totalExpense }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                data.forEach { entry ->
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                entry.channelName,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "UGX ${entry.totalExpense.amountShort()}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        val fraction = (entry.totalExpense / maxVal).toFloat().coerceIn(0f, 1f)
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth(fraction)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(LightColors.Expense),
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

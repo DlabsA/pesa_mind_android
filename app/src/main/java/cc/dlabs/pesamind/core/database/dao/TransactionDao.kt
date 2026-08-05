@@ -13,22 +13,32 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TransactionDao {
     /** Non-deleted transactions, newest first — paged since this list can be thousands of rows. */
-    @Query("SELECT * FROM transactions WHERE deletedAt IS NULL ORDER BY createdAt DESC")
-    fun pagingSource(): PagingSource<Int, TransactionEntity>
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    fun pagingSource(userId: String): PagingSource<Int, TransactionEntity>
 
     /** For screens that need the full list reactively without paging (e.g. summary totals). */
-    @Query("SELECT * FROM transactions WHERE deletedAt IS NULL ORDER BY createdAt DESC")
-    fun observeAll(): Flow<List<TransactionEntity>>
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    fun observeAll(userId: String): Flow<List<TransactionEntity>>
 
-    /** Live, channel-scoped list for [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen]. */
-    @Query("SELECT * FROM transactions WHERE channelId = :channelId AND deletedAt IS NULL ORDER BY createdAt DESC")
-    fun observeByChannel(channelId: String): Flow<List<TransactionEntity>>
+    /** Live, channel-scoped list for [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen].
+     * [userId] is redundant with [channelId] (a channel always belongs to exactly one account),
+     * kept for consistency with every other list query here rather than as an independent gap. */
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND channelId = :channelId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    fun observeByChannel(
+        userId: String,
+        channelId: String,
+    ): Flow<List<TransactionEntity>>
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): TransactionEntity?
 
-    @Query("SELECT * FROM transactions WHERE smsSourceKey = :smsSourceKey LIMIT 1")
-    suspend fun findBySmsSourceKey(smsSourceKey: String): TransactionEntity?
+    /** Scoped by [userId] — the unique index this mirrors is now `(userId, smsSourceKey)`, not
+     * `smsSourceKey` alone, so a different account's row must never match here. */
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND smsSourceKey = :smsSourceKey LIMIT 1")
+    suspend fun findBySmsSourceKey(
+        userId: String,
+        smsSourceKey: String,
+    ): TransactionEntity?
 
     /** Provider-TID dedup lookup — catches two *different* SMS bodies sharing one real
      * transaction (confirmed: Airtel Uganda), which a content-derived [smsSourceKey] can't. */
@@ -45,8 +55,8 @@ interface TransactionDao {
     suspend fun findByServerId(serverId: String): TransactionEntity?
 
     /** One-shot full-list read for `TransactionViewModel.loadTransactions()`. */
-    @Query("SELECT * FROM transactions WHERE deletedAt IS NULL ORDER BY createdAt DESC")
-    suspend fun getAllActive(): List<TransactionEntity>
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    suspend fun getAllActive(userId: String): List<TransactionEntity>
 
     /** Every row known locally, including soft-deleted — the full-pull diff (Step 3) needs this. */
     @Query("SELECT * FROM transactions")

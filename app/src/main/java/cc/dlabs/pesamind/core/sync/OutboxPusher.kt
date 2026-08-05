@@ -476,20 +476,33 @@ class OutboxPusher(
         val now = System.currentTimeMillis()
         if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
-        val requestTransactions =
-            BudgetRepository.parseTransactions(entity.transactionsJson).map {
-                BudgetTransactionRequest(name = it.name, amount = it.amount, type = it.type)
-            }
+        val currentTransactions = BudgetRepository.parseTransactions(entity.transactionsJson)
 
         return try {
             val response =
                 when (current.operation) {
                     OutboxOperation.CREATE ->
                         api.createYearlyBudget(
-                            CreateYearlyBudgetRequest(id = entity.id, year = entity.year, transactions = requestTransactions),
+                            CreateYearlyBudgetRequest(
+                                id = entity.id,
+                                year = entity.year,
+                                transactions =
+                                    currentTransactions.map {
+                                        BudgetTransactionRequest(name = it.name, amount = it.amount, type = it.type)
+                                    },
+                            ),
                         )
-                    else ->
-                        api.updateYearlyBudget(entity.serverId!!, UpdateYearlyBudgetRequest(transactions = requestTransactions))
+                    else -> {
+                        // transaction_ops, not the legacy `transactions` full-replace field —
+                        // see BudgetRepository.buildTransactionOps's doc comment for the full
+                        // rationale: that field carries no ids, so every push (even a single
+                        // new item, with a perfectly healthy local cache) wiped every existing
+                        // server-side transaction not present in that one push's payload —
+                        // confirmed in production.
+                        val baseline = entity.lastSyncedTransactionsJson?.let { BudgetRepository.parseTransactions(it) } ?: emptyList()
+                        val ops = BudgetRepository.buildTransactionOps(baseline, currentTransactions)
+                        api.updateYearlyBudget(entity.serverId!!, UpdateYearlyBudgetRequest(transactionOps = ops))
+                    }
                 }
             when {
                 response.isSuccessful ->
@@ -533,6 +546,10 @@ class OutboxPusher(
                     latest.copy(
                         serverId = resolvedServerId,
                         transactionsJson = Gson().toJson(responseBody.transactions),
+                        // This push just confirmed the server has exactly responseBody's line
+                        // items — seed the diff baseline for the next push (see
+                        // BudgetRepository.buildTransactionOps).
+                        lastSyncedTransactionsJson = Gson().toJson(responseBody.transactions),
                         totalExpenditures = responseBody.totalExpenditures,
                         totalIncome = responseBody.totalIncome,
                         totalSavings = responseBody.totalSavings,
@@ -550,8 +567,17 @@ class OutboxPusher(
                 // is newer than what was just sent/received here, so only serverId is safe
                 // to persist; overwriting transactionsJson with this response would silently
                 // drop that newer edit. The requeued push sends the newer state next time.
+                // lastSyncedTransactionsJson, unlike transactionsJson, IS updated here: it
+                // tracks what the server actually has (confirmed by this response), not what
+                // the user wants locally — the requeued push diffs against this so it doesn't
+                // resend "add" for items this push already created server-side.
                 yearlyBudgetDao.update(
-                    latest.copy(serverId = decision.serverId ?: latest.serverId, syncStatus = SyncStatus.PENDING, updatedAt = now),
+                    latest.copy(
+                        serverId = decision.serverId ?: latest.serverId,
+                        lastSyncedTransactionsJson = Gson().toJson(responseBody.transactions),
+                        syncStatus = SyncStatus.PENDING,
+                        updatedAt = now,
+                    ),
                 )
                 outboxDao.update(
                     current.copy(
@@ -642,10 +668,7 @@ class OutboxPusher(
         val now = System.currentTimeMillis()
         if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
-        val requestTransactions =
-            BudgetRepository.parseTransactions(entity.transactionsJson).map {
-                BudgetTransactionRequest(name = it.name, amount = it.amount, type = it.type)
-            }
+        val currentTransactions = BudgetRepository.parseTransactions(entity.transactionsJson)
 
         return try {
             val response =
@@ -657,11 +680,21 @@ class OutboxPusher(
                                 yearlyBudgetId = parentServerId,
                                 month = entity.month,
                                 year = entity.year,
-                                transactions = requestTransactions,
+                                transactions =
+                                    currentTransactions.map {
+                                        BudgetTransactionRequest(name = it.name, amount = it.amount, type = it.type)
+                                    },
                             ),
                         )
-                    else ->
-                        api.updateMonthlyBudget(entity.serverId!!, UpdateMonthlyBudgetRequest(transactions = requestTransactions))
+                    else -> {
+                        // transaction_ops, not the legacy `transactions` full-replace field —
+                        // see BudgetRepository.buildTransactionOps's doc comment for why: this
+                        // is the actual fix for the reported bug (adding to August's budget
+                        // wiped its whole history down to just the new item).
+                        val baseline = entity.lastSyncedTransactionsJson?.let { BudgetRepository.parseTransactions(it) } ?: emptyList()
+                        val ops = BudgetRepository.buildTransactionOps(baseline, currentTransactions)
+                        api.updateMonthlyBudget(entity.serverId!!, UpdateMonthlyBudgetRequest(transactionOps = ops))
+                    }
                 }
             when {
                 response.isSuccessful ->
@@ -705,6 +738,10 @@ class OutboxPusher(
                     latest.copy(
                         serverId = resolvedServerId,
                         transactionsJson = Gson().toJson(responseBody.transactions),
+                        // This push just confirmed the server has exactly responseBody's line
+                        // items — seed the diff baseline for the next push (see
+                        // BudgetRepository.buildTransactionOps).
+                        lastSyncedTransactionsJson = Gson().toJson(responseBody.transactions),
                         totalExpenditures = responseBody.totalExpenditures,
                         totalIncome = responseBody.totalIncome,
                         totalSavings = responseBody.totalSavings,
@@ -719,9 +756,15 @@ class OutboxPusher(
             }
             is PushCompletionDecision.RequeueDirty -> {
                 // See finishYearlyBudgetPush's identical branch: a local edit landed
-                // mid-flight, so only serverId is safe to persist here.
+                // mid-flight, so only serverId is safe to persist here. lastSyncedTransactionsJson
+                // is still updated — it tracks confirmed server state, not local intent.
                 monthlyBudgetDao.update(
-                    latest.copy(serverId = decision.serverId ?: latest.serverId, syncStatus = SyncStatus.PENDING, updatedAt = now),
+                    latest.copy(
+                        serverId = decision.serverId ?: latest.serverId,
+                        lastSyncedTransactionsJson = Gson().toJson(responseBody.transactions),
+                        syncStatus = SyncStatus.PENDING,
+                        updatedAt = now,
+                    ),
                 )
                 outboxDao.update(
                     current.copy(

@@ -4,7 +4,6 @@ import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.analytics.AnalyticsSummaryResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetActualData
-import cc.dlabs.pesamind.core.network.analytics.BudgetUtilizationResponse
 import cc.dlabs.pesamind.core.network.analytics.BudgetVsActualResponse
 import cc.dlabs.pesamind.core.network.analytics.ContextData
 import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
@@ -139,9 +138,7 @@ class DashboardViewModelRefreshOrderingTest {
             summary = AnalyticsSummaryResponse(data = summaryData, metadata = metadata, context = contextData, health = health),
             spendingVelocity = SpendingVelocityResponse(data = velocityData, metadata = metadata, health = health),
             anomalies = anomalies,
-            budgetActualData = budgetActualData,
-            budgetVsActualResponse = BudgetVsActualResponse(data = budgetActualData, metadata = metadata, health = health),
-            budgetUtilization = BudgetUtilizationResponse(budgetUtilization = 8.0, month = 8, year = 2026),
+            budgetUtilization = BudgetVsActualResponse(data = budgetActualData, metadata = metadata, health = health),
             financialHealth = FinancialHealthResponse(data = health, metadata = metadata),
             streak = null,
         )

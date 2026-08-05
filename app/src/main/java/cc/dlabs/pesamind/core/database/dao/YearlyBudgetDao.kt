@@ -11,11 +11,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface YearlyBudgetDao {
-    @Query("SELECT * FROM yearly_budgets WHERE deletedAt IS NULL ORDER BY year DESC")
-    fun observeAll(): Flow<List<YearlyBudgetEntity>>
+    @Query("SELECT * FROM yearly_budgets WHERE userId = :userId AND deletedAt IS NULL ORDER BY year DESC")
+    fun observeAll(userId: String): Flow<List<YearlyBudgetEntity>>
 
-    @Query("SELECT * FROM yearly_budgets WHERE year = :year AND deletedAt IS NULL LIMIT 1")
-    fun observeByYear(year: Long): Flow<YearlyBudgetEntity?>
+    /** [userId]-scoped: two different accounts can each have their own "2026" budget — matching
+     * on [year] alone (as this query did before MIGRATION_5_6) let one silently absorb the
+     * other's edits on a shared device. */
+    @Query("SELECT * FROM yearly_budgets WHERE userId = :userId AND year = :year AND deletedAt IS NULL LIMIT 1")
+    fun observeByYear(
+        userId: String,
+        year: Long,
+    ): Flow<YearlyBudgetEntity?>
 
     @Query("SELECT * FROM yearly_budgets WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): YearlyBudgetEntity?
@@ -26,8 +32,12 @@ interface YearlyBudgetDao {
     @Query("SELECT * FROM yearly_budgets WHERE serverId = :serverId LIMIT 1")
     suspend fun findByServerId(serverId: String): YearlyBudgetEntity?
 
-    @Query("SELECT * FROM yearly_budgets WHERE year = :year AND deletedAt IS NULL LIMIT 1")
-    suspend fun getByYear(year: Long): YearlyBudgetEntity?
+    /** See [observeByYear]'s doc comment for why this is scoped by [userId]. */
+    @Query("SELECT * FROM yearly_budgets WHERE userId = :userId AND year = :year AND deletedAt IS NULL LIMIT 1")
+    suspend fun getByYear(
+        userId: String,
+        year: Long,
+    ): YearlyBudgetEntity?
 
     @Query("SELECT * FROM yearly_budgets")
     suspend fun getAllIncludingDeleted(): List<YearlyBudgetEntity>

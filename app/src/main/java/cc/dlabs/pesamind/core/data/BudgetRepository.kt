@@ -18,9 +18,11 @@ import cc.dlabs.pesamind.core.database.entity.YearlyBudgetEntity
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.NetworkMonitor
+import cc.dlabs.pesamind.core.network.models.BudgetTransactionOperation
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.OutboxPusher
 import cc.dlabs.pesamind.core.utils.TransactionTypes
 import com.google.gson.Gson
@@ -29,6 +31,8 @@ import dagger.hilt.EntryPoints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -80,9 +84,14 @@ object BudgetRepository {
         outboxPusher = OutboxPusher(database, ApiClient.api)
     }
 
-    fun observeYearlyBudget(year: Long): Flow<YearlyBudgetResponse?> = yearlyBudgetDao.observeByYear(year).map { it?.toDetails() }
+    fun observeYearlyBudget(year: Long): Flow<YearlyBudgetResponse?> =
+        flow {
+            val userId = AccountManager.currentUserIdOrEmpty()
+            emitAll(yearlyBudgetDao.observeByYear(userId, year).map { it?.toDetails() })
+        }
 
-    suspend fun getYearlyBudgetByYear(year: Long): YearlyBudgetResponse? = yearlyBudgetDao.getByYear(year)?.toDetails()
+    suspend fun getYearlyBudgetByYear(year: Long): YearlyBudgetResponse? =
+        yearlyBudgetDao.getByYear(AccountManager.currentUserIdOrEmpty(), year)?.toDetails()
 
     /**
      * Local-first add: creates the yearly budget row if this is the first transaction for
@@ -96,10 +105,11 @@ object BudgetRepository {
         type: String,
     ): YearlyBudgetResponse {
         val now = System.currentTimeMillis()
+        val userId = AccountManager.currentUserIdOrEmpty()
         val newItem = BudgetTransactionResponse(id = UUID.randomUUID().toString(), name = name, amount = amount, type = type)
         val result =
             database.withTransaction {
-                val existing = yearlyBudgetDao.getByYear(year)
+                val existing = yearlyBudgetDao.getByYear(userId, year)
                 if (existing == null) {
                     val transactions = listOf(newItem)
                     val totals = computeTotals(transactions)
@@ -107,6 +117,7 @@ object BudgetRepository {
                         YearlyBudgetEntity(
                             id = UUID.randomUUID().toString(),
                             serverId = null,
+                            userId = userId,
                             year = year,
                             totalExpenditures = totals.expense,
                             totalIncome = totals.income,
@@ -155,7 +166,7 @@ object BudgetRepository {
         val now = System.currentTimeMillis()
         val result =
             database.withTransaction {
-                val existing = yearlyBudgetDao.getByYear(year) ?: return@withTransaction null
+                val existing = yearlyBudgetDao.getByYear(AccountManager.currentUserIdOrEmpty(), year) ?: return@withTransaction null
                 val transactions = parseTransactions(existing.transactionsJson).filterNot { it.id == transactionId }
                 val totals = computeTotals(transactions)
                 val updated =
@@ -200,6 +211,10 @@ object BudgetRepository {
                             totalSavings = details.totalSavings,
                             totalTransactions = details.totalTransactions,
                             transactionsJson = gson.toJson(details.transactions),
+                            // A successful pull means local state now matches the server —
+                            // seed the diff baseline OutboxPusher uses to build safe
+                            // transaction_ops on the next push (see buildTransactionOps).
+                            lastSyncedTransactionsJson = gson.toJson(details.transactions),
                             syncStatus = SyncStatus.SYNCED,
                             updatedAt = now,
                         )
@@ -207,16 +222,23 @@ object BudgetRepository {
                     updated.toDetails()
                 }
                 ReconcileDecision.InsertNew -> {
+                    // A pull only ever returns the authenticated user's own budgets, so the
+                    // current session's id is always correct — details.userId (the server's
+                    // echoed user_id) must not be trusted for local scoping, since every read
+                    // query filters by AccountManager's cached id, not the server's. Mirrors
+                    // TransactionRepository.reconcileFromServer.
                     val inserted =
                         YearlyBudgetEntity(
                             id = UUID.randomUUID().toString(),
                             serverId = details.id,
+                            userId = AccountManager.currentUserIdOrEmpty(),
                             year = details.year,
                             totalExpenditures = details.totalExpenditures,
                             totalIncome = details.totalIncome,
                             totalSavings = details.totalSavings,
                             totalTransactions = details.totalTransactions,
                             transactionsJson = gson.toJson(details.transactions),
+                            lastSyncedTransactionsJson = gson.toJson(details.transactions),
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
                             createdAt = now,
@@ -234,12 +256,16 @@ object BudgetRepository {
     fun observeMonthlyBudget(
         month: Int,
         year: Long,
-    ): Flow<MonthlyBudgetResponse?> = monthlyBudgetDao.observeByMonthYear(month, year).map { it?.toDetails() }
+    ): Flow<MonthlyBudgetResponse?> =
+        flow {
+            val userId = AccountManager.currentUserIdOrEmpty()
+            emitAll(monthlyBudgetDao.observeByMonthYear(userId, month, year).map { it?.toDetails() })
+        }
 
     suspend fun getMonthlyBudgetByMonthYear(
         month: Int,
         year: Long,
-    ): MonthlyBudgetResponse? = monthlyBudgetDao.getByMonthYear(month, year)?.toDetails()
+    ): MonthlyBudgetResponse? = monthlyBudgetDao.getByMonthYear(AccountManager.currentUserIdOrEmpty(), month, year)?.toDetails()
 
     /**
      * Local-first add: creates the monthly budget row if this is the first transaction for
@@ -257,14 +283,15 @@ object BudgetRepository {
         amount: Double,
         type: String,
     ): MonthlyBudgetResponse {
+        val userId = AccountManager.currentUserIdOrEmpty()
         val yearlyBudget =
-            yearlyBudgetDao.getByYear(year)
+            yearlyBudgetDao.getByYear(userId, year)
                 ?: error("No yearly budget found for $year. Create one first.")
         val now = System.currentTimeMillis()
         val newItem = BudgetTransactionResponse(id = UUID.randomUUID().toString(), name = name, amount = amount, type = type)
         val result =
             database.withTransaction {
-                val existing = monthlyBudgetDao.getByMonthYear(month, year)
+                val existing = monthlyBudgetDao.getByMonthYear(userId, month, year)
                 if (existing == null) {
                     val transactions = listOf(newItem)
                     val totals = computeTotals(transactions)
@@ -272,6 +299,7 @@ object BudgetRepository {
                         MonthlyBudgetEntity(
                             id = UUID.randomUUID().toString(),
                             serverId = null,
+                            userId = userId,
                             yearlyBudgetId = yearlyBudget.id,
                             month = month,
                             year = year,
@@ -321,7 +349,9 @@ object BudgetRepository {
         val now = System.currentTimeMillis()
         val result =
             database.withTransaction {
-                val existing = monthlyBudgetDao.getByMonthYear(month, year) ?: return@withTransaction null
+                val existing =
+                    monthlyBudgetDao.getByMonthYear(AccountManager.currentUserIdOrEmpty(), month, year)
+                        ?: return@withTransaction null
                 val transactions = parseTransactions(existing.transactionsJson).filterNot { it.id == transactionId }
                 val totals = computeTotals(transactions)
                 val updated =
@@ -370,6 +400,10 @@ object BudgetRepository {
                             totalSavings = details.totalSavings,
                             totalTransactions = details.totalTransactions,
                             transactionsJson = gson.toJson(details.transactions),
+                            // A successful pull means local state now matches the server —
+                            // seed the diff baseline OutboxPusher uses to build safe
+                            // transaction_ops on the next push (see buildTransactionOps).
+                            lastSyncedTransactionsJson = gson.toJson(details.transactions),
                             syncStatus = SyncStatus.SYNCED,
                             updatedAt = now,
                         )
@@ -377,10 +411,16 @@ object BudgetRepository {
                     updated.toDetails()
                 }
                 ReconcileDecision.InsertNew -> {
+                    // A pull only ever returns the authenticated user's own budgets, so the
+                    // current session's id is always correct — details.userId (the server's
+                    // echoed user_id) must not be trusted for local scoping, since every read
+                    // query filters by AccountManager's cached id, not the server's. Mirrors
+                    // TransactionRepository.reconcileFromServer.
                     val inserted =
                         MonthlyBudgetEntity(
                             id = UUID.randomUUID().toString(),
                             serverId = details.id,
+                            userId = AccountManager.currentUserIdOrEmpty(),
                             yearlyBudgetId = localYearlyBudget.id,
                             month = details.month,
                             year = details.year,
@@ -389,6 +429,7 @@ object BudgetRepository {
                             totalSavings = details.totalSavings,
                             totalTransactions = details.totalTransactions,
                             transactionsJson = gson.toJson(details.transactions),
+                            lastSyncedTransactionsJson = gson.toJson(details.transactions),
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
                             createdAt = now,
@@ -488,6 +529,51 @@ object BudgetRepository {
     internal fun parseTransactions(json: String): List<BudgetTransactionResponse> =
         if (json.isBlank()) emptyList() else gson.fromJson(json, transactionListType)
 
+    /**
+     * Diffs [current] against [baseline] (the line-item list as of the last successful server
+     * sync — empty if this row has never synced) to build a minimal `transaction_ops` batch,
+     * used by [cc.dlabs.pesamind.core.sync.OutboxPusher]'s push functions in place of the
+     * legacy full-replace field. This is the fix for a real, confirmed data-loss bug: the
+     * legacy field carries no ids, so the backend's update handler — which deletes any
+     * existing server-side transaction whose id isn't present in the incoming list — wiped
+     * history on *every* push, since that field never carried ids at all (see
+     * `MIGRATION_6_7`'s doc comment for the full incident).
+     *
+     * A delete op is only ever emitted for an item literally present in [baseline] — so a
+     * never-synced row ([baseline] empty/null) can structurally only ever produce "add" ops,
+     * never "delete": a fresh local row can no longer wipe real server-side history just by
+     * being pushed. This does *not* independently guard against a baseline that's genuinely
+     * stale relative to the server (e.g. a separate reconcile bug losing track of a
+     * previously-synced item between syncs) — that would still surface as an apparent
+     * deletion here, same as it would to a human diffing two lists by hand. What it fixes is
+     * the previous behavior, where *every* push — even a single new item, with a perfectly
+     * healthy local cache — necessarily wiped everything not in that one push's payload.
+     */
+    internal fun buildTransactionOps(
+        baseline: List<BudgetTransactionResponse>,
+        current: List<BudgetTransactionResponse>,
+    ): List<BudgetTransactionOperation> {
+        val baselineById = baseline.associateBy { it.id }
+        val currentIds = current.mapTo(mutableSetOf()) { it.id }
+        val ops = mutableListOf<BudgetTransactionOperation>()
+
+        for (item in current) {
+            val before = baselineById[item.id]
+            if (before == null) {
+                // New since baseline — the server assigns a real id on success, "add" needs none.
+                ops += BudgetTransactionOperation(name = item.name, amount = item.amount, type = item.type, action = "add")
+            } else if (before.name != item.name || before.amount != item.amount || before.type != item.type) {
+                ops += BudgetTransactionOperation(id = item.id, name = item.name, amount = item.amount, type = item.type, action = "update")
+            }
+        }
+        for (before in baseline) {
+            if (before.id !in currentIds) {
+                ops += BudgetTransactionOperation(id = before.id, action = "delete")
+            }
+        }
+        return ops
+    }
+
     private data class Totals(val income: Long, val expense: Long, val savings: Long, val net: Long)
 
     /** Mirrors `budget.Service.CalculateYearlyBudgetTotals`/`calculateMonthlyBudgetTotals`'s
@@ -512,7 +598,7 @@ object BudgetRepository {
 internal fun YearlyBudgetEntity.toDetails() =
     YearlyBudgetResponse(
         id = id,
-        userId = "",
+        userId = userId,
         year = year,
         totalExpenditures = totalExpenditures,
         totalIncome = totalIncome,
@@ -526,7 +612,7 @@ internal fun YearlyBudgetEntity.toDetails() =
 internal fun MonthlyBudgetEntity.toDetails() =
     MonthlyBudgetResponse(
         id = id,
-        userId = "",
+        userId = userId,
         yearlyBudgetId = yearlyBudgetId.orEmpty(),
         month = month,
         year = year,

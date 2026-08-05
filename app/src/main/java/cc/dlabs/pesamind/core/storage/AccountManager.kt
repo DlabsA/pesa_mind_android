@@ -80,6 +80,21 @@ object AccountManager {
         )
     }
 
+    /**
+     * Best-effort current-user id for scoping local Room rows/queries to the logged-in account
+     * (ADR-0004-adjacent cross-account isolation fix) — swallows to `""` on any failure (not
+     * initialized, no account saved yet) rather than throwing, mirroring [getAccount]'s
+     * exception on missing init but never propagating it: a repository read/write must not
+     * crash just because identity lookup failed. Was previously duplicated per-repository as
+     * each one's own private `currentUserId()`; this is the single shared implementation.
+     */
+    suspend fun currentUserIdOrEmpty(): String =
+        try {
+            getAccount().id
+        } catch (e: Exception) {
+            ""
+        }
+
     suspend fun clearAccount() {
         if (!isInitialized()) return
         appContext.dataStore.edit {

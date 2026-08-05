@@ -31,8 +31,8 @@ import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
-import cc.dlabs.pesamind.core.storage.TokenManager
 import coil3.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -87,9 +87,7 @@ fun SettingsScreen(rootNav: NavHostController) {
 
                         googleClient.signOut().addOnCompleteListener {
                             scope.launch {
-                                TokenManager.clearTokens()
-                                TokenManager.clearLock()
-                                AccountManager.clearAccount()
+                                AuthManager.logout()
                                 showLogoutDialog = false
                                 rootNav.navigate(Routes.Login.route) {
                                     popUpTo(0) { inclusive = true }

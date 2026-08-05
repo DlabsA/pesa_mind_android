@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import cc.dlabs.pesamind.core.database.DATABASE_NAME
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
+import cc.dlabs.pesamind.core.database.dao.BlogPostDao
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
 import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
@@ -15,6 +16,10 @@ import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_1_2
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_2_3
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_3_4
+import cc.dlabs.pesamind.core.database.migration.MIGRATION_4_5
+import cc.dlabs.pesamind.core.database.migration.MIGRATION_5_6
+import cc.dlabs.pesamind.core.database.migration.MIGRATION_6_7
+import cc.dlabs.pesamind.core.database.migration.MIGRATION_7_8
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,7 +36,15 @@ object DatabaseModule {
         @ApplicationContext context: Context,
     ): PesaMindDatabase =
         Room.databaseBuilder(context, PesaMindDatabase::class.java, DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+            )
             .build()
 
     @Provides
@@ -57,4 +70,7 @@ object DatabaseModule {
 
     @Provides
     fun provideProcessedMessageDao(db: PesaMindDatabase): ProcessedMessageDao = db.processedMessageDao()
+
+    @Provides
+    fun provideBlogPostDao(db: PesaMindDatabase): BlogPostDao = db.blogPostDao()
 }

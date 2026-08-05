@@ -26,7 +26,15 @@ import cc.dlabs.pesamind.core.database.SyncStatus
  * provider TIDs are not confirmed unique across every supported provider — scoping by
  * channel (one channel per real sender/provider, see [ChannelEntity.normalizedSenderKey])
  * is the safer default until cross-provider uniqueness is verified. Null for manually
- * entered transactions and for any SMS a TID can't be extracted from.
+ * entered transactions and for any SMS a TID can't be extracted from. This index is *not*
+ * additionally scoped by [userId] the way [smsSourceKey]'s is — it doesn't need to be, since
+ * [channelId] already FKs to exactly one [ChannelEntity.userId]; two different accounts can
+ * never share a `channelId` in the first place, so the pair is transitively user-safe already.
+ *
+ * [userId] scopes [smsSourceKey]'s uniqueness (and every list/lookup query on this table) to
+ * the owning account — a table-wide unique `smsSourceKey` let a different account's SMS-derived
+ * transaction silently block this account's structurally-identical one (see `ChannelEntity`'s
+ * doc comment for the confirmed real-world bug this same shape caused for channels).
  */
 @Entity(
     tableName = "transactions",
@@ -43,7 +51,7 @@ import cc.dlabs.pesamind.core.database.SyncStatus
         Index(value = ["channelId"]),
         Index(value = ["syncStatus"]),
         Index(value = ["updatedAt"]),
-        Index(value = ["smsSourceKey"], unique = true),
+        Index(value = ["userId", "smsSourceKey"], unique = true),
         Index(value = ["channelId", "providerTransactionId"], unique = true),
     ],
 )
@@ -51,6 +59,7 @@ data class TransactionEntity(
     @PrimaryKey
     val id: String,
     val serverId: String?,
+    val userId: String,
     val channelId: String?,
     val channelDetailsName: String,
     val amount: Double,

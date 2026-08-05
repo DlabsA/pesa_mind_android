@@ -15,11 +15,15 @@ import cc.dlabs.pesamind.core.database.SyncStatus
  * (`"$senderId:$timestamp:${content.hashCode()}"`) — a redelivered/reprocessed SMS enqueues
  * the outbox push exactly once via the same `insertIgnore`-is-the-correctness-mechanism
  * pattern [cc.dlabs.pesamind.core.data.TransactionRepository.createTransaction] uses.
+ * Unique-indexed per [userId], not table-wide — two different accounts receiving a
+ * structurally-identical SMS on the same physical SIM/device must never collide (see
+ * `ChannelEntity`'s doc comment for the confirmed real-world bug this same table-wide-index
+ * shape caused for channels).
  */
 @Entity(
     tableName = "processed_messages",
     indices = [
-        Index(value = ["dedupeKey"], unique = true),
+        Index(value = ["userId", "dedupeKey"], unique = true),
         Index(value = ["syncStatus"]),
     ],
 )
@@ -27,6 +31,7 @@ data class ProcessedMessageEntity(
     @PrimaryKey
     val id: String,
     val serverId: String?,
+    val userId: String,
     val senderId: String,
     val content: String,
     val timestamp: Long,

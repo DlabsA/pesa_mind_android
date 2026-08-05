@@ -16,6 +16,7 @@ import cc.dlabs.pesamind.core.database.dao.OutboxDao
 import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.migration.resolveUniqueChannelIdsByName
 import cc.dlabs.pesamind.core.network.ApiService
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.SyncMetadataManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import dagger.assisted.Assisted
@@ -295,7 +296,8 @@ class SyncWorker
 
             // TransactionDetails only ever carries a channel *name* (never an id) — same
             // best-effort, unique-name-only matching PrefsToRoomMigrator already established.
-            val channelIdByUniqueName = resolveUniqueChannelIdsByName(database.channelDao().getAllActive())
+            val channelIdByUniqueName =
+                resolveUniqueChannelIdsByName(database.channelDao().getAllActive(AccountManager.currentUserIdOrEmpty()))
             for (details in remote) {
                 TransactionRepository.reconcileFromServer(details, channelIdByUniqueName[details.channelDetailsName])
             }

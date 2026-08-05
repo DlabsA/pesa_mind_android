@@ -4,6 +4,10 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
+import cc.dlabs.pesamind.core.data.ChannelSpend
+import cc.dlabs.pesamind.core.data.DayOfWeekSpend
+import cc.dlabs.pesamind.core.data.TransactionRepository
+import cc.dlabs.pesamind.core.data.monthRangeMillis
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.AnalyticResponse
 import cc.dlabs.pesamind.core.storage.StreakSessionCache
@@ -12,6 +16,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -55,6 +63,10 @@ data class AnalyticsUiState(
     val streakLastActiveDate: String? = null,
     val period: AnalyticsPeriod = AnalyticsPeriod.MONTH,
     val isPeriodChanging: Boolean = false,
+    // Locally-computed (Room-only, no backend endpoint) — see [AnalyticsViewModel]'s
+    // `observeLocalAnalytics`.
+    val dayOfWeekSpend: List<DayOfWeekSpend> = emptyList(),
+    val topChannels: List<ChannelSpend> = emptyList(),
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────
@@ -65,6 +77,44 @@ class AnalyticsViewModel
     constructor() : UnifiedViewModel() {
         private val _state = MutableStateFlow(AnalyticsUiState())
         val state: StateFlow<AnalyticsUiState> = _state.asStateFlow()
+
+        init {
+            observeLocalAnalytics()
+        }
+
+        /**
+         * Feeds [AnalyticsUiState.dayOfWeekSpend]/[AnalyticsUiState.topChannels] from Room —
+         * no network round-trip, so this needs no `load()`/`refresh()` gating of its own and
+         * updates live the instant a transaction is created/edited locally (same rationale as
+         * `DashboardViewModel`'s local summary card). Re-subscribes whenever
+         * [AnalyticsUiState.period] changes so the aggregation window follows the existing
+         * Month/Lifetime toggle.
+         */
+        private fun observeLocalAnalytics() {
+            viewModelScope.launch {
+                _state.map { it.period }.distinctUntilChanged().collectLatest { period ->
+                    val range = periodRangeMillis(period)
+                    combine(
+                        TransactionRepository.observeSpendingByDayOfWeek(range?.first, range?.second),
+                        TransactionRepository.observeTopChannelsBySpend(range?.first, range?.second),
+                    ) { dayOfWeek, topChannels -> dayOfWeek to topChannels }
+                        .collect { (dayOfWeek, topChannels) ->
+                            _state.value = _state.value.copy(dayOfWeekSpend = dayOfWeek, topChannels = topChannels)
+                        }
+                }
+            }
+        }
+
+        /** `null` means "no bound" (Lifetime); a `[start, end)` pair scopes to the current
+         * calendar month (Month), reusing [monthRangeMillis] rather than re-deriving it. */
+        private fun periodRangeMillis(period: AnalyticsPeriod): Pair<Long, Long>? =
+            when (period) {
+                AnalyticsPeriod.LIFETIME -> null
+                AnalyticsPeriod.MONTH -> {
+                    val now = Calendar.getInstance()
+                    monthRangeMillis(now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1)
+                }
+            }
 
         override fun onStateEvent(event: StateEvent) {
             when (event) {

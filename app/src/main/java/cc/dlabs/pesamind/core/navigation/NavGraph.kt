@@ -25,6 +25,7 @@ import cc.dlabs.pesamind.features.auth.LoginScreen
 import cc.dlabs.pesamind.features.auth.PatternUnlockScreen
 import cc.dlabs.pesamind.features.auth.PinUnlockScreen
 import cc.dlabs.pesamind.features.auth.RegisterScreen
+import cc.dlabs.pesamind.features.blog.BlogScreen
 import cc.dlabs.pesamind.features.budgets.SetMonthlyBudgetScreen
 import cc.dlabs.pesamind.features.budgets.YearlyBudgetDetailScreen
 import cc.dlabs.pesamind.features.home.AddTransactionScreen
@@ -182,6 +183,7 @@ fun PesaMindNavGraph(navController: NavHostController) {
             composable(Routes.SetYearlyBudget.route) {
                 YearlyBudgetDetailScreen(navController, Calendar.getInstance().get(Calendar.YEAR))
             }
+            composable(Routes.Blog.route) { BlogScreen(navController) }
         }
     }
 }

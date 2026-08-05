@@ -14,10 +14,14 @@ import cc.dlabs.pesamind.core.database.SyncStatus
  * [normalizedSenderKey] is a trim+lowercase fold of [channelDesc], populated only for
  * provider/bank channels resolved from a known SMS sender (mobile money, bank) — null for
  * CASH channels, which legitimately share a single `channelDesc` ("Cash") across many rows
- * and must never be forced unique. Unique-indexed (nullable-safe: SQLite allows multiple
- * NULLs in a unique index) so two concurrent SMS auto-create attempts for the same real
- * sender — regardless of the casing either one happened to compute [channelDesc] with —
- * always converge to exactly one channel row instead of racing a check-then-insert.
+ * and must never be forced unique. Unique-indexed *per [userId]* (nullable-safe: SQLite
+ * allows multiple NULLs in a unique index) so two concurrent SMS auto-create attempts for the
+ * same real sender under the same account — regardless of the casing either one happened to
+ * compute [channelDesc] with — always converge to exactly one channel row instead of racing a
+ * check-then-insert. Scoped by [userId], not table-wide: a table-wide unique index let a
+ * previous account's (even soft-deleted) channel silently block a different account from ever
+ * creating its own channel under the same provider name — confirmed as a real bug on a
+ * reused/shared device (see MIGRATION_5_6's doc comment).
  */
 @Entity(
     tableName = "channels",
@@ -25,7 +29,7 @@ import cc.dlabs.pesamind.core.database.SyncStatus
         Index(value = ["serverId"]),
         Index(value = ["syncStatus"]),
         Index(value = ["updatedAt"]),
-        Index(value = ["normalizedSenderKey"], unique = true),
+        Index(value = ["userId", "normalizedSenderKey"], unique = true),
     ],
 )
 data class ChannelEntity(

@@ -11,11 +11,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MonthlyBudgetDao {
-    @Query("SELECT * FROM monthly_budgets WHERE deletedAt IS NULL ORDER BY year DESC, month DESC")
-    fun observeAll(): Flow<List<MonthlyBudgetEntity>>
+    @Query("SELECT * FROM monthly_budgets WHERE userId = :userId AND deletedAt IS NULL ORDER BY year DESC, month DESC")
+    fun observeAll(userId: String): Flow<List<MonthlyBudgetEntity>>
 
-    @Query("SELECT * FROM monthly_budgets WHERE month = :month AND year = :year AND deletedAt IS NULL LIMIT 1")
+    /** [userId]-scoped — see [YearlyBudgetDao.observeByYear]'s doc comment for why: two
+     * accounts can each have their own "March 2026" budget. */
+    @Query("SELECT * FROM monthly_budgets WHERE userId = :userId AND month = :month AND year = :year AND deletedAt IS NULL LIMIT 1")
     fun observeByMonthYear(
+        userId: String,
         month: Int,
         year: Long,
     ): Flow<MonthlyBudgetEntity?>
@@ -23,8 +26,10 @@ interface MonthlyBudgetDao {
     @Query("SELECT * FROM monthly_budgets WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): MonthlyBudgetEntity?
 
-    @Query("SELECT * FROM monthly_budgets WHERE month = :month AND year = :year AND deletedAt IS NULL LIMIT 1")
+    /** See [observeByMonthYear]'s doc comment for why this is scoped by [userId]. */
+    @Query("SELECT * FROM monthly_budgets WHERE userId = :userId AND month = :month AND year = :year AND deletedAt IS NULL LIMIT 1")
     suspend fun getByMonthYear(
+        userId: String,
         month: Int,
         year: Long,
     ): MonthlyBudgetEntity?

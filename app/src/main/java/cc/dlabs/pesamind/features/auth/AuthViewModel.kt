@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.ApiClient
-import cc.dlabs.pesamind.core.network.models.BatchCreateChannelsRequest
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
@@ -458,24 +457,14 @@ class AuthViewModel : UnifiedViewModel() {
         }
 
     /**
-     * Server-true-wins: only ever flips the local flag true, never clears an already-true
-     * local flag back to false (covers reinstall-on-already-onboarded-account). The reverse
-     * case — locally onboarded but the server hasn't heard yet — happens when the onboarding
-     * flow's own fire-and-forget flag-sync call (see ChannelOnboardingViewModel.finish) failed
-     * while offline; retry it here on the next successful login now that a fresh token exists.
-     * Empty payload is enough — the actual channels already synced via their own outbox
-     * entries independently of this call, whose only remaining job is flipping the flag.
+     * The server now computes `channels_onboarded` live from the account's actual channel
+     * count (see backend `ToProfileDTO`), so it's authoritative in both directions — a local
+     * cache that mirrors it directly, refreshed on every login, is what keeps a device from
+     * leaking one account's state into the next (or reprompting/not-reprompting incorrectly
+     * after channels are added or removed server-side).
      */
     private suspend fun syncChannelsOnboardedFlag(serverOnboarded: Boolean) {
-        if (serverOnboarded) {
-            TokenManager.setChannelsOnboarded(true)
-        } else if (TokenManager.isChannelsOnboarded()) {
-            try {
-                ApiClient.api.batchCreateChannels(BatchCreateChannelsRequest(emptyList()))
-            } catch (e: Exception) {
-                Log.w("AuthVM", "Retry of onboarding flag-sync failed; will retry on next login", e)
-            }
-        }
+        TokenManager.setChannelsOnboarded(serverOnboarded)
     }
 
     /** Clear error state when the user starts typing after a failure. */

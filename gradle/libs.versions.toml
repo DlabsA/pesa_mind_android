@@ -42,6 +42,11 @@ androidxTestCore = "1.6.1"
 # 1.1.0 is still the latest stable release (1.2.0/1.4.0 are alpha-only, confirmed via web
 # search) — same "pin to last confirmed stable" convention as the tink pin above.
 biometric = "1.1.0"
+# Firebase BOM manages the messaging artifact's own version — pinned here to the latest
+# confirmed-stable release found via web search (Firebase Android SDK release notes,
+# firebase-bom 34.10.0, ~March 2026); reconfirm against
+# https://firebase.google.com/support/release-notes/android before bumping.
+firebaseBom = "34.10.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -88,9 +93,12 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime-ktx", version.ref = "paging" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

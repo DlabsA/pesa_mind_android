@@ -224,6 +224,10 @@ class TransactionProviderIdDedupTest {
     ) = TransactionEntity(
         id = UUID.randomUUID().toString(),
         serverId = null,
+        // Matches what AccountManager.currentUserIdOrEmpty() resolves to in this test (no
+        // AccountManager.init() call), same as every row TransactionRepository.createTransaction
+        // creates elsewhere in this file.
+        userId = "",
         channelId = channelId,
         channelDetailsName = "Airtel Money",
         amount = 1000.0,

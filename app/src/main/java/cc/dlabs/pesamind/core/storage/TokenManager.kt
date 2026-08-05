@@ -144,11 +144,14 @@ object TokenManager {
     // ── Channel onboarding ──────────────────────────────────
     // Local gate for the post-signup channel-onboarding flow. Non-secret UI-gate state (unlike
     // PIN_KEY/PATTERN_KEY above), so no TokenCryptoManager involvement — mirrors PIN_ENABLED's
-    // plain booleanPreferencesKey treatment. Never derived from local channel count: finishing
-    // onboarding with 0 channels is a valid completed state. Set to true locally as soon as the
-    // user finishes onboarding (before the batch necessarily syncs, for offline-first safety);
-    // only ever flipped true from a server response, never back to false — see AuthViewModel's
-    // server-true-wins sync on login.
+    // plain booleanPreferencesKey treatment. A local cache of the server's live "does this
+    // account currently have at least one channel" value (see backend ToProfileDTO), refreshed
+    // on every login/register/OAuth via AuthViewModel.syncChannelsOnboardedFlag — not a
+    // permanent "completed onboarding" flag, so a user with zero channels is re-prompted on
+    // every login even if they previously skipped the whole flow. Also set optimistically,
+    // offline-first, by ChannelOnboardingViewModel.finish() before its own network call
+    // completes, and cleared on logout (AuthManager.logout, SettingsScreen's logout handler) so
+    // it never leaks from one account into the next on a shared device.
     suspend fun isChannelsOnboarded(): Boolean =
         if (!isInitialized()) false else appContext.dataStore.data.first()[CHANNELS_ONBOARDED] ?: false
 

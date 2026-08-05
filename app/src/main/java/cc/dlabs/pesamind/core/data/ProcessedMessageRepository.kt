@@ -11,6 +11,7 @@ import cc.dlabs.pesamind.core.database.entity.ProcessedMessageEntity
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.NetworkMonitor
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.OutboxPusher
 import dagger.hilt.EntryPoints
 import kotlinx.coroutines.CoroutineScope
@@ -81,6 +82,7 @@ object ProcessedMessageRepository {
             ProcessedMessageEntity(
                 id = id,
                 serverId = null,
+                userId = AccountManager.currentUserIdOrEmpty(),
                 senderId = senderId,
                 content = content,
                 timestamp = timestamp,

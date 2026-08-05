@@ -92,11 +92,15 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
 
     /**
      * Loops [ChannelRepository.createChannel] for every included draft (skipped drafts
-     * contribute nothing), sets the local onboarding flag immediately so a re-login before sync
-     * doesn't re-trigger onboarding, then fires a best-effort batch call purely to flip the
-     * server-side flag (safe to retry — items are idempotent via client-id; sent even with an
-     * empty list if every screen was skipped). The fire-and-forget call's failure doesn't block
-     * finishing — [TokenManager]'s server-true-wins sync on next login retries it.
+     * contribute nothing), then optimistically mirrors the resulting local channel count into
+     * the onboarding flag before the batch call below completes — offline-safe, so a re-login
+     * before sync still sees the right value. The server now computes `channels_onboarded`
+     * live from actual channel count (not a stored flag), so finishing with zero included
+     * channels correctly leaves the flag `false`: the prompt reappears on the next login rather
+     * than being permanently suppressed by a "completed onboarding" state. The batch call
+     * itself is still sent (even empty) — items are idempotent via client-id — purely so the
+     * server's audit timestamp gets set; its failure doesn't block finishing, since the flag
+     * itself no longer depends on it.
      */
     fun finish() {
         val current = _state.value
@@ -155,8 +159,9 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
                 }
 
                 // Offline-first: set the local flag before the network call below, so the flow
-                // is considered complete even if the device is offline right now.
-                TokenManager.setChannelsOnboarded(true)
+                // is considered complete even if the device is offline right now. Mirrors
+                // whether any channel was actually included, not an unconditional true.
+                TokenManager.setChannelsOnboarded(batchItems.isNotEmpty())
 
                 try {
                     ApiClient.api.batchCreateChannels(BatchCreateChannelsRequest(batchItems))

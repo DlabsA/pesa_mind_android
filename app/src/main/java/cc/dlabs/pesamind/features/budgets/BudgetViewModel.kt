@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.features.budgets
 
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.network.ApiClient.api
@@ -95,14 +96,14 @@ data class BudgetUiState(
  * live in production (its `init()` was never called from `PesaMindApp.onCreate()`), so this
  * isn't just a rewire — it's the first time budgets have had a working local cache at all.
  *
- * Deliberately does NOT subscribe to `StateEvent.SyncCompleted` the way `DashboardViewModel`/
- * `AnalyticsViewModel` do — those two are still 100% server-computed and need an explicit
- * "go refetch" trigger; budgets are now genuinely local-first, so the Room write `SyncWorker`
- * performs on a successful pull *is* the trigger — [observeBudgets]'s Flow collectors pick it
- * up automatically, no event needed.
+ * Deliberately does NOT subscribe to `StateEvent.SyncCompleted` for the *budget* fields the
+ * way `DashboardViewModel`/`AnalyticsViewModel` do — budgets are genuinely local-first, so the
+ * Room write `SyncWorker` performs on a successful pull *is* the trigger — [observeBudgets]'s
+ * Flow collectors pick it up automatically, no event needed.
  *
- * [fetchStreak]/`api.getDashboard()` stay network-backed, unchanged — gamification streak is
- * out of this fix's scope.
+ * [fetchStreak] is still 100% server-computed (`api.getDashboard()`, no local recomputation),
+ * so — unlike the budget fields above — it *does* need [onStateEvent] to explicitly refetch on
+ * `TransactionCreated`/`SyncCompleted`, mirroring `DashboardViewModel`'s pattern exactly.
  */
 @HiltViewModel
 class BudgetViewModel
@@ -118,6 +119,17 @@ class BudgetViewModel
             observeConnectivity()
             observeBudgets()
             viewModelScope.launch { fetchStreak() }
+        }
+
+        /** Streak is the one field on this screen that isn't Room-Flow-backed (see class doc
+         * comment) — [DashboardViewModel]'s exact trigger set for "the streak may have
+         * changed", minus its channel events, which don't affect daily-activity streaks. */
+        override fun onStateEvent(event: StateEvent) {
+            when (event) {
+                is StateEvent.TransactionCreated, is StateEvent.SyncCompleted ->
+                    viewModelScope.launch { fetchStreak(forceNetwork = true) }
+                else -> {}
+            }
         }
 
         private fun observeConnectivity() {
@@ -198,6 +210,7 @@ class BudgetViewModel
          * already picks up the sync worker's write-back once it completes. */
         fun refresh() {
             SyncScheduler.triggerSyncNow()
+            viewModelScope.launch { fetchStreak(forceNetwork = true) }
             viewModelScope.launch {
                 _state.update { it.copy(isRefreshing = true) }
                 try {
@@ -215,18 +228,24 @@ class BudgetViewModel
             }
         }
 
-        // ── Streak (unchanged — server/gamification-backed, out of A9's scope) ──────
+        // ── Streak (server/gamification-backed — see class doc comment) ────────────
 
-        private suspend fun fetchStreak() {
-            val cachedStreak = StreakSessionCache.get()
-            if (cachedStreak != null) {
-                _state.update {
-                    it.copy(
-                        streakCount = cachedStreak.count,
-                        streakLastActiveDate = cachedStreak.lastActiveDate,
-                    )
+        /** [forceNetwork] skips the cache-hit early-return: the cache-first path is a cheap
+         * initial paint for [init], but a `TransactionCreated`/`SyncCompleted` event or an
+         * explicit [refresh] means the cached value is now known-possibly-stale and must be
+         * re-fetched, not just re-read. */
+        private suspend fun fetchStreak(forceNetwork: Boolean = false) {
+            if (!forceNetwork) {
+                val cachedStreak = StreakSessionCache.get()
+                if (cachedStreak != null) {
+                    _state.update {
+                        it.copy(
+                            streakCount = cachedStreak.count,
+                            streakLastActiveDate = cachedStreak.lastActiveDate,
+                        )
+                    }
+                    return
                 }
-                return
             }
 
             try {

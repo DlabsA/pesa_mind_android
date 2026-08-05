@@ -17,6 +17,9 @@ import cc.dlabs.pesamind.core.database.SyncStatus
  * [month]+[year] and [serverId] are indexed but NOT DB-unique, same reasoning as
  * [YearlyBudgetEntity.year] — soft-delete means "at most one live row" has to be a
  * repository-layer rule, not a schema constraint.
+ *
+ * [userId] scopes every list/lookup query on this table to the owning account — see
+ * [YearlyBudgetEntity.userId]'s doc comment for the bug this closes.
  */
 @Entity(
     tableName = "monthly_budgets",
@@ -33,13 +36,14 @@ import cc.dlabs.pesamind.core.database.SyncStatus
         Index(value = ["yearlyBudgetId"]),
         Index(value = ["syncStatus"]),
         Index(value = ["updatedAt"]),
-        Index(value = ["month", "year"]),
+        Index(value = ["userId", "month", "year"]),
     ],
 )
 data class MonthlyBudgetEntity(
     @PrimaryKey
     val id: String,
     val serverId: String?,
+    val userId: String,
     val yearlyBudgetId: String?,
     val month: Int,
     val year: Long,
@@ -48,6 +52,14 @@ data class MonthlyBudgetEntity(
     val totalSavings: Long,
     val totalTransactions: Long,
     val transactionsJson: String,
+    // The line-item list as of the last successful server sync (push or pull) — null if this
+    // row has never synced. Diffed against [transactionsJson] at push time to build a precise
+    // transaction_ops add/update/delete batch instead of the legacy full-replace field; see
+    // OutboxPusher.pushMonthlyBudgetEntry's doc comment for why that matters (a stale/
+    // incomplete local cache must never be able to delete server-side history it doesn't know
+    // about). Only [OutboxPusher]'s finish* functions and [BudgetRepository]'s reconcile*
+    // functions ever write this — local edits (add/delete transaction) leave it untouched.
+    val lastSyncedTransactionsJson: String? = null,
     val syncStatus: SyncStatus,
     val dirty: Boolean,
     val createdAt: Long,

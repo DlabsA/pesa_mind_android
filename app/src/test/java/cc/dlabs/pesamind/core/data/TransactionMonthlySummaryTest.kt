@@ -67,6 +67,10 @@ class TransactionMonthlySummaryTest {
             TransactionEntity(
                 id = UUID.randomUUID().toString(),
                 serverId = null,
+                // Matches what AccountManager.currentUserIdOrEmpty() resolves to here: this
+                // test never calls AccountManager.init(), so TransactionRepository.observeMonthlySummary()
+                // (the code under test) queries with userId = "" too.
+                userId = "",
                 channelId = channelId,
                 channelDetailsName = "Test Channel",
                 amount = amount,

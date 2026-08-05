@@ -78,4 +78,6 @@ sealed class Routes(val route: String) {
     }
 
     object SetYearlyBudget : Routes("set_yearly_budget")
+
+    object Blog : Routes("blog")
 }

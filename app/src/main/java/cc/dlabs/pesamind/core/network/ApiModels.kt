@@ -218,6 +218,14 @@ data class TransactionDetails(
     // TransactionEntity.createdAt, used for client-side date-range filtering (TransactionListScreen).
     @Transient
     val createdAt: Long = 0L,
+    // The server's real transaction date (Go's time.Time.String() format, e.g.
+    // "2026-07-12 19:51:33.525482 +0000 UTC") — NOT the same thing as [createdAt] above, which
+    // is local-only. TransactionRepository.reconcileFromServer parses this into
+    // TransactionEntity.createdAt on a fresh insert; without it, every re-synced transaction
+    // (e.g. after a logout/Room-wipe) silently got stamped with "now" instead of its actual
+    // date, corrupting any local date-range filter (see that function's doc comment).
+    @SerializedName("created_at")
+    val serverCreatedAt: String? = null,
 )
 
 data class ProcessedMessageRequest(
@@ -906,4 +914,23 @@ data class AnomalySection(
     val data: AnomalyData,
     val metadata: AnomalyMetadata,
     val recommendations: List<AnomalyRecommendation> = emptyList(),
+)
+
+// ─── Finance Blog (admin-authored content) ─────────────────────────────────────
+// Backend contract expected from the separate Go repo — NOT implemented there yet as of this
+// change. `GET blog-posts` is called by [cc.dlabs.pesamind.core.data.BlogRepository]; the
+// `POST` that creates a post is admin/web-UI-only and is never called from this app.
+
+data class BlogPostResponse(
+    val id: String,
+    val title: String,
+    val body: String,
+    @SerializedName("published_at") val publishedAt: String,
+)
+
+/** Registers this device's FCM token so the backend can target a push when a new post is
+ * published — sent from [cc.dlabs.pesamind.features.blog.BlogMessagingService.onNewToken]. */
+data class RegisterDeviceTokenRequest(
+    val token: String,
+    val platform: String = "android",
 )

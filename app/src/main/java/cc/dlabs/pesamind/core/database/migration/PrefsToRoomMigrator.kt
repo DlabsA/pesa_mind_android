@@ -100,7 +100,7 @@ object PrefsToRoomMigrator {
         val channelIdByUniqueName = resolveUniqueChannelIdsByName(channelEntities)
 
         val transactionEntities =
-            transactionDtos.map { it.toEntity(now, channelIdByUniqueName[it.channelDetailsName]) }
+            transactionDtos.map { it.toEntity(now, channelIdByUniqueName[it.channelDetailsName], account.id) }
 
         val yearlyEntities = yearlyDtos.map { it.toEntity(now) }
         val yearlyLocalIdByServerId = yearlyEntities.associate { it.serverId to it.id }
@@ -215,9 +215,11 @@ internal fun ChannelDetails.toEntity(now: Long) =
 internal fun TransactionDetails.toEntity(
     now: Long,
     resolvedChannelId: String?,
+    userId: String,
 ) = TransactionEntity(
     id = UUID.randomUUID().toString(),
     serverId = id.ifBlank { null },
+    userId = userId,
     channelId = resolvedChannelId,
     channelDetailsName = channelDetailsName,
     amount = amount,
@@ -239,6 +241,7 @@ internal fun YearlyBudgetResponse.toEntity(now: Long) =
     YearlyBudgetEntity(
         id = UUID.randomUUID().toString(),
         serverId = id.ifBlank { null },
+        userId = userId,
         year = year,
         totalExpenditures = totalExpenditures,
         totalIncome = totalIncome,
@@ -258,6 +261,7 @@ internal fun MonthlyBudgetResponse.toEntity(
 ) = MonthlyBudgetEntity(
     id = UUID.randomUUID().toString(),
     serverId = id.ifBlank { null },
+    userId = userId,
     yearlyBudgetId = resolvedYearlyBudgetId,
     month = month,
     year = year,

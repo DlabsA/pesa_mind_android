@@ -137,6 +137,11 @@ android {
                 srcDirs("src/main/assets")
             }
         }
+        getByName("androidTest") {
+            assets {
+                srcDirs("$projectDir/schemas")
+            }
+        }
     }
 }
 
@@ -177,11 +182,18 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.room.testing)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
     // Google Sign-In
     implementation(libs.google.signin)
+
+    // Firebase Cloud Messaging — push delivery for admin-authored blog posts (features/blog).
+    // The google-services plugin + app/google-services.json already existed for Google
+    // Sign-In; this is the first Firebase *product* dependency added to the project.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // Tink + Android Keystore — encrypts TokenManager's DataStore-persisted secrets at rest.
     // Not EncryptedSharedPreferences: deprecated in security-crypto 1.1.0-alpha07 (April 2025)

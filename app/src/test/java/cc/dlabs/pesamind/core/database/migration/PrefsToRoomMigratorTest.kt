@@ -92,7 +92,7 @@ class PrefsToRoomMigratorTest {
                 username = "jane",
             )
 
-        val entity = dto.toEntity(now = 1000L, resolvedChannelId = "local-channel-uuid")
+        val entity = dto.toEntity(now = 1000L, resolvedChannelId = "local-channel-uuid", userId = "test-user")
 
         assertEquals(dto.id, entity.serverId)
         assertEquals("local-channel-uuid", entity.channelId)
@@ -118,7 +118,7 @@ class PrefsToRoomMigratorTest {
                 username = "jane",
             )
 
-        val entity = dto.toEntity(now = 1000L, resolvedChannelId = null)
+        val entity = dto.toEntity(now = 1000L, resolvedChannelId = null, userId = "test-user")
 
         assertNull(entity.channelId)
         assertEquals("Deleted Or Ambiguous Channel", entity.channelDetailsName)

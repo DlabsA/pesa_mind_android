@@ -782,6 +782,17 @@ fun ChannelCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (!item.accountNumber.isNullOrBlank()) {
+                        Text(
+                            text = item.accountNumber,
+                            style =
+                                MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 Spacer(Modifier.width(8.dp))

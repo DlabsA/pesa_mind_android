@@ -24,6 +24,8 @@ import dagger.hilt.EntryPoints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -122,12 +124,15 @@ object ChannelRepository {
         }
     }
 
-    fun observeChannels(): Flow<List<ChannelDetails>> = channelDao.observeAll().map { list -> list.map { it.toDetails() } }
+    fun observeChannels(): Flow<List<ChannelDetails>> =
+        flow {
+            emitAll(channelDao.observeAll(currentUserId()).map { list -> list.map { it.toDetails() } })
+        }
 
     /** One-shot read of the current full (unfiltered) list — used by `loadChannels()` to reset
      * out of a `getByChannelType`/`getByActiveStatus` filtered view. Screens should otherwise
      * prefer [observeChannels] for live updates. */
-    suspend fun getAllChannels(): List<ChannelDetails> = channelDao.getAllActive().map { it.toDetails() }
+    suspend fun getAllChannels(): List<ChannelDetails> = channelDao.getAllActive(currentUserId()).map { it.toDetails() }
 
     /** One-shot single-channel lookup for `ChannelDetailViewModel` — there's no
      * `GET /categories/:id` on the backend, so this is Room-only, no network fallback needed. */
@@ -135,10 +140,12 @@ object ChannelRepository {
 
     suspend fun getByChannelType(channelType: String): List<ChannelDetails> =
         channelDao.getByChannelType(
+            currentUserId(),
             channelType,
         ).map { it.toDetails() }
 
-    suspend fun getByActiveStatus(active: Boolean): List<ChannelDetails> = channelDao.getByActiveStatus(active).map { it.toDetails() }
+    suspend fun getByActiveStatus(active: Boolean): List<ChannelDetails> =
+        channelDao.getByActiveStatus(currentUserId(), active).map { it.toDetails() }
 
     /**
      * Every non-CASH [channelType] gets a non-null [ChannelEntity.normalizedSenderKey] and the
@@ -162,7 +169,7 @@ object ChannelRepository {
         val outcome =
             database.withTransaction {
                 if (normalizedKey != null) {
-                    channelDao.findByNormalizedSenderKey(normalizedKey)?.let {
+                    channelDao.findByNormalizedSenderKey(userId, normalizedKey)?.let {
                         // Found a pre-existing row under this provider's normalizedSenderKey —
                         // live or (rarely, see ChannelEntity's doc comment) soft-deleted. Either
                         // way, nothing is inserted, so the caller must be told "already exists,"
@@ -194,7 +201,7 @@ object ChannelRepository {
                 if (rowId == -1L) {
                     // Lost a race against a concurrent insert for the same provider — return the
                     // row that actually won instead of a second, discarded one.
-                    val winner = channelDao.findByNormalizedSenderKey(normalizedKey!!)!!
+                    val winner = channelDao.findByNormalizedSenderKey(userId, normalizedKey!!)!!
                     return@withTransaction ChannelCreateOutcome.AlreadyExists(winner.toDetails())
                 }
                 outboxDao.upsert(newOutboxEntry(OutboxEntityType.CHANNEL, entity.id, OutboxOperation.CREATE, now))
@@ -306,7 +313,7 @@ object ChannelRepository {
      * happens to be in.
      */
     suspend fun findByNormalizedSenderKey(channelDesc: String): ChannelDetails? =
-        channelDao.findLiveByNormalizedSenderKey(normalizeSenderKey(channelDesc))?.toDetails()
+        channelDao.findLiveByNormalizedSenderKey(currentUserId(), normalizeSenderKey(channelDesc))?.toDetails()
 
     /** Trim+lowercase fold used for [ChannelEntity.normalizedSenderKey] — see its doc comment. */
     fun normalizeSenderKey(channelDesc: String): String = channelDesc.trim().lowercase(Locale.ROOT)
@@ -365,10 +372,17 @@ object ChannelRepository {
                     updated.toDetails()
                 }
                 ReconcileDecision.InsertNew -> {
+                    // A pull only ever returns the authenticated user's own channels, so the
+                    // current session's id is always correct — details.userId (the server's
+                    // echoed user_id) must not be trusted for local scoping, since every read
+                    // query filters by AccountManager's cached id, not the server's, and a
+                    // mismatch here silently orphans the row (invisible to every screen, no
+                    // crash, no retry fixes it). Mirrors TransactionRepository.reconcileFromServer.
+                    val sessionUserId = currentUserId()
                     val normalizedKey =
                         if (isProviderChannelType(details.channelType)) normalizeSenderKey(details.channelDesc) else null
                     if (normalizedKey != null) {
-                        channelDao.findByNormalizedSenderKey(normalizedKey)?.let {
+                        channelDao.findByNormalizedSenderKey(sessionUserId, normalizedKey)?.let {
                             // A different serverId, same real provider — a pre-existing local
                             // duplicate (plausible for existing users, see ADR-0004) or a
                             // concurrent SMS auto-create that already won. Either way, this
@@ -380,7 +394,7 @@ object ChannelRepository {
                         ChannelEntity(
                             id = UUID.randomUUID().toString(),
                             serverId = details.id,
-                            userId = details.userId,
+                            userId = sessionUserId,
                             name = details.name,
                             channelType = details.channelType,
                             description = details.description,
@@ -399,7 +413,7 @@ object ChannelRepository {
                     val rowId = channelDao.insertIgnore(inserted)
                     if (rowId == -1L) {
                         // Lost a race against a concurrent insert for the same provider.
-                        channelDao.findByNormalizedSenderKey(normalizedKey!!)!!.toDetails()
+                        channelDao.findByNormalizedSenderKey(sessionUserId, normalizedKey!!)!!.toDetails()
                     } else {
                         inserted.toDetails()
                     }
@@ -407,16 +421,10 @@ object ChannelRepository {
             }
         }
 
-    /** Best-effort current user id for locally-created rows (ADR-0004 Slice A2 — closes the
-     * "userId = ''" gap A1 shipped with). Mirrors `TransactionViewModel.currentUsername()`'s
-     * swallow-to-empty pattern: a repository write must never fail just because identity
-     * lookup did. */
-    private suspend fun currentUserId(): String =
-        try {
-            AccountManager.getAccount().id
-        } catch (e: Exception) {
-            ""
-        }
+    /** Current user id, for both stamping locally-created rows and scoping every read query to
+     * the logged-in account. See [AccountManager.currentUserIdOrEmpty] for the swallow-to-empty
+     * semantics. */
+    private suspend fun currentUserId(): String = AccountManager.currentUserIdOrEmpty()
 
     private suspend fun enqueueOutbox(
         entityType: OutboxEntityType,
