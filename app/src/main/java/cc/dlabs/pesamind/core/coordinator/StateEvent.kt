@@ -65,14 +65,6 @@ sealed class StateEvent {
 
     data object BudgetUpdated : StateEvent()
 
-    // ─── Blog Events ────────────────────────────────────────────────────
-
-    /** Published after a successful [cc.dlabs.pesamind.core.data.BlogRepository.refreshPosts]
-     * — fired both from a normal screen load/refresh and from
-     * [cc.dlabs.pesamind.features.blog.BlogMessagingService] after a push-triggered fetch, so
-     * any open [cc.dlabs.pesamind.features.blog.BlogViewModel] picks up new content either way. */
-    data object BlogPostsRefreshed : StateEvent()
-
     // ─── Generic Events ────────────────────────────────────────────────
 
     data class ErrorOccurred(

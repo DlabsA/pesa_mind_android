@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -122,64 +121,6 @@ private fun UnavailableFeatureOverlay(
                     textAlign = TextAlign.Center,
                 )
             }
-        }
-    }
-}
-
-// ─── Finance Blog entry ────────────────────────────────────────────────────────
-
-/** Entry point into [cc.dlabs.pesamind.features.blog.BlogScreen] — a plain link-style card
- * rather than a bottom-nav tab, so the hardcoded 4-item bottom bar in `MainScreen.kt` doesn't
- * need to change. Always tappable regardless of dashboard/budget state, unlike the
- * budget-gated cards below it. */
-@Composable
-private fun FinanceBlogEntryCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Article,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Finance Blog",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    "Short write-ups on managing your money",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
-            )
         }
     }
 }
@@ -299,17 +240,6 @@ private fun DashboardScrollBody(
                             modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                         )
                     }
-                }
-            }
-
-            // ── Finance Blog entry — always navigable regardless of dashboard/budget state,
-            // unlike the budget-gated cards below.
-            item {
-                StaggeredCard(index = 6, visible = cardsVisible) {
-                    FinanceBlogEntryCard(
-                        onClick = { navController?.navigate(Routes.Blog.route) },
-                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                    )
                 }
             }
 

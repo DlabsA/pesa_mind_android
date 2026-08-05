@@ -915,22 +915,3 @@ data class AnomalySection(
     val metadata: AnomalyMetadata,
     val recommendations: List<AnomalyRecommendation> = emptyList(),
 )
-
-// ─── Finance Blog (admin-authored content) ─────────────────────────────────────
-// Backend contract expected from the separate Go repo — NOT implemented there yet as of this
-// change. `GET blog-posts` is called by [cc.dlabs.pesamind.core.data.BlogRepository]; the
-// `POST` that creates a post is admin/web-UI-only and is never called from this app.
-
-data class BlogPostResponse(
-    val id: String,
-    val title: String,
-    val body: String,
-    @SerializedName("published_at") val publishedAt: String,
-)
-
-/** Registers this device's FCM token so the backend can target a push when a new post is
- * published — sent from [cc.dlabs.pesamind.features.blog.BlogMessagingService.onNewToken]. */
-data class RegisterDeviceTokenRequest(
-    val token: String,
-    val platform: String = "android",
-)

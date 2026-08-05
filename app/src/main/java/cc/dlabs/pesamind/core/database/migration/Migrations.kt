@@ -247,26 +247,3 @@ val MIGRATION_6_7 =
             db.execSQL("ALTER TABLE `yearly_budgets` ADD COLUMN `lastSyncedTransactionsJson` TEXT DEFAULT NULL")
         }
     }
-
-/**
- * v7 -> v8: adds the `blog_posts` table — cached admin-authored finance write-ups fetched
- * read-only from the backend (`GET blog-posts`). Unlike every other table here, this app is
- * never the source of truth for a row (posts are created by a separate admin web UI), so
- * there's no outbox/dirty/sync-status column, just a plain cache keyed by the server's own
- * post id.
- */
-val MIGRATION_7_8 =
-    object : Migration(7, 8) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL(
-                "CREATE TABLE IF NOT EXISTS `blog_posts` (" +
-                    "`id` TEXT NOT NULL, " +
-                    "`title` TEXT NOT NULL, " +
-                    "`body` TEXT NOT NULL, " +
-                    "`publishedAt` INTEGER NOT NULL, " +
-                    "`fetchedAt` INTEGER NOT NULL, " +
-                    "`isRead` INTEGER NOT NULL, " +
-                    "PRIMARY KEY(`id`))",
-            )
-        }
-    }

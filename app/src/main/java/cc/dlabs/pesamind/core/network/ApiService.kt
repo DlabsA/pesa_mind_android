@@ -14,7 +14,6 @@ import cc.dlabs.pesamind.core.network.models.AuthRegisterResponse
 import cc.dlabs.pesamind.core.network.models.AuthResponse
 import cc.dlabs.pesamind.core.network.models.BatchCreateChannelsRequest
 import cc.dlabs.pesamind.core.network.models.BatchCreateChannelsResponse
-import cc.dlabs.pesamind.core.network.models.BlogPostResponse
 import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CheckUsernameRequest
@@ -34,7 +33,6 @@ import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
 import cc.dlabs.pesamind.core.network.models.ProcessedMessageResponse
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
-import cc.dlabs.pesamind.core.network.models.RegisterDeviceTokenRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
@@ -274,20 +272,4 @@ interface ApiService {
     suspend fun getAnalytics(
         @Query("period") period: String = "month",
     ): Response<AnalyticResponse>
-
-    // ─── Finance Blog ───────────────────────────────────────────────────────
-    // Backend contract expected from the separate Go repo (see BlogPostResponse's doc
-    // comment) — these two 404 until that repo implements them; [BlogRepository]/
-    // [BlogMessagingService] treat that the same as any other network failure.
-
-    /** [since] is an epoch-millis cursor (as a string) — omit to fetch full history. */
-    @GET("blog-posts")
-    suspend fun getBlogPosts(
-        @Query("since") since: String? = null,
-    ): Response<List<BlogPostResponse>>
-
-    @POST("devices/fcm-token")
-    suspend fun registerDeviceToken(
-        @Body body: RegisterDeviceTokenRequest,
-    ): Response<Unit>
 }
