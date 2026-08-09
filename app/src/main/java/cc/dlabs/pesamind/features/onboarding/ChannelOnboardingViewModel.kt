@@ -44,6 +44,10 @@ data class ChannelOnboardingUiState(
     val isSaving: Boolean = false,
     val error: String? = null,
     val finished: Boolean = false,
+    // Non-empty only for a Free-tier account that selected more channels than its plan allows
+    // (e.g. both MoMo + Airtel, or 4 types at once) — every new signup is on a Premium trial, so
+    // this is a rare path (a lapsed-trial account re-entering onboarding), not the common case.
+    val skippedChannels: List<String> = emptyList(),
 )
 
 /**
@@ -76,10 +80,14 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
 
     fun setMomoPhone(text: String) = _state.update { it.copy(momo = it.momo.copy(accountNumber = text)) }
 
+    fun setMomoBalance(text: String) = _state.update { it.copy(momo = it.momo.copy(openingBalanceText = text)) }
+
     // ── Airtel ───────────────────────────────────────────────────────────────
     fun setAirtelIncluded(included: Boolean) = _state.update { it.copy(airtel = it.airtel.copy(included = included)) }
 
     fun setAirtelPhone(text: String) = _state.update { it.copy(airtel = it.airtel.copy(accountNumber = text)) }
+
+    fun setAirtelBalance(text: String) = _state.update { it.copy(airtel = it.airtel.copy(openingBalanceText = text)) }
 
     // ── Bank ─────────────────────────────────────────────────────────────────
     fun setBankIncluded(included: Boolean) = _state.update { it.copy(bank = it.bank.copy(included = included)) }
@@ -108,6 +116,7 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
             _state.update { it.copy(isSaving = true, error = null) }
 
             val batchItems = mutableListOf<BatchCreateChannelItem>()
+            val skipped = mutableListOf<String>()
 
             suspend fun createIfIncluded(
                 draft: ChannelDraft,
@@ -134,6 +143,12 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
                     when (outcome) {
                         is ChannelCreateOutcome.Created -> outcome.channel
                         is ChannelCreateOutcome.AlreadyExists -> outcome.existing
+                        is ChannelCreateOutcome.TotalLimitExceeded, is ChannelCreateOutcome.MobileMoneyLimitExceeded -> {
+                            // Free-tier limit reached mid-onboarding — skip this one and keep
+                            // going with the rest rather than failing the whole flow.
+                            skipped.add(draft.name)
+                            return
+                        }
                     }
                 batchItems.add(
                     BatchCreateChannelItem(
@@ -169,7 +184,7 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
                     Log.w(TAG, "Onboarding batch flag-sync call failed; will retry on next login", e)
                 }
 
-                _state.update { it.copy(isSaving = false, finished = true) }
+                _state.update { it.copy(isSaving = false, finished = true, skippedChannels = skipped) }
             } catch (e: Exception) {
                 Log.e(TAG, "Onboarding finish failed", e)
                 _state.update { it.copy(isSaving = false, error = e.message ?: "Failed to save channels") }

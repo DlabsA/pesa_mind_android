@@ -22,6 +22,10 @@ data class TransactionState(
     val isSaving: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    // Defaults true (unrestricted) so a screen doesn't flash a Free-tier-restricted UI before
+    // the real value loads — [transactions] itself is already correctly clamped either way by
+    // TransactionRepository, this is purely for UI elements like the date-range picker bound.
+    val isPremium: Boolean = true,
 )
 
 sealed class TransactionCreationResult {
@@ -50,6 +54,9 @@ class TransactionViewModel : UnifiedViewModel() {
     val state: StateFlow<TransactionState> = _state.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
+        }
         viewModelScope.launch {
             try {
                 TransactionRepository.observeTransactions().collect { transactions ->

@@ -209,7 +209,7 @@ object ChannelManager {
             when (
                 val outcome =
                     ChannelRepository.createChannel(
-                        name = "Auto‑created $channelDesc",
+                        name = channelDesc,
                         description = receivingSimNumber,
                         channelType = channelType,
                         channelDesc = channelDesc,
@@ -234,6 +234,17 @@ object ChannelManager {
                     } else {
                         ChannelInfo(live, true)
                     }
+                }
+                is ChannelCreateOutcome.TotalLimitExceeded, is ChannelCreateOutcome.MobileMoneyLimitExceeded -> {
+                    // Free-tier plan limit reached — degrade the same way every other
+                    // auto-create failure here does (SMS ingestion continues, this sender's
+                    // messages just stop auto-creating transactions until the user upgrades or
+                    // frees up a slot).
+                    Log.i(
+                        "ChannelManager",
+                        "Auto-create for sender $senderID skipped — Free-tier channel limit reached",
+                    )
+                    null
                 }
             }
         } catch (e: Exception) {

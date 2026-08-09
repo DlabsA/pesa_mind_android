@@ -168,6 +168,8 @@ class ChannelSenderKeyDedupTest {
                 when (this) {
                     is ChannelCreateOutcome.Created -> channel.id
                     is ChannelCreateOutcome.AlreadyExists -> existing.id
+                    is ChannelCreateOutcome.TotalLimitExceeded, is ChannelCreateOutcome.MobileMoneyLimitExceeded ->
+                        error("unexpected: tier limit hit in a 2-channel test")
                 }
 
             assertEquals(

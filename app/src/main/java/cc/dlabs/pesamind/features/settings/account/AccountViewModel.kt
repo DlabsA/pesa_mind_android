@@ -21,7 +21,11 @@ data class AccountState(
     val successMessage: String? = null,
     val balance: Double? = null,
     val type: String? = null,
-)
+    // Non-null only while on an active Premium trial — see [AccountManager.trialDaysRemaining].
+    val trialDaysRemaining: Int? = null,
+) {
+    val isPremium: Boolean get() = type == "Premium" || type == "Enterprise"
+}
 
 class AccountViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(AccountState())
@@ -51,6 +55,7 @@ class AccountViewModel : UnifiedViewModel() {
                             avatarUrl = cachedAccount.avatarUrl,
                             balance = cachedAccount.balance,
                             type = cachedAccount.type,
+                            trialDaysRemaining = AccountManager.trialDaysRemaining(),
                             isLoading = false,
                         )
                     return@launch

@@ -61,6 +61,14 @@ fun OnboardingMoMoScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth(),
             )
+            OutlinedTextField(
+                value = draft.openingBalanceText,
+                onValueChange = vm::setMomoBalance,
+                label = { Text("Opening balance (optional)") },
+                placeholder = { Text("0") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

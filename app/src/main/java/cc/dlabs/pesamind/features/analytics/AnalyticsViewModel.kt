@@ -10,6 +10,7 @@ import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.data.monthRangeMillis
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.AnalyticResponse
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.StreakSessionCache
 import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -67,6 +68,10 @@ data class AnalyticsUiState(
     // `observeLocalAnalytics`.
     val dayOfWeekSpend: List<DayOfWeekSpend> = emptyList(),
     val topChannels: List<ChannelSpend> = emptyList(),
+    // Defaults true (unrestricted) so gated cards don't flash an upsell before this loads —
+    // the backend response itself is already correctly gated regardless (see fetchFromNetwork),
+    // this is purely for rendering the right placeholder/toggle state.
+    val isPremium: Boolean = true,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────
@@ -80,6 +85,9 @@ class AnalyticsViewModel
 
         init {
             observeLocalAnalytics()
+            viewModelScope.launch {
+                _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
+            }
         }
 
         /**

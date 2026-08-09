@@ -62,6 +62,8 @@ sealed class Routes(val route: String) {
 
     object ChangePassword : Routes("change_password")
 
+    object Upgrade : Routes("upgrade")
+
     object Channels : Routes("channels")
 
     object ChannelDetail : Routes("channel_detail/{channelId}") {

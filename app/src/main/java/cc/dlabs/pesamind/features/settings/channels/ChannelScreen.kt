@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -92,6 +93,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -447,8 +449,8 @@ fun ChannelScreen(
             showStatusField = false,
             isSaving = state.isSaving,
             onDismiss = { showCreateDialog = false },
-            onConfirm = { name, description, type, channelDescription, status ->
-                vm.createChannel(name, description, type, channelDescription, status)
+            onConfirm = { name, description, type, channelDescription, status, openingBalance ->
+                vm.createChannel(name, description, type, channelDescription, status, openingBalance)
                 showCreateDialog = false
             },
         )
@@ -466,7 +468,7 @@ fun ChannelScreen(
             initialStatus = channel.status,
             isSaving = state.isSaving,
             onDismiss = { editingChannel = null },
-            onConfirm = { name, description, _, channelDescription, status ->
+            onConfirm = { name, description, _, channelDescription, status, _ ->
                 vm.updateChannel(
                     id = channel.id,
                     name = name,
@@ -972,6 +974,9 @@ private data class ChannelFormState(
     val mobileNumber: String = "",
     val selectedCountry: CountryCode = COUNTRY_CODES[0],
     val status: Boolean = true,
+    // Only used/shown on "Add channel" (channelKey == null) — editing an existing channel
+    // has no code path to adjust availableBalance, only to set it at creation time.
+    val openingBalanceText: String = "",
     val attemptedSave: Boolean = false,
     // ---- Originals (for restoration on type switch back) ----
     val originalType: String = ChannelTypes.CASH,
@@ -1008,7 +1013,7 @@ private fun ChannelFormDialog(
     initialStatus: Boolean = true,
     isSaving: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String, String, Boolean) -> Unit,
+    onConfirm: (String, String, String, String, Boolean, Double) -> Unit,
     isTypeEditable: Boolean = true,
     showStatusField: Boolean = true,
     subtitle: String? = null,
@@ -1126,6 +1131,11 @@ private fun ChannelFormDialog(
             else -> formState.description
         }
     val effectiveProvider = if (formState.type == ChannelTypes.CASH) "" else formState.channelDescription
+    // Blank/unparseable text is treated as "no opening balance entered" (0.0), same as
+    // ChannelOnboardingViewModel.finish's draft.openingBalanceText.toDoubleOrNull() ?: 0.0 —
+    // never shown/settable outside "Add channel" (channelKey == null), so it's always 0.0 here
+    // for edits regardless of what's typed.
+    val effectiveOpeningBalance = formState.openingBalanceText.toDoubleOrNull() ?: 0.0
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1269,6 +1279,22 @@ private fun ChannelFormDialog(
                         )
                     }
 
+                    // Opening balance — creation-only: ChannelRepository.updateChannel has no
+                    // code path to adjust availableBalance, so editing an existing channel would
+                    // be misleading here.
+                    if (channelKey == null) {
+                        OutlinedTextField(
+                            value = formState.openingBalanceText,
+                            onValueChange = { formState = formState.copy(openingBalanceText = it) },
+                            label = { Text("Opening balance (optional)") },
+                            placeholder = { Text("0") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                        )
+                    }
+
                     // Status
                     if (showStatusField) {
                         Surface(
@@ -1352,6 +1378,7 @@ private fun ChannelFormDialog(
                                     formState.type.trim(),
                                     effectiveProvider.trim(),
                                     formState.status,
+                                    effectiveOpeningBalance,
                                 )
                             }
                         },

@@ -20,6 +20,14 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL ORDER BY createdAt DESC")
     fun observeAll(userId: String): Flow<List<TransactionEntity>>
 
+    /** Same as [observeAll], clamped to [cutoffMillis] and later — the Free-tier history-depth
+     * limit. `cutoffMillis` is epoch millis, matching [TransactionEntity.createdAt]. */
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL AND createdAt >= :cutoffMillis ORDER BY createdAt DESC")
+    fun observeAllSince(
+        userId: String,
+        cutoffMillis: Long,
+    ): Flow<List<TransactionEntity>>
+
     /** Live, channel-scoped list for [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen].
      * [userId] is redundant with [channelId] (a channel always belongs to exactly one account),
      * kept for consistency with every other list query here rather than as an independent gap. */
@@ -57,6 +65,13 @@ interface TransactionDao {
     /** One-shot full-list read for `TransactionViewModel.loadTransactions()`. */
     @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL ORDER BY createdAt DESC")
     suspend fun getAllActive(userId: String): List<TransactionEntity>
+
+    /** Same as [getAllActive], clamped to [cutoffMillis] and later — see [observeAllSince]. */
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL AND createdAt >= :cutoffMillis ORDER BY createdAt DESC")
+    suspend fun getAllActiveSince(
+        userId: String,
+        cutoffMillis: Long,
+    ): List<TransactionEntity>
 
     /** Every row known locally, including soft-deleted — the full-pull diff (Step 3) needs this. */
     @Query("SELECT * FROM transactions")

@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cc.dlabs.pesamind.core.network.models.Account
 import kotlinx.coroutines.flow.first
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 
 private val Context.dataStore by preferencesDataStore("pesamind_account")
 
@@ -16,6 +19,7 @@ object AccountManager {
     private val AvatarUrl = stringPreferencesKey("avatar_url")
     private val Balance = stringPreferencesKey("balance")
     private val Type = stringPreferencesKey("type")
+    private val TrialExpiresAt = stringPreferencesKey("trial_expires_at")
 
     private lateinit var appContext: Context
 
@@ -32,6 +36,7 @@ object AccountManager {
         avatarUrl: String,
         balance: String,
         type: String,
+        trialExpiresAt: String? = null,
     ) {
         if (!isInitialized()) return
         appContext.dataStore.edit {
@@ -41,6 +46,11 @@ object AccountManager {
             it[AvatarUrl] = avatarUrl
             it[Balance] = balance
             it[Type] = type
+            if (trialExpiresAt != null) {
+                it[TrialExpiresAt] = trialExpiresAt
+            } else {
+                it.remove(TrialExpiresAt)
+            }
         }
     }
 
@@ -77,7 +87,49 @@ object AccountManager {
             avatarUrl = data[AvatarUrl] ?: "",
             type = data[Type] ?: "",
             balance = data[Balance]?.toDoubleOrNull() ?: 0.0,
+            trialExpiresAt = data[TrialExpiresAt],
         )
+    }
+
+    /**
+     * Whether the current account's plan is Premium or Enterprise (unlimited
+     * tier). Free is the safe default on any failure (not initialized, no
+     * account cached yet) — never assume Premium when the tier is unknown.
+     * The server always sends the already-effective tier (see
+     * `ToProfileDTO`/`EffectiveType` backend-side), so this never needs to
+     * duplicate trial-expiry math itself — it just reads the cached `type`.
+     */
+    suspend fun isPremium(): Boolean =
+        try {
+            val type = getAccount().type
+            type == "Premium" || type == "Enterprise"
+        } catch (e: Exception) {
+            false
+        }
+
+    /**
+     * Days remaining in an active Premium trial, or `null` if the account
+     * isn't on a trial (Free, paid Premium/Enterprise, or unparseable/missing
+     * data). Floored at 0 rather than negative — a trial whose expiry has
+     * technically passed but hasn't yet been re-synced from the server reads
+     * as "0 days left," not a negative countdown.
+     */
+    suspend fun trialDaysRemaining(): Int? {
+        val account =
+            try {
+                getAccount()
+            } catch (e: Exception) {
+                return null
+            }
+        val expiresAt = account.trialExpiresAt ?: return null
+        val expiry =
+            try {
+                OffsetDateTime.parse(expiresAt).toInstant()
+            } catch (e: Exception) {
+                return null
+            }
+        val daysLeft = ChronoUnit.DAYS.between(Instant.now(), expiry)
+        return daysLeft.coerceAtLeast(0).toInt()
     }
 
     /**
@@ -104,6 +156,7 @@ object AccountManager {
             it.remove(AvatarUrl)
             it.remove(Balance)
             it.remove(Type)
+            it.remove(TrialExpiresAt)
         }
     }
 }

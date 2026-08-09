@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.data.ChannelSpend
 import cc.dlabs.pesamind.core.data.DayOfWeekSpend
+import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.analytics.*
 import cc.dlabs.pesamind.core.network.models.AnalyticsRecommendation
 import cc.dlabs.pesamind.core.network.models.AnomalyData
@@ -64,6 +65,7 @@ import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
+import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
@@ -162,6 +164,7 @@ fun AnalyticsScreen(
                         state = state,
                         viewModel = viewModel,
                         onRefresh = { viewModel.refresh() },
+                        navController = navController,
                     )
             }
         }
@@ -176,6 +179,7 @@ private fun AnalyticsScrollBody(
     state: AnalyticsUiState,
     viewModel: AnalyticsViewModel,
     onRefresh: () -> Unit,
+    navController: NavController,
 ) {
     var cardsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { cardsVisible = true }
@@ -229,6 +233,8 @@ private fun AnalyticsScrollBody(
                         PeriodToggle(
                             period = state.period,
                             onPeriodChange = viewModel::setPeriod,
+                            isPremium = state.isPremium,
+                            onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
                         )
                     }
                     SectionHeader(
@@ -332,6 +338,16 @@ private fun AnalyticsScrollBody(
                                 )
                             }
                         }
+                    } else if (a.anomalies == null && !state.isPremium) {
+                        item {
+                            StaggeredCard(index = 4, visible = cardsVisible) {
+                                PremiumUpsellCard(
+                                    feature = "anomaly detection",
+                                    onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
+                        }
                     } else if (a.anomalies == null) {
                         a.errors["anomalies"]?.let { err ->
                             item {
@@ -385,6 +401,16 @@ private fun AnalyticsScrollBody(
                             )
                         }
                     }
+                } else if (!state.isPremium) {
+                    item {
+                        StaggeredCard(index = 5, visible = cardsVisible) {
+                            PremiumUpsellCard(
+                                feature = "budget vs. actual insights",
+                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
                 } else {
                     // A null budget_vs_actual with no entry in `errors` is the legitimate
                     // "no monthly budget set yet" case (see comprehensive_service.go) — only
@@ -408,6 +434,16 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 6, visible = cardsVisible) {
                             SpendingVelocityCard(
                                 section = a.spendingVelocity,
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
+                } else if (!state.isPremium) {
+                    item {
+                        StaggeredCard(index = 6, visible = cardsVisible) {
+                            PremiumUpsellCard(
+                                feature = "spending velocity",
+                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
@@ -436,6 +472,16 @@ private fun AnalyticsScrollBody(
                             )
                         }
                     }
+                } else if (!state.isPremium) {
+                    item {
+                        StaggeredCard(index = 7, visible = cardsVisible) {
+                            PremiumUpsellCard(
+                                feature = "expense forecasting",
+                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
                 } else {
                     a.errors["expense_forecast"]?.let { err ->
                         item {
@@ -456,6 +502,16 @@ private fun AnalyticsScrollBody(
                         StaggeredCard(index = 8, visible = cardsVisible) {
                             FinancialHealthCard(
                                 health = a.financialHealth.data,
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
+                } else if (!state.isPremium) {
+                    item {
+                        StaggeredCard(index = 8, visible = cardsVisible) {
+                            PremiumUpsellCard(
+                                feature = "financial health score",
+                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
@@ -513,6 +569,8 @@ private fun StaggeredCard(
 private fun PeriodToggle(
     period: AnalyticsPeriod,
     onPeriodChange: (AnalyticsPeriod) -> Unit,
+    isPremium: Boolean,
+    onUpgradeClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val options = listOf(AnalyticsPeriod.MONTH to "Month", AnalyticsPeriod.LIFETIME to "Lifetime")
@@ -520,7 +578,16 @@ private fun PeriodToggle(
         options.forEachIndexed { index, (value, label) ->
             SegmentedButton(
                 selected = period == value,
-                onClick = { onPeriodChange(value) },
+                onClick = {
+                    // Lifetime is Premium-only (it would otherwise trivially bypass the
+                    // Free-tier 90-day transaction-history cap) — tapping it while on Free
+                    // opens the upgrade flow instead of switching periods.
+                    if (value == AnalyticsPeriod.LIFETIME && !isPremium) {
+                        onUpgradeClick()
+                    } else {
+                        onPeriodChange(value)
+                    }
+                },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
             )

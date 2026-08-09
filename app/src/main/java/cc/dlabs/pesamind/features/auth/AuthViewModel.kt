@@ -148,6 +148,7 @@ class AuthViewModel : UnifiedViewModel() {
                                 avatarUrl = profile.avatarUrl ?: "",
                                 balance = profile.balance?.toString() ?: "",
                                 type = profile.type ?: "",
+                                trialExpiresAt = profile.trialExpiresAt,
                             )
                         }
                         syncChannelsOnboardedFlag(body.profile?.channelsOnboarded == true)
@@ -292,6 +293,7 @@ class AuthViewModel : UnifiedViewModel() {
                                 avatarUrl = profile.avatarUrl ?: "",
                                 balance = profile.balance?.toString() ?: "",
                                 type = profile.type ?: "",
+                                trialExpiresAt = profile.trialExpiresAt,
                             )
                         }
                         syncChannelsOnboardedFlag(response.profile?.channelsOnboarded == true)
@@ -369,6 +371,7 @@ class AuthViewModel : UnifiedViewModel() {
                                 avatarUrl = profile.avatarUrl ?: "",
                                 balance = profile.balance?.toString() ?: "",
                                 type = profile.type ?: "",
+                                trialExpiresAt = profile.trialExpiresAt,
                             )
                         }
                         syncChannelsOnboardedFlag(response.profile?.channelsOnboarded == true)

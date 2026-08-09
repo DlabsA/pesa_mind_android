@@ -97,6 +97,8 @@ class SMSMessageProcessor(
                 when (normalizedSender) {
                     MessageSender.MTN_MOB_MONEY -> parseMTNMessage(content)
                     MessageSender.AIRTEL_MONEY -> parseAirtelMessage(content)
+                    MessageSender.STANBIC_BANK -> parseStanbicMessage(content)
+                    MessageSender.CENTENARY_BANK -> parseCentenaryMessage(content)
                     else -> null
                 } ?: run {
                     Log.w(TAG, "Could not parse message content: $content")
@@ -322,14 +324,14 @@ class SMSMessageProcessor(
 
     /** [providerTransactionId] is null unless a provider-specific TID pattern matched —
      * see [extractAirtelTid]'s doc comment for why MTN doesn't have one yet. */
-    private data class ParsedSms(
+    internal data class ParsedSms(
         val amount: Double,
         val type: String,
         val note: String,
         val providerTransactionId: String? = null,
     )
 
-    private fun parseMTNMessage(content: String): ParsedSms? {
+    internal fun parseMTNMessage(content: String): ParsedSms? {
         // No providerTransactionId extraction here: MTN's transaction-reference format hasn't
         // been confirmed against a real sample message (ADR-0004 Phase 0 measurement found
         // zero MTN SMS samples anywhere in this repo) — falling back to smsSourceKey-only
@@ -361,7 +363,7 @@ class SMSMessageProcessor(
         return null
     }
 
-    private fun parseAirtelMessage(content: String): ParsedSms? {
+    internal fun parseAirtelMessage(content: String): ParsedSms? {
         val tid = extractAirtelTid(content)
 
         val expensePatterns =
@@ -371,6 +373,7 @@ class SMSMessageProcessor(
                 Regex("WITHDRAWN\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
                 Regex("has collected UGX\\s*([\\d,]+(?:\\.[\\d]+)?)\\s*from your account", RegexOption.IGNORE_CASE),
                 Regex("You have been debited UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("PAID\\.TID.*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)\\s*to", RegexOption.IGNORE_CASE),
             )
         for (pattern in expensePatterns) {
             pattern.find(content)?.let { match ->
@@ -384,6 +387,7 @@ class SMSMessageProcessor(
                 Regex("CASH DEPOSIT of UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
                 Regex("RECEIVED UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
                 Regex("RECEIVED\\..*?UGX\\s*([\\d,]+(?:\\.[\\d]+)?)", RegexOption.IGNORE_CASE),
+                Regex("Quickloan UGX\\s*([\\d,]+(?:\\.[\\d]+)?)\\s*deposited", RegexOption.IGNORE_CASE),
             )
         for (pattern in incomePatterns) {
             pattern.find(content)?.let { match ->
@@ -395,8 +399,67 @@ class SMSMessageProcessor(
     }
 
     /**
+     * Parses Stanbic Bank Uganda transaction alerts, e.g. "Stanbic Bank Uganda : A transaction
+     * of UGX 3,000,000.00, AccNr : XX5285 has been completed via HEAD OFFICE on 04/08/26
+     * 08:47:56. IMMEDIATELY CALL 0800150150 TO REPORT PHONE THEFT!" (credit, no sign) or
+     * "...UGX -480.00,..." (debit, leading '-'). The sign is the only type discriminator — no
+     * separate credit/debit keyword is present in the message. No providerTransactionId: no
+     * reference/TID field has been observed in any real Stanbic sample seen so far, same
+     * limitation as [parseMTNMessage]. Other Stanbic SMS shapes (phone-theft-report footers,
+     * CCN/OTP messages) contain no "UGX" amount and simply fail to match, same drop-and-log
+     * behavior as any other unparseable message.
+     */
+    internal fun parseStanbicMessage(content: String): ParsedSms? {
+        val match =
+            Regex("A transaction of UGX\\s*(-?[\\d,]+\\.\\d{2})", RegexOption.IGNORE_CASE)
+                .find(content) ?: return null
+        val raw = match.groupValues[1].replace(",", "")
+        val amount = raw.removePrefix("-").toDoubleOrNull() ?: return null
+        val type = if (raw.startsWith("-")) TYPE_EXPENSE else TYPE_INCOME
+        return ParsedSms(amount, type, content)
+    }
+
+    /**
+     * Parses Centenary Bank transaction alerts, e.g. "CENTENARY: Dear REBECCA, a trxn of
+     * -210,000 on your A/C **663 on 20-04-2026 at 17:43. Bal:296,349 (ATM WITHDRAWAL VISA
+     * /Ebanking). Call 0800200555" (debit, leading '-') or "...a trxn of 471,500 on your A/C
+     * ...(APRIL 2026 END OF MONTH PAY/Finance)..." (credit, no sign) — same sign-is-the-only-
+     * discriminator shape as [parseStanbicMessage]. Also tolerates the "a Debit trxn of" variant
+     * seen on some messages, and messages missing the "Bal:" field entirely (the amount capture
+     * doesn't depend on it). No providerTransactionId — no reference/TID field observed in any
+     * real Centenary sample seen so far, same limitation as [parseMTNMessage].
+     *
+     * Separately handles reversal messages, e.g. "Centenary. Dear MS. NAKINTU REBECCA, your last
+     * transaction of 210,000 has been reversed successfully." — these don't match the "on your
+     * A/C" shape above at all (no account/date/balance fields). Recorded as income for the
+     * reversed amount rather than attempting to find-and-negate the original debit transaction:
+     * matching two separate messages by amount alone would be fragile (nothing ties them
+     * together but a coincidentally-equal figure), whereas recording the reversal as its own
+     * income event keeps the net balance correct with no cross-message linking.
+     */
+    internal fun parseCentenaryMessage(content: String): ParsedSms? {
+        Regex("a\\s+(?:Debit\\s+)?trxn of\\s*(-?[\\d,]+(?:\\.\\d+)?)\\s*on your A/C", RegexOption.IGNORE_CASE)
+            .find(content)?.let { match ->
+                val raw = match.groupValues[1].replace(",", "")
+                val amount = raw.removePrefix("-").toDoubleOrNull() ?: return@let
+                val type = if (raw.startsWith("-")) TYPE_EXPENSE else TYPE_INCOME
+                return ParsedSms(amount, type, content)
+            }
+
+        Regex("your last transaction of\\s*([\\d,]+(?:\\.\\d+)?)\\s*has been reversed", RegexOption.IGNORE_CASE)
+            .find(content)?.let { match ->
+                val amount = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return@let
+                return ParsedSms(amount, TYPE_INCOME, content)
+            }
+
+        return null
+    }
+
+    /**
      * Extracts Airtel Uganda's `TID` transaction reference, e.g. "...SENT.TID 123456.UGX..."
-     * or "...TID: 123456...". Tolerant of a colon or bare whitespace before the value, since
+     * or "...TID: 123456...". Also matches the `Trans ID:` variant seen on some Airtel message
+     * shapes (e.g. "...Trans ID:153569568145.") — same provider, inconsistent field label.
+     * Tolerant of a colon or bare whitespace before the value, since
      * the only confirmed real-world evidence of this field's shape in this repo (the
      * pre-existing `SENT\.TID.*?UGX` amount regex above) shows `TID` and `UGX` co-occurring
      * in expense messages but doesn't itself capture the value or its exact delimiter — this
@@ -415,8 +478,8 @@ class SMSMessageProcessor(
      * `\b`s avoid matching `TID` as a substring of an unrelated word; the length floor avoids
      * treating a stray 1-3 character token as a transaction id.
      */
-    private fun extractAirtelTid(content: String): String? =
-        Regex("\\bTID\\b[:\\s]+(\\w{4,})", RegexOption.IGNORE_CASE).find(content)?.groupValues?.get(1)
+    internal fun extractAirtelTid(content: String): String? =
+        Regex("\\b(?:TID|Trans\\s*ID)\\b[:\\s]+(\\w{4,})", RegexOption.IGNORE_CASE).find(content)?.groupValues?.get(1)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -1,11 +1,13 @@
 package cc.dlabs.pesamind.features.settings.account
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -172,6 +174,64 @@ fun AccountSettingsScreen(
                     )
                 } else {
                     Text("Save Changes", fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
+                "Plan",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = Color.Gray,
+            )
+
+            // ── Plan row ──────────────────────────────────────
+            Surface(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { navController.navigate(Routes.Upgrade.route) },
+                shape = RoundedCornerShape(12.dp),
+                color = teal.copy(alpha = 0.08f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (state.isPremium) Icons.Filled.Star else Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = teal,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = state.type ?: "Free",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                        )
+                        val trialDays = state.trialDaysRemaining
+                        if (trialDays != null) {
+                            Text(
+                                text = "$trialDays day${if (trialDays == 1) "" else "s"} left in your trial",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                            )
+                        } else if (!state.isPremium) {
+                            Text(
+                                text = "Upgrade for unlimited channels & full analytics",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                            )
+                        }
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(14.dp),
+                    )
                 }
             }
 

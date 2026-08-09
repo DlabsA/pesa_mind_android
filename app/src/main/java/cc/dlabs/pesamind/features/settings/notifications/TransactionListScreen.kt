@@ -423,6 +423,7 @@ fun TransactionListScreen(
     if (showDatePicker) {
         TransactionDateRangePickerDialog(
             initialDates = selectedDates,
+            isPremium = state.isPremium,
             onDismiss = { showDatePicker = false },
             onConfirm = {
                 selectedDates = it
@@ -537,16 +538,36 @@ private fun TransactionDateRangeField(
     )
 }
 
+/** Free-tier transaction history depth in days — mirrors
+ * [cc.dlabs.pesamind.core.data.TransactionRepository]'s clamp, kept in sync manually. */
+private const val FREE_TIER_HISTORY_DAYS = 90L
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TransactionDateRangePickerDialog(
     initialDates: Pair<Long, Long>?,
+    isPremium: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (Pair<Long, Long>) -> Unit,
 ) {
+    // Free tier can only pick within the last FREE_TIER_HISTORY_DAYS — grayed out rather than
+    // removing the picker entirely, so the boundary itself communicates the plan limit.
+    val selectableDates =
+        remember(isPremium) {
+            if (isPremium) {
+                object : SelectableDates {}
+            } else {
+                val cutoffMillis = System.currentTimeMillis() - FREE_TIER_HISTORY_DAYS * 24 * 60 * 60 * 1000
+                object : SelectableDates {
+                    override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= cutoffMillis
+                }
+            }
+        }
     val pickerState =
         rememberDateRangePickerState(
             initialSelectedStartDateMillis = initialDates?.first,
             initialSelectedEndDateMillis = initialDates?.second,
+            selectableDates = selectableDates,
         )
     Dialog(
         onDismissRequest = onDismiss,

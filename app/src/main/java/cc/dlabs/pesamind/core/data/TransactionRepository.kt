@@ -103,9 +103,24 @@ object TransactionRepository {
         }
     }
 
+    /** Free-tier transaction history depth — mirrors the backend's `freeTierHistoryDays`
+     * clamp (`~/Github/Personal/pesa-mind/internal/interfaces/http/handlers/transaction_handler.go`);
+     * kept in sync manually, the backend remains the source of truth and authoritative
+     * enforcement. */
+    private const val FREE_TIER_HISTORY_DAYS = 90L
+
+    private fun freeTierHistoryCutoffMillis(): Long = System.currentTimeMillis() - FREE_TIER_HISTORY_DAYS * 24 * 60 * 60 * 1000
+
     fun observeTransactions(): Flow<List<TransactionDetails>> =
         flow {
-            emitAll(transactionDao.observeAll(AccountManager.currentUserIdOrEmpty()).map { list -> list.map { it.toDetails() } })
+            val userId = AccountManager.currentUserIdOrEmpty()
+            val source =
+                if (AccountManager.isPremium()) {
+                    transactionDao.observeAll(userId)
+                } else {
+                    transactionDao.observeAllSince(userId, freeTierHistoryCutoffMillis())
+                }
+            emitAll(source.map { list -> list.map { it.toDetails() } })
         }
 
     /** Live, offline-first list for one channel — instant from Room, refreshed by [refreshByChannel]. */
@@ -157,8 +172,16 @@ object TransactionRepository {
 
     /** One-shot read of the current list — used by `loadTransactions()`/`refresh()`, which
      * screens should otherwise prefer [observeTransactions] over for live updates. */
-    suspend fun getAllTransactions(): List<TransactionDetails> =
-        transactionDao.getAllActive(AccountManager.currentUserIdOrEmpty()).map { it.toDetails() }
+    suspend fun getAllTransactions(): List<TransactionDetails> {
+        val userId = AccountManager.currentUserIdOrEmpty()
+        val entities =
+            if (AccountManager.isPremium()) {
+                transactionDao.getAllActive(userId)
+            } else {
+                transactionDao.getAllActiveSince(userId, freeTierHistoryCutoffMillis())
+            }
+        return entities.map { it.toDetails() }
+    }
 
     /**
      * Live income/expense/savings/net-movement summary for [year]/[month] (1-based), computed

@@ -20,6 +20,7 @@ import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.OutboxPusher
+import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
 import dagger.hilt.EntryPoints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,15 @@ sealed class ChannelCreateOutcome {
     data class Created(val channel: ChannelDetails) : ChannelCreateOutcome()
 
     data class AlreadyExists(val existing: ChannelDetails) : ChannelCreateOutcome()
+
+    /** Free tier is capped at [ChannelRepository.FREE_TIER_CHANNEL_LIMIT] channels total —
+     * a client-side first line of defense; the backend remains authoritative (see
+     * [ChannelRepository.createChannel]'s doc comment on the offline-overshoot case). */
+    data object TotalLimitExceeded : ChannelCreateOutcome()
+
+    /** Free tier is capped at [ChannelRepository.FREE_TIER_MOBILE_MONEY_LIMIT] MobileMoney
+     * channel(s), a sub-cap within the total limit above. */
+    data object MobileMoneyLimitExceeded : ChannelCreateOutcome()
 }
 
 /**
@@ -99,6 +109,12 @@ object ChannelRepository {
 
     private fun isProviderChannelType(channelType: String): Boolean = channelType != CASH_CHANNEL_TYPE
 
+    /** Mirrors the backend's `category.FreeTierChannelLimit`/`FreeTierMobileMoneyLimit`
+     * (`~/Github/Personal/pesa-mind/internal/domain/category/service.go`) — kept in sync
+     * manually, the backend remains the source of truth and authoritative enforcement. */
+    private const val FREE_TIER_CHANNEL_LIMIT = 3
+    private const val FREE_TIER_MOBILE_MONEY_LIMIT = 1
+
     fun init(context: Context) {
         database = EntryPoints.get(context.applicationContext, DatabaseEntryPoint::class.java).database()
         networkMonitor = NetworkMonitor(context.applicationContext)
@@ -153,6 +169,14 @@ object ChannelRepository {
      * CASH channels share a single `channelDesc` ("Cash") across many legitimate rows and must
      * never be forced unique. Non-provider callers get exactly the old unconditional-insert
      * behavior (a fresh UUID primary key never collides).
+     *
+     * The [ChannelCreateOutcome.TotalLimitExceeded]/[ChannelCreateOutcome.MobileMoneyLimitExceeded]
+     * checks here are a first line of defense only — this local count can't see channels created
+     * on another device, or ones still sitting unsynced in another session's outbox. The backend
+     * remains authoritative: an offline-created channel that turns out to overshoot the plan's
+     * limit once synced gets rejected by [cc.dlabs.pesamind.core.sync.OutboxPusher] instead
+     * (`CHANNEL_LIMIT_EXCEEDED`/`MOBILE_MONEY_CHANNEL_LIMIT_EXCEEDED`), surfaced as a non-blocking
+     * notice rather than silently dropped — see `OutboxPusher.pushChannelEntry`.
      */
     suspend fun createChannel(
         name: String,
@@ -166,8 +190,19 @@ object ChannelRepository {
         val now = System.currentTimeMillis()
         val normalizedKey = if (isProviderChannelType(channelType)) normalizeSenderKey(channelDesc) else null
         val userId = currentUserId()
+        val isPremium = AccountManager.isPremium()
         val outcome =
             database.withTransaction {
+                if (!isPremium) {
+                    if (channelDao.countByUserId(userId) >= FREE_TIER_CHANNEL_LIMIT) {
+                        return@withTransaction ChannelCreateOutcome.TotalLimitExceeded
+                    }
+                    if (channelType == ChannelTypes.MOBILE_MONEY &&
+                        channelDao.countByUserIdAndChannelType(userId, ChannelTypes.MOBILE_MONEY) >= FREE_TIER_MOBILE_MONEY_LIMIT
+                    ) {
+                        return@withTransaction ChannelCreateOutcome.MobileMoneyLimitExceeded
+                    }
+                }
                 if (normalizedKey != null) {
                     channelDao.findByNormalizedSenderKey(userId, normalizedKey)?.let {
                         // Found a pre-existing row under this provider's normalizedSenderKey —

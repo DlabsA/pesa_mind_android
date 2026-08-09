@@ -29,7 +29,7 @@ object MessageSender {
     const val POSTBANK_UGANDA = "postbankuganda"
     const val PRIDE_BANK = "pridebank"
     const val SALAAM_BANK = "salaambank"
-    const val STANBIC_BANK = "stanbicbank"
+    const val STANBIC_BANK = "Stanbic"
     const val STANDARD_CHARTERED_BANK = "standardcharteredbank"
     const val TROPICAL_BANK = "tropicalbank"
     const val UBA_UGANDA = "ubauganda"

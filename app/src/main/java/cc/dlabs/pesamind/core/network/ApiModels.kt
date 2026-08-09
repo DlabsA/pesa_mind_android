@@ -39,6 +39,11 @@ data class AuthProfile(
     val balance: Double? = null,
     @SerializedName("channels_onboarded")
     val channelsOnboarded: Boolean = false,
+    // Non-null only while Type == "Premium" AND the account is on its 30-day
+    // trial (never set for a paid Premium/Enterprise account) — backend always
+    // sends the already-effective Type, so this is purely for a countdown UI.
+    @SerializedName("trial_expires_at")
+    val trialExpiresAt: String? = null,
 )
 
 data class AuthRegisterResponse(
@@ -188,6 +193,7 @@ data class Account(
     val avatarUrl: String = "",
     val type: String = "",
     val balance: Double = 0.0,
+    val trialExpiresAt: String? = null,
 )
 
 data class TransactionRequest(

@@ -51,6 +51,9 @@ data class BudgetUiState(
     val lastUpdated: Long? = null,
     val streakCount: Int = 0,
     val streakLastActiveDate: String? = null,
+    // Defaults true (unrestricted) so the next-month card doesn't flash an upsell before this
+    // loads. Next-month lookahead is a Premium-only feature — see [observeBudgets].
+    val isPremium: Boolean = true,
 ) {
     /** Net balance = income - expenditure for the current monthly budget */
     val monthlyBalance: Long
@@ -117,7 +120,11 @@ class BudgetViewModel
         init {
             loadUserProfile()
             observeConnectivity()
-            observeBudgets()
+            viewModelScope.launch {
+                val premium = AccountManager.isPremium()
+                _state.update { it.copy(isPremium = premium) }
+                observeBudgets(premium)
+            }
             viewModelScope.launch { fetchStreak() }
         }
 
@@ -141,8 +148,11 @@ class BudgetViewModel
         }
 
         /** Sole writer of yearlyBudget/currentMonthlyBudget/nextMonthBudget — see this class's
-         * doc comment for why no `StateEvent.SyncCompleted` handling is needed alongside it. */
-        private fun observeBudgets() {
+         * doc comment for why no `StateEvent.SyncCompleted` handling is needed alongside it.
+         * [isPremium] gates the next-month observer: Free tier never fetches/observes it at
+         * all (not just hides it in the UI), saving the redundant Room read/collector for a
+         * card that will just render an upsell teaser instead. */
+        private fun observeBudgets(isPremium: Boolean) {
             val year = _state.value.displayYear.toLong()
             val month = _state.value.displayMonth
             val nextMonth = _state.value.nextMonthIndex
@@ -164,9 +174,11 @@ class BudgetViewModel
                     }
                 }
             }
-            viewModelScope.launch {
-                BudgetRepository.observeMonthlyBudget(nextMonth, nextYear).collect { budget ->
-                    _state.update { it.copy(nextMonthBudget = budget) }
+            if (isPremium) {
+                viewModelScope.launch {
+                    BudgetRepository.observeMonthlyBudget(nextMonth, nextYear).collect { budget ->
+                        _state.update { it.copy(nextMonthBudget = budget) }
+                    }
                 }
             }
         }
@@ -216,11 +228,16 @@ class BudgetViewModel
                 try {
                     val year = _state.value.displayYear.toLong()
                     val month = _state.value.displayMonth
-                    val nextMonth = _state.value.nextMonthIndex
-                    val nextYear = _state.value.nextMonthYear.toLong()
                     val yearly = BudgetRepository.getYearlyBudgetByYear(year)
                     val monthly = BudgetRepository.getMonthlyBudgetByMonthYear(month, year)
-                    val next = BudgetRepository.getMonthlyBudgetByMonthYear(nextMonth, nextYear)
+                    val next =
+                        if (_state.value.isPremium) {
+                            val nextMonth = _state.value.nextMonthIndex
+                            val nextYear = _state.value.nextMonthYear.toLong()
+                            BudgetRepository.getMonthlyBudgetByMonthYear(nextMonth, nextYear)
+                        } else {
+                            null
+                        }
                     _state.update { it.copy(yearlyBudget = yearly, currentMonthlyBudget = monthly, nextMonthBudget = next) }
                 } finally {
                     _state.update { it.copy(isRefreshing = false) }

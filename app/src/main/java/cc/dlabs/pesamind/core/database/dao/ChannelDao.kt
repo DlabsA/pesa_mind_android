@@ -123,4 +123,16 @@ interface ChannelDao {
 
     @Query("SELECT COUNT(*) FROM channels")
     suspend fun count(): Int
+
+    /** Live (non-deleted) channel count for a user — the Free-tier total-cap check. */
+    @Query("SELECT COUNT(*) FROM channels WHERE userId = :userId AND deletedAt IS NULL")
+    suspend fun countByUserId(userId: String): Int
+
+    /** Live (non-deleted) count of a given channel type for a user — the Free-tier
+     * mobile-money sub-cap check. */
+    @Query("SELECT COUNT(*) FROM channels WHERE userId = :userId AND channelType = :channelType AND deletedAt IS NULL")
+    suspend fun countByUserIdAndChannelType(
+        userId: String,
+        channelType: String,
+    ): Int
 }

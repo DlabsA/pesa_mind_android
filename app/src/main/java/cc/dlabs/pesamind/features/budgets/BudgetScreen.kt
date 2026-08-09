@@ -71,6 +71,7 @@ import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.theme.Radius
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
+import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.ShimmerBox
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.core.ui.StatsRowsSkeleton
@@ -186,20 +187,28 @@ fun BudgetScreen(
 
                     item {
                         StaggeredCard(index = 1, visible = cardsVisible) {
-                            NextMonthBudgetCard(
-                                nextMonth = state.nextMonthIndex,
-                                nextYear = state.nextMonthYear,
-                                hasExisting = state.hasNextMonthBudget,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                                onSetBudget = {
-                                    navController.navigate(
-                                        Routes.SetMonthlyBudget.createRoute(
-                                            state.nextMonthIndex,
-                                            state.nextMonthYear,
-                                        ),
-                                    )
-                                },
-                            )
+                            if (state.isPremium) {
+                                NextMonthBudgetCard(
+                                    nextMonth = state.nextMonthIndex,
+                                    nextYear = state.nextMonthYear,
+                                    hasExisting = state.hasNextMonthBudget,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                    onSetBudget = {
+                                        navController.navigate(
+                                            Routes.SetMonthlyBudget.createRoute(
+                                                state.nextMonthIndex,
+                                                state.nextMonthYear,
+                                            ),
+                                        )
+                                    },
+                                )
+                            } else {
+                                PremiumUpsellCard(
+                                    feature = "next-month budget planning",
+                                    onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
 

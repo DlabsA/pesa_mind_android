@@ -27,6 +27,8 @@ class MessageMonitoringService : Service() {
         private const val CHANNEL_ID = "pesamind_monitoring"
     }
 
+    private var foregroundStarted = false
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "MessageMonitoringService created")
@@ -40,8 +42,11 @@ class MessageMonitoringService : Service() {
     ): Int {
         Log.d(TAG, "MessageMonitoringService started")
 
-        // Start as foreground service (required on Android 8+)
-        startForeground(NOTIFICATION_ID, buildNotification())
+        // Only start as foreground service once (on first run)
+        if (!foregroundStarted) {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            foregroundStarted = true
+        }
 
         // Return START_STICKY to ensure the service restarts if killed
         return START_STICKY
@@ -95,10 +100,10 @@ class MessageMonitoringService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("PesaMind Active")
-            .setContentText("Monitoring SMS transactions...")
+            .setContentText("Monitoring transactions")
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true) // Cannot be dismissed by user
+            .setOngoing(false)
             .setContentIntent(pendingIntent)
             .build()
     }

@@ -18,6 +18,9 @@ data class ChannelState(
     val isSaving: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    // Distinguishes a Free-tier limit rejection from any other error — a screen can use this to
+    // show an "Upgrade" CTA next to [error] instead of a plain dismiss button.
+    val needsUpgrade: Boolean = false,
 )
 
 /**
@@ -120,6 +123,7 @@ class ChannelViewModel : UnifiedViewModel() {
         channelType: String,
         channelDescription: String,
         status: Boolean = true,
+        openingBalance: Double = 0.0,
     ) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
         val normalizedChannelDesc =
@@ -157,6 +161,7 @@ class ChannelViewModel : UnifiedViewModel() {
                         channelType = normalizedType,
                         channelDesc = normalizedChannelDesc ?: "Cash",
                         status = status,
+                        openingBalance = openingBalance,
                     )
             ) {
                 is ChannelCreateOutcome.Created -> {
@@ -173,6 +178,22 @@ class ChannelViewModel : UnifiedViewModel() {
                         _state.value.copy(
                             isSaving = false,
                             message = "A channel for this provider already exists: ${outcome.existing.name}",
+                        )
+                }
+                is ChannelCreateOutcome.TotalLimitExceeded -> {
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error = "Free plan is limited to 3 channels. Upgrade to Premium for unlimited channels.",
+                            needsUpgrade = true,
+                        )
+                }
+                is ChannelCreateOutcome.MobileMoneyLimitExceeded -> {
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error = "Free plan allows only 1 mobile money channel. Upgrade to Premium for unlimited channels.",
+                            needsUpgrade = true,
                         )
                 }
             }
@@ -239,6 +260,6 @@ class ChannelViewModel : UnifiedViewModel() {
     }
 
     fun clearMessage() {
-        _state.value = _state.value.copy(message = null, error = null)
+        _state.value = _state.value.copy(message = null, error = null, needsUpgrade = false)
     }
 }
