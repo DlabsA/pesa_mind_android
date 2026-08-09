@@ -80,6 +80,10 @@ class MessageMonitoringService : Service() {
     /**
      * Builds the persistent notification displayed while the service is running.
      * This informs the user that the app is actively monitoring SMS messages.
+     *
+     * Note: This notification CANNOT be dismissed by the user because it's required
+     * for a foreground service on Android 8+. The system enforces that foreground
+     * services must display a persistent, non-dismissible notification.
      */
     private fun buildNotification(): android.app.Notification {
         // Intent to open the app when notification is tapped
@@ -99,12 +103,21 @@ class MessageMonitoringService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("PesaMind Active")
-            .setContentText("Monitoring transactions")
+            .setContentTitle("PesaMind")
+            .setContentText("Monitoring for transactions")
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(false)
+            .setShowWhen(false)
+            .setAutoCancel(false)
+            // Foreground service notifications are non-dismissible by design
             .setContentIntent(pendingIntent)
+            // Make it compact and less intrusive
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("Transaction monitoring is active. Tap to view app.")
+            )
+            .setColor(0xFF6366F1.toInt()) // Material indigo for visual polish
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 }
