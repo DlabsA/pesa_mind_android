@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug-build-only receiver — see DebugSmsInjectReceiver's doc comment. Lets
+             `adb shell am broadcast` drive the SMS pipeline directly for manual verification,
+             since a real SMS_RECEIVED broadcast can't be spoofed via adb on a non-rooted,
+             production-signed device. This entire file only merges into debug builds. -->
+        <receiver
+            android:name=".features.settings.notifications.DebugSmsInjectReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="cc.dlabs.pesamind.debug.INJECT_SMS" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
