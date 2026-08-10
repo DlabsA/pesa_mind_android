@@ -2,6 +2,7 @@ package cc.dlabs.pesamind.core.di
 
 import android.content.Context
 import androidx.room.Room
+import cc.dlabs.pesamind.BuildConfig
 import cc.dlabs.pesamind.core.database.DATABASE_NAME
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
@@ -35,6 +36,17 @@ object DatabaseModule {
     ): PesaMindDatabase =
         Room.databaseBuilder(context, PesaMindDatabase::class.java, DATABASE_NAME)
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .apply {
+                // Debug builds only: a dev device can end up with a local schema *ahead* of
+                // whatever branch is currently checked out (e.g. after testing a newer build) —
+                // that's a downgrade, which no real Migration can express. Self-heal instead of
+                // hard-crashing on launch. Real users can never hit this on their normal forward
+                // upgrade path, so ADR-0004's "every forward migration must be real, never
+                // destructive" guarantee is untouched in release builds.
+                if (BuildConfig.DEBUG) {
+                    fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+                }
+            }
             .build()
 
     @Provides

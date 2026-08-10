@@ -1,13 +1,11 @@
 package cc.dlabs.pesamind.core.utils
 
 import cc.dlabs.pesamind.R
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 object StreakUiHelper {
-    private const val STREAK_DATE_PATTERN = "yyyy-MM-dd"
-
     fun label(streakCount: Int): String =
         when (streakCount) {
             0 -> "Start your streak"
@@ -27,15 +25,17 @@ object StreakUiHelper {
         }
     }
 
+    /**
+     * [lastActiveDate] is the backend's full ISO-8601 instant (e.g. "2026-08-09T21:00:00Z"),
+     * representing the backend's local midnight (Africa/Kampala) — not a bare calendar date
+     * already in the device's zone. Parse as a real instant and convert to the DEVICE's local
+     * calendar date before comparing to "today": the user cares about their own calendar day.
+     */
     fun isActiveToday(lastActiveDate: String?): Boolean {
         if (lastActiveDate.isNullOrBlank()) return false
         return try {
-            val sdf = SimpleDateFormat(STREAK_DATE_PATTERN, Locale.getDefault())
-            val lastDate = sdf.parse(lastActiveDate) ?: return false
-            val lastCal = Calendar.getInstance().apply { time = lastDate }
-            val todayCal = Calendar.getInstance()
-            lastCal.get(Calendar.YEAR) == todayCal.get(Calendar.YEAR) &&
-                lastCal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR)
+            val lastLocalDate = Instant.parse(lastActiveDate).atZone(ZoneId.systemDefault()).toLocalDate()
+            lastLocalDate == LocalDate.now(ZoneId.systemDefault())
         } catch (_: Exception) {
             false
         }

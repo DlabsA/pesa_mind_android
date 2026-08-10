@@ -50,11 +50,10 @@ private val comparisonRows =
     listOf(
         PlanComparisonRow(
             "SMS auto-capture",
-            "MTN + Airtel Money only, up to 1 mobile money channel",
-            "All supported banks, unlimited mobile money",
+            "Off once your trial ends — add transactions manually",
+            "Automatic for every channel, always",
         ),
         PlanComparisonRow("Manual transactions", "Unlimited, any channel", "Unlimited, any channel"),
-        PlanComparisonRow("Channels", "Up to 3 total", "Unlimited"),
         PlanComparisonRow("Transaction history", "Last 90 days", "Full history + search/filter"),
         PlanComparisonRow("Budgets", "1 active monthly budget, current month only", "Yearly budgets + next-month planning"),
         PlanComparisonRow(
@@ -117,7 +116,8 @@ fun UpgradeScreen(navController: NavHostController) {
                             )
                         }
                         Text(
-                            "Unlock unlimited channels, full transaction history, and the complete analytics suite.",
+                            "Unlock automatic transaction capture for every channel, full transaction history, " +
+                                "and the complete analytics suite.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

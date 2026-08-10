@@ -6,6 +6,7 @@ import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
 import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,9 +19,11 @@ data class ChannelState(
     val isSaving: Boolean = false,
     val error: String? = null,
     val message: String? = null,
-    // Distinguishes a Free-tier limit rejection from any other error — a screen can use this to
-    // show an "Upgrade" CTA next to [error] instead of a plain dismiss button.
-    val needsUpgrade: Boolean = false,
+    // Read once at init (matches TransactionViewModel's identical pattern) — gates whether
+    // per-channel SMS auto-capture can be toggled at all. Defaults true so the toggle doesn't
+    // flash as locked before the real value loads; toggleSmsNotification re-checks the real
+    // value server-side-cached value before acting regardless of what the UI shows.
+    val isPremium: Boolean = true,
 )
 
 /**
@@ -51,6 +54,9 @@ class ChannelViewModel : UnifiedViewModel() {
     private var activeStatusFilter: Boolean? = null
 
     init {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
+        }
         viewModelScope.launch {
             try {
                 ChannelRepository.observeChannels().collect { channels ->
@@ -180,22 +186,6 @@ class ChannelViewModel : UnifiedViewModel() {
                             message = "A channel for this provider already exists: ${outcome.existing.name}",
                         )
                 }
-                is ChannelCreateOutcome.TotalLimitExceeded -> {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            error = "Free plan is limited to 3 channels. Upgrade to Premium for unlimited channels.",
-                            needsUpgrade = true,
-                        )
-                }
-                is ChannelCreateOutcome.MobileMoneyLimitExceeded -> {
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            error = "Free plan allows only 1 mobile money channel. Upgrade to Premium for unlimited channels.",
-                            needsUpgrade = true,
-                        )
-                }
             }
         }
     }
@@ -234,7 +224,11 @@ class ChannelViewModel : UnifiedViewModel() {
     }
 
     /**
-     * Toggle SMS notification flag for a channel (non-CASH only)
+     * Toggle SMS auto-capture for a channel (non-CASH only). This is the real per-channel
+     * control [cc.dlabs.pesamind.core.storage.ChannelManager.isSmsAllowedForSender] reads —
+     * gated on Premium/active-trial here too, not just in the UI, since a stored `true` on a
+     * channel from before a trial lapsed must never let a Free account re-enable capture by
+     * calling this directly.
      */
     fun toggleSmsNotification(channelId: String) {
         viewModelScope.launch {
@@ -243,6 +237,15 @@ class ChannelViewModel : UnifiedViewModel() {
 
                 if (targetChannel.channelType == "CASH") {
                     _state.value = _state.value.copy(error = "SMS notifications not available for CASH channels")
+                    return@launch
+                }
+
+                if (!AccountManager.isPremium()) {
+                    _state.value =
+                        _state.value.copy(
+                            isPremium = false,
+                            error = "Upgrade to Premium to control SMS auto-capture per channel",
+                        )
                     return@launch
                 }
 
@@ -260,6 +263,6 @@ class ChannelViewModel : UnifiedViewModel() {
     }
 
     fun clearMessage() {
-        _state.value = _state.value.copy(message = null, error = null, needsUpgrade = false)
+        _state.value = _state.value.copy(message = null, error = null)
     }
 }

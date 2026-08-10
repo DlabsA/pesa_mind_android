@@ -2,6 +2,7 @@ package cc.dlabs.pesamind.core.network
 import android.util.Log
 import cc.dlabs.pesamind.core.network.ApiClient.BASE_URL
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.sync.SyncScheduler
@@ -143,6 +144,27 @@ class TokenRefreshInterceptor : Interceptor {
                     // This prevents a race condition window where other threads see null tokens
                     TokenManager.saveTokens(authResponse.accessToken, authResponse.refreshToken)
                     Log.d(TAG, "✓ New tokens saved successfully")
+
+                    // The refresh response carries the same up-to-date profile (type,
+                    // trialExpiresAt, ...) a login response does — persist it here too, or a
+                    // trial lapsing/upgrading mid-session never reaches AccountManager's cache
+                    // until the next full login. AuthResponse/AuthProfile carry no `email`
+                    // field (login/signup source it from the form/OAuth callback instead, which
+                    // this interceptor doesn't have), so fall back to the already-cached account
+                    // for that and anything else the response might not populate.
+                    authResponse.profile?.let { profile ->
+                        val cached = AccountManager.getAccount()
+                        AccountManager.saveAccount(
+                            id = profile.id ?: cached.id,
+                            email = cached.email,
+                            username = profile.username ?: cached.username,
+                            avatarUrl = profile.avatarUrl ?: cached.avatarUrl,
+                            balance = profile.balance?.toString() ?: cached.balance.toString(),
+                            type = profile.type ?: cached.type,
+                            trialExpiresAt = profile.trialExpiresAt,
+                        )
+                    }
+
                     // A fresh token is worth a pull — the outbox/periodic pull may have been
                     // silently failing on the now-expired token for a while.
                     SyncScheduler.triggerSyncNow()

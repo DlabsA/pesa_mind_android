@@ -42,6 +42,8 @@ import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
@@ -422,6 +424,7 @@ fun ChannelScreen(
                         items(visibleChannels, key = { it.id }) { channel ->
                             ChannelCard(
                                 item = channel,
+                                smsCaptureLocked = !state.isPremium,
                                 onEdit = { editingChannel = channel },
                                 onView = {
                                     navController.navigate(Routes.ChannelDetail.createRoute(channel.id))
@@ -429,6 +432,7 @@ fun ChannelScreen(
                                 onAddTransaction = {
                                     navController.navigate(Routes.AddTransaction.createRoute(channel.id))
                                 },
+                                onToggleSmsCapture = { vm.toggleSmsNotification(channel.id) },
                             )
                         }
                         item { Spacer(Modifier.height(96.dp)) }
@@ -697,9 +701,11 @@ internal fun Double.asUgx(): String = "UGX ${ugxFmt.format(this)}"
 @Composable
 fun ChannelCard(
     item: ChannelDetails,
+    smsCaptureLocked: Boolean,
     onEdit: () -> Unit,
     onView: () -> Unit,
     onAddTransaction: () -> Unit,
+    onToggleSmsCapture: () -> Unit,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -834,6 +840,16 @@ fun ChannelCard(
                 overflow = TextOverflow.Ellipsis,
             )
 
+            // ── SMS auto-capture: real per-channel control, not a CASH concept ──
+            if (item.channelType != ChannelTypes.CASH) {
+                Spacer(Modifier.height(10.dp))
+                SmsCaptureRow(
+                    checked = item.smsNotificationEnabled && !smsCaptureLocked,
+                    locked = smsCaptureLocked,
+                    onToggle = onToggleSmsCapture,
+                )
+            }
+
             // ── Action row: solid neutral pills ──────────────────────────────
             Spacer(Modifier.height(14.dp))
             Row(
@@ -881,6 +897,72 @@ fun ChannelCard(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * The real control behind whether this channel's incoming SMS get auto-captured into
+ * transactions — [checked] mirrors [cc.dlabs.pesamind.core.network.models.ChannelDetails
+ * .smsNotificationEnabled], the exact field [cc.dlabs.pesamind.core.storage.ChannelManager
+ * .isSmsAllowedForSender] reads at parse time. [locked] means the account isn't currently
+ * Premium/on an active trial: the switch always renders off and non-interactive in that state
+ * (regardless of the channel's own stored preference, which is left untouched in the database
+ * so it's restored automatically on upgrade — see [ChannelViewModel.toggleSmsNotification]).
+ * Never shown for CASH channels, which have no SMS source to capture.
+ */
+@Composable
+private fun SmsCaptureRow(
+    checked: Boolean,
+    locked: Boolean,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (locked) Icons.Outlined.Lock else Icons.Outlined.Notifications,
+                contentDescription = null,
+                tint =
+                    if (locked) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    } else {
+                        getPrimaryColor()
+                    },
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "SMS auto-capture",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                )
+                if (locked) {
+                    Text(
+                        "Requires Premium",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = { onToggle() },
+                enabled = !locked,
+                colors =
+                    SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = getPrimaryColor(),
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+            )
         }
     }
 }

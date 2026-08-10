@@ -164,6 +164,14 @@ object ChannelManager {
      * outbox), the same write path every other channel mutation already uses, instead of calling
      * `ApiClient.api.createChannel()` directly. See the inline comments below for the full
      * reasoning.
+     *
+     * [ChannelInfo.enabled] below is the channel's own real, user-controlled
+     * `ChannelDetails.smsNotificationEnabled` (toggled per channel from the Channels screen,
+     * `ChannelViewModel.toggleSmsNotification`) — the caller ([cc.dlabs.pesamind.features.
+     * settings.notifications.SMSMessageProcessor]) already gates on
+     * `AccountManager.isPremium()` before this method is ever reached, so a Free/lapsed account
+     * never gets here at all; this is purely a within-plan per-channel preference, not a second
+     * tier check.
      */
     suspend fun isSmsAllowedForSender(
         receivingSimNumber: String,
@@ -192,7 +200,7 @@ object ChannelManager {
         // every message through the network branch below, every time).
         val matchingChannel = ChannelRepository.findByNormalizedSenderKey(channelDesc)
         if (matchingChannel != null) {
-            return ChannelInfo(matchingChannel, true)
+            return ChannelInfo(matchingChannel, matchingChannel.smsNotificationEnabled)
         }
 
         // Local-first as of Slice A3: goes through ChannelRepository.createChannel (Room +
@@ -216,7 +224,7 @@ object ChannelManager {
                         status = true,
                     )
             ) {
-                is ChannelCreateOutcome.Created -> ChannelInfo(outcome.channel, true)
+                is ChannelCreateOutcome.Created -> ChannelInfo(outcome.channel, outcome.channel.smsNotificationEnabled)
                 is ChannelCreateOutcome.AlreadyExists -> {
                     // createChannel's own atomic dedup-on-insert can resolve AlreadyExists to a
                     // row that is itself soft-deleted (normalizedSenderKey stays unique *across*
@@ -232,19 +240,8 @@ object ChannelManager {
                         )
                         null
                     } else {
-                        ChannelInfo(live, true)
+                        ChannelInfo(live, live.smsNotificationEnabled)
                     }
-                }
-                is ChannelCreateOutcome.TotalLimitExceeded, is ChannelCreateOutcome.MobileMoneyLimitExceeded -> {
-                    // Free-tier plan limit reached — degrade the same way every other
-                    // auto-create failure here does (SMS ingestion continues, this sender's
-                    // messages just stop auto-creating transactions until the user upgrades or
-                    // frees up a slot).
-                    Log.i(
-                        "ChannelManager",
-                        "Auto-create for sender $senderID skipped — Free-tier channel limit reached",
-                    )
-                    null
                 }
             }
         } catch (e: Exception) {

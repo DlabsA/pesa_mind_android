@@ -128,6 +128,13 @@ class AnalyticsViewModel
             when (event) {
                 // Auto-refresh when transactions are created
                 is StateEvent.TransactionCreated -> {
+                    // Clear synchronously (before the coroutine below is queued) so no
+                    // concurrent reader — this ViewModel's own fetchFromNetwork(), or
+                    // BudgetViewModel's fetchStreak() reading the same shared
+                    // StreakSessionCache — can observe a stale snapshot. Previously only
+                    // cleared on UserLoggedOut, so once any screen populated it, the
+                    // displayed streak froze until logout regardless of new transactions.
+                    StreakSessionCache.clear()
                     viewModelScope.launch {
                         try {
                             refreshSuspend()
@@ -143,6 +150,7 @@ class AnalyticsViewModel
                 is StateEvent.ChannelUpdated,
                 is StateEvent.ChannelDeleted,
                 -> {
+                    StreakSessionCache.clear()
                     viewModelScope.launch {
                         try {
                             refresh()
@@ -153,8 +161,15 @@ class AnalyticsViewModel
 
                 // SyncWorker just finished a push+pull cycle — the accurate correction after
                 // TransactionCreated's immediate (possibly-stale) refresh above. refreshSuspend()
-                // already has no isConnectedNow guard to bypass (unlike Dashboard's).
+                // already has no isConnectedNow guard to bypass (unlike Dashboard's). Must also
+                // clear the streak cache here: TransactionCreated's own fetchFromNetwork()
+                // already repopulated it with whatever /dashboard returned at that moment,
+                // which the backend's own same-day dedup semantics can still render
+                // stale-looking seconds later — without clearing again, this "accurate
+                // correction" pass would just silently re-serve that same cached snapshot
+                // instead of refetching, defeating its own documented purpose.
                 is StateEvent.SyncCompleted -> {
+                    StreakSessionCache.clear()
                     viewModelScope.launch {
                         try {
                             refreshSuspend()

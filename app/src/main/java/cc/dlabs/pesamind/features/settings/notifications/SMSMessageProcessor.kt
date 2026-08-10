@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.data.ProcessedMessageRepository
 import cc.dlabs.pesamind.core.network.models.SMSMessage
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
 import cc.dlabs.pesamind.core.utils.TransactionCreationResult
@@ -83,6 +84,16 @@ class SMSMessageProcessor(
             val normalizedSender = MessageSender.normalizeOrNull(senderId)
             if (normalizedSender == null) {
                 Log.w(TAG, "Unknown sender: $senderId")
+                return@withContext
+            }
+
+            // Free tier (no active trial, not Premium) gets no automatic parsing at all — this
+            // is the actual Free-tier restriction, not a channel count. Placed ahead of
+            // ChannelManager so a lapsed account neither auto-creates a channel for a
+            // never-seen sender nor a transaction on an existing one; manual entry is
+            // unaffected since it never goes through this pipeline.
+            if (!AccountManager.isPremium()) {
+                Log.i(TAG, "Message parsing skipped: account is not on an active trial or Premium plan")
                 return@withContext
             }
 
