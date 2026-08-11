@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -172,7 +173,7 @@ fun ChannelScreen(
                 title = {
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text(
-                            text = "Channels",
+                            text = "Accounts",
                             style =
                                 MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Bold,
@@ -181,7 +182,7 @@ fun ChannelScreen(
                         )
                         if (state.channels.isNotEmpty()) {
                             Text(
-                                text = "${state.channels.size} channel${if (state.channels.size != 1) "s" else ""}",
+                                text = "${state.channels.size} account${if (state.channels.size != 1) "s" else ""}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                             )
@@ -216,7 +217,7 @@ fun ChannelScreen(
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = {
                     Text(
-                        "Add Channel",
+                        "Add Account",
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     )
                 },
@@ -234,7 +235,8 @@ fun ChannelScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .imePadding(),
         ) {
             // ── Divider under top bar
             Box(
@@ -447,7 +449,7 @@ fun ChannelScreen(
     if (showCreateDialog) {
         ChannelFormDialog(
             channelKey = null,
-            title = "New Channel",
+            title = "New Account",
             confirmLabel = "Create",
             initialStatus = true,
             showStatusField = false,
@@ -463,7 +465,7 @@ fun ChannelScreen(
     editingChannel?.let { channel ->
         ChannelFormDialog(
             channelKey = channel.id,
-            title = "Edit Channel",
+            title = "Edit Account",
             confirmLabel = "Save Changes",
             initialName = channel.name,
             initialDescription = channel.description,
@@ -579,7 +581,7 @@ private fun ChannelSearchField(
         onValueChange = onQueryChange,
         modifier = modifier.fillMaxWidth(),
         placeholder = {
-            Text("Search channels", style = MaterialTheme.typography.bodyMedium)
+            Text("Search accounts", style = MaterialTheme.typography.bodyMedium)
         },
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
         trailingIcon = {
@@ -605,7 +607,7 @@ private fun ChannelSearchField(
 private fun ChannelNoMatchesState(onClear: () -> Unit) {
     EmptyState(
         icon = Icons.Outlined.SearchOff,
-        title = "No matching channels",
+        title = "No matching accounts",
         subtitle = "Try a different search term",
         modifier = Modifier.fillMaxSize().padding(32.dp),
         iconSize = 36.dp,
@@ -940,7 +942,7 @@ private fun SmsCaptureRow(
             Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "SMS auto-capture",
+                    "Account auto tracking",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
                 )
                 if (locked) {
@@ -1231,7 +1233,8 @@ private fun ChannelFormDialog(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .heightIn(max = 640.dp),
+                    .heightIn(max = 640.dp)
+                    .imePadding(),
         ) {
             Column {
                 // ---- Header (sticky) ----------------------------------------

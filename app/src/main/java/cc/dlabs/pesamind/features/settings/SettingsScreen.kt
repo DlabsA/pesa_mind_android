@@ -215,8 +215,8 @@ fun SettingsScreen(rootNav: NavHostController) {
         SettingsRow(
             icon = Icons.Filled.Money,
             iconTint = teal,
-            title = "Financial Channel",
-            subtitle = "Configure financial channels",
+            title = "Financial Accounts",
+            subtitle = "Configure financial accounts",
             onClick = { rootNav.navigate(Routes.Channels.route) },
         )
 

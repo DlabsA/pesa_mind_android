@@ -114,7 +114,7 @@ class MessageMonitoringService : Service() {
             // Make it compact and less intrusive
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("Transaction monitoring is active. Tap to view app.")
+                    .bigText("Transaction monitoring is active. Tap to view app."),
             )
             .setColor(0xFF6366F1.toInt()) // Material indigo for visual polish
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)

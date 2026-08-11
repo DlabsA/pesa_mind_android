@@ -66,6 +66,34 @@ class DashboardViewModel
         private val _state = MutableStateFlow(DashboardUiState())
         val state: StateFlow<DashboardUiState> = _state.asStateFlow()
 
+        /** Serializes every network-refetch entry point — [load]/[init]'s cold-launch fetch and
+         * [refreshSuspend]/[refreshAfterSyncSuspend] — against each other, for two different
+         * reasons depending on the caller:
+         *  - [load]/[init] use it to DEDUPE: both can independently decide "nothing loaded yet,
+         *    fetch" within milliseconds of each other at cold launch (init's connectivity
+         *    collector fires ~instantly on ViewModel construction; load() follows ~30ms later
+         *    via DashboardScreen's LaunchedEffect(Unit)). The guard is re-checked *inside* the
+         *    lock so whichever caller loses the race sees the winner's now-populated
+         *    `dashboard` and skips its own redundant fetch, instead of both firing a real
+         *    GET /dashboard.
+         *  - [refreshSuspend]/[refreshAfterSyncSuspend] use it so two overlapping callers (e.g.
+         *    a manual pull-to-refresh racing the [StateEvent.TransactionCreated] handler) both
+         *    genuinely wait for and perform a real fetch, rather than a plain `isRefreshing`
+         *    boolean letting the second caller skip work and return instantly with stale data —
+         *    that would silently reintroduce the exact "refreshed signal fires before the fetch
+         *    finishes" bug this split exists to fix. These two do NOT re-check any guard inside
+         *    the lock — every call always performs a real fetch.
+         *
+         * Must be declared *before* [init], not just anywhere in the class: `viewModelScope`
+         * runs on `Dispatchers.Main.immediate`, and [NetworkMonitor.isConnected] seeds its
+         * current value synchronously on collection, so init's `collect` lambda — including its
+         * own `refreshMutex.withLock` call — runs synchronously, still inside this constructor.
+         * Kotlin initializes properties/init blocks in textual order, so declaring this after
+         * [init] leaves it null at that point: `.withLock` then throws a NullPointerException
+         * on `Mutex.lock`. Confirmed via a production crash, 2026-08-11 — don't move this back
+         * down. */
+        private val refreshMutex = Mutex()
+
         init {
             // Mirror iOS: observe connectivity, auto-load when connection returns
             viewModelScope.launch {
@@ -78,7 +106,19 @@ class DashboardViewModel
                     // dashboard had already loaded once this session.
                     val reconnected = wasConnected == false
                     if (connected && (_state.value.dashboard == null || reconnected)) {
-                        fetchFromNetwork()
+                        // Re-checked fresh *inside* the lock so whichever of init/load() loses
+                        // the race to acquire refreshMutex sees the winner's now-populated
+                        // `dashboard` and skips its own redundant fetch — see refreshMutex's
+                        // doc comment. `reconnected` is intentionally reused as-is (a stable
+                        // val from this specific isConnected emission): a genuine reconnect
+                        // still refetches even if a concurrent load() already populated
+                        // `dashboard` while this waited for the lock, matching
+                        // refreshSuspend()'s "always fetch when explicitly triggered" contract.
+                        refreshMutex.withLock {
+                            if (_state.value.dashboard == null || reconnected) {
+                                fetchFromNetwork()
+                            }
+                        }
                     }
                     wasConnected = connected
                 }
@@ -157,25 +197,33 @@ class DashboardViewModel
         // ─── Public API (mirrors iOS load() / refresh()) ──────────────────────────
 
         fun load() {
+            // Cheap, unsynchronized fast path: once loaded, every re-entry to this screen
+            // returns immediately without launching a coroutine or touching refreshMutex.
             if (_state.value.dashboard != null) return
             viewModelScope.launch {
+                // Set immediately, unsynchronized — this is what shows the Loading skeleton
+                // promptly on cold launch. Deliberately NOT inside refreshMutex.withLock below:
+                // init's own cold-launch fetch almost always wins the race to acquire that lock
+                // first and can hold it for the full ~1s+ GET /dashboard round trip, so gating
+                // this update behind the same lock would delay — or entirely skip — the
+                // loading-skeleton feedback the very first frame is supposed to show.
                 _state.update {
                     it.copy(
                         phase = DashboardPhase.Loading,
                         isOffline = !networkMonitor.isConnectedNow,
                     )
                 }
-                if (networkMonitor.isConnectedNow) fetchFromNetwork()
+                // Shares refreshMutex with init()/refreshSuspend()/refreshAfterSyncSuspend() so
+                // this and init's near-simultaneous cold-launch fetch can't both hit the
+                // network at once. Re-checked fresh *inside* the lock so whichever caller loses
+                // the race sees the winner's now-populated `dashboard` and skips its own
+                // redundant fetch.
+                refreshMutex.withLock {
+                    if (_state.value.dashboard != null) return@withLock
+                    if (networkMonitor.isConnectedNow) fetchFromNetwork()
+                }
             }
         }
-
-        /** Serializes [refreshSuspend]/[refreshAfterSyncSuspend] so two overlapping callers
-         * (e.g. a manual pull-to-refresh racing the [StateEvent.TransactionCreated] handler)
-         * both genuinely wait for a real fetch to finish, rather than a plain `isRefreshing`
-         * boolean letting the second caller skip work and return instantly with stale data —
-         * that would silently reintroduce the exact "refreshed signal fires before the fetch
-         * finishes" bug this split exists to fix. */
-        private val refreshMutex = Mutex()
 
         /** Suspend core of [refresh] — awaits the actual network refetch (or the offline
          * short-circuit) before returning, so a caller that needs to know a refresh has

@@ -137,169 +137,137 @@ fun AddTransactionScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .background(MaterialTheme.colorScheme.background)
-                    .verticalScroll(rememberScrollState()),
+                    .imePadding(),
         ) {
-            // ── Hero header ───────────────────────────────────────────────────
-            Box(
+            // ── Scrollable content (hero + form card) ───────────────────────
+            Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .background(
-                            brush =
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(accentColor, accentColor.copy(alpha = 0.8f)),
-                                ),
-                        )
-                        .padding(top = 24.dp, bottom = 32.dp, start = 16.dp, end = 16.dp),
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
             ) {
-                // Back button
-                IconButton(
-                    onClick = { navController.popBackStack() },
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .size(40.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-
-                Column(
+                // ── Hero header ───────────────────────────────────────────────────
+                Box(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = 48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                            .background(
+                                brush =
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        colors = listOf(accentColor, accentColor.copy(alpha = 0.8f)),
+                                    ),
+                            )
+                            .padding(top = 24.dp, bottom = 32.dp, start = 16.dp, end = 16.dp),
                 ) {
-                    // Amount display — centre stage
-                    Text(
-                        text = "UGX",
-                        fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.75f),
-                        letterSpacing = 2.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text =
-                            if (amountText.isEmpty()) {
-                                "0"
-                            } else {
-                                val number = amountText.toBigInteger()
-                                NumberFormat.getNumberInstance(LocalLocale.current.platformLocale)
-                                    .apply<NumberFormat> {
-                                        this.minimumFractionDigits = 0
-                                        this.maximumFractionDigits = 0
-                                    }.format(number)
-                            },
-                        fontSize = 52.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        letterSpacing = (-1).sp,
-                    )
-                }
-            }
-
-            // ── Card that overlaps the hero ───────────────────────────────────
-            Card(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-20.dp))
-                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(28.dp)),
-                shape = RoundedCornerShape(28.dp),
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    // ── Income / Expense toggle ───────────────────────────────
-                    TransactionTypeToggle(
-                        selected = txType,
-                        onSelect = { txType = it },
-                        accentColor = accentColor,
-                    )
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outline,
-                        thickness = 1.dp,
-                    )
-
-                    // ── Amount field ──────────────────────────────────────────
-                    LabeledField(label = "Amount") {
-                        OutlinedTextField(
-                            value = amountText,
-                            onValueChange = { raw ->
-                                // Allow only valid decimal numbers
-                                if (raw.isEmpty() || raw.matches(Regex("^\\d{0,10}(\\.\\d{0,2})?\$"))) {
-                                    amountText = raw
-                                }
-                            },
-                            placeholder = { Text("0.00") },
-                            prefix = { Text("UGX  ", fontWeight = FontWeight.SemiBold) },
-                            isError = amountError,
-                            supportingText =
-                                if (amountError) {
-                                    { Text("Enter a valid amount greater than zero") }
-                                } else {
-                                    null
-                                },
-                            keyboardOptions =
-                                KeyboardOptions(
-                                    keyboardType = KeyboardType.Decimal,
-                                    imeAction = ImeAction.Next,
-                                ),
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            colors =
-                                OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = accentColor,
-                                    cursorColor = accentColor,
-                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                ),
+                    // Back button
+                    IconButton(
+                        onClick = { navController.popBackStack() },
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
                         )
                     }
 
-                    // ── Channel ID dropdown ──────────────────────────────────
-                    LabeledField(label = "Channel") {
-                        ExposedDropdownMenuBox(
-                            expanded = channelDropdownExpanded,
-                            onExpandedChange = { channelDropdownExpanded = !channelDropdownExpanded },
-                        ) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        // Amount display — centre stage
+                        Text(
+                            text = "UGX",
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = 0.75f),
+                            letterSpacing = 2.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text =
+                                if (amountText.isEmpty()) {
+                                    "0"
+                                } else {
+                                    val number = amountText.toBigInteger()
+                                    NumberFormat.getNumberInstance(LocalLocale.current.platformLocale)
+                                        .apply<NumberFormat> {
+                                            this.minimumFractionDigits = 0
+                                            this.maximumFractionDigits = 0
+                                        }.format(number)
+                                },
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            letterSpacing = (-1).sp,
+                        )
+                    }
+                }
+
+                // ── Card that overlaps the hero ───────────────────────────────────
+                Card(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .offset(y = (-20.dp))
+                            .shadow(elevation = 12.dp, shape = RoundedCornerShape(28.dp)),
+                    shape = RoundedCornerShape(28.dp),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        // ── Income / Expense toggle ───────────────────────────────
+                        TransactionTypeToggle(
+                            selected = txType,
+                            onSelect = { txType = it },
+                            accentColor = accentColor,
+                        )
+
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outline,
+                            thickness = 1.dp,
+                        )
+
+                        // ── Amount field ──────────────────────────────────────────
+                        LabeledField(label = "Amount") {
                             OutlinedTextField(
-                                value = channelList.find { it.id == channelId }?.name ?: "",
-                                onValueChange = {},
-                                readOnly = true,
-                                placeholder = { Text("Select a channel") },
-                                isError = channelError,
+                                value = amountText,
+                                onValueChange = { raw ->
+                                    // Allow only valid decimal numbers
+                                    if (raw.isEmpty() || raw.matches(Regex("^\\d{0,10}(\\.\\d{0,2})?\$"))) {
+                                        amountText = raw
+                                    }
+                                },
+                                placeholder = { Text("0.00") },
+                                prefix = { Text("UGX  ", fontWeight = FontWeight.SemiBold) },
+                                isError = amountError,
                                 supportingText =
-                                    if (channelError) {
-                                        { Text("Channel ID cannot be blank") }
+                                    if (amountError) {
+                                        { Text("Enter a valid amount greater than zero") }
                                     } else {
                                         null
                                     },
-                                trailingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null,
-                                    )
-                                },
-                                modifier =
-                                    Modifier
-                                        .menuAnchor()
-                                        .fillMaxWidth(),
+                                keyboardOptions =
+                                    KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next,
+                                    ),
+                                singleLine = true,
                                 shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 colors =
                                     OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = accentColor,
@@ -308,64 +276,104 @@ fun AddTransactionScreen(
                                         unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                     ),
                             )
-                            ExposedDropdownMenu(
+                        }
+
+                        // ── Channel ID dropdown ──────────────────────────────────
+                        LabeledField(label = "Account") {
+                            ExposedDropdownMenuBox(
                                 expanded = channelDropdownExpanded,
-                                onDismissRequest = { channelDropdownExpanded = false },
+                                onExpandedChange = { channelDropdownExpanded = !channelDropdownExpanded },
                             ) {
-                                channelList.forEach { channel ->
-                                    DropdownMenuItem(
-                                        text = { Text(channel.name) },
-                                        onClick = {
-                                            channelId = channel.id
-                                            channelDropdownExpanded = false
+                                OutlinedTextField(
+                                    value = channelList.find { it.id == channelId }?.name ?: "",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    placeholder = { Text("Select a Account") },
+                                    isError = channelError,
+                                    supportingText =
+                                        if (channelError) {
+                                            { Text("Account ID cannot be blank") }
+                                        } else {
+                                            null
                                         },
-                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                                    )
+                                    trailingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .menuAnchor()
+                                            .fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors =
+                                        OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = accentColor,
+                                            cursorColor = accentColor,
+                                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        ),
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = channelDropdownExpanded,
+                                    onDismissRequest = { channelDropdownExpanded = false },
+                                ) {
+                                    channelList.forEach { channel ->
+                                        DropdownMenuItem(
+                                            text = { Text(channel.name) },
+                                            onClick = {
+                                                channelId = channel.id
+                                                channelDropdownExpanded = false
+                                            },
+                                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    // ── Note field ────────────────────────────────────────────
-                    LabeledField(label = "Note") {
-                        OutlinedTextField(
-                            value = note,
-                            onValueChange = { if (it.length <= 200) note = it },
-                            placeholder = { Text("What was this for?") },
-                            minLines = 2,
-                            maxLines = 4,
-                            keyboardOptions =
-                                KeyboardOptions(
-                                    keyboardType = KeyboardType.Text,
-                                    capitalization = KeyboardCapitalization.Sentences,
-                                    imeAction = ImeAction.Done,
-                                ),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            supportingText = {
-                                Text(
-                                    text = "${note.length}/200",
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.End,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.outline,
-                                )
-                            },
-                            colors =
-                                OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = accentColor,
-                                    cursorColor = accentColor,
-                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                ),
-                        )
+                        // ── Note field ────────────────────────────────────────────
+                        LabeledField(label = "Note") {
+                            OutlinedTextField(
+                                value = note,
+                                onValueChange = { if (it.length <= 200) note = it },
+                                placeholder = { Text("What was this for?") },
+                                minLines = 2,
+                                maxLines = 4,
+                                keyboardOptions =
+                                    KeyboardOptions(
+                                        keyboardType = KeyboardType.Text,
+                                        capitalization = KeyboardCapitalization.Sentences,
+                                        imeAction = ImeAction.Done,
+                                    ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                supportingText = {
+                                    Text(
+                                        text = "${note.length}/200",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.End,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                },
+                                colors =
+                                    OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = accentColor,
+                                        cursorColor = accentColor,
+                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                            )
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ── Submit button ─────────────────────────────────────────────────
+            // ── Submit button (sticky footer) ─────────────────────────────────
             val canSubmit =
                 channelId.isNotBlank() &&
                     amountText.toDoubleOrNull() != null &&

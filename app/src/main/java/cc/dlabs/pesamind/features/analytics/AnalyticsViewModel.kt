@@ -66,8 +66,6 @@ data class AnalyticsUiState(
     val isPeriodChanging: Boolean = false,
     // Locally-computed (Room-only, no backend endpoint) — see [AnalyticsViewModel]'s
     // `observeLocalAnalytics`.
-    val dayOfWeekSpend: List<DayOfWeekSpend> = emptyList(),
-    val topChannels: List<ChannelSpend> = emptyList(),
     // Defaults true (unrestricted) so gated cards don't flash an upsell before this loads —
     // the backend response itself is already correctly gated regardless (see fetchFromNetwork),
     // this is purely for rendering the right placeholder/toggle state.
@@ -84,32 +82,8 @@ class AnalyticsViewModel
         val state: StateFlow<AnalyticsUiState> = _state.asStateFlow()
 
         init {
-            observeLocalAnalytics()
             viewModelScope.launch {
                 _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
-            }
-        }
-
-        /**
-         * Feeds [AnalyticsUiState.dayOfWeekSpend]/[AnalyticsUiState.topChannels] from Room —
-         * no network round-trip, so this needs no `load()`/`refresh()` gating of its own and
-         * updates live the instant a transaction is created/edited locally (same rationale as
-         * `DashboardViewModel`'s local summary card). Re-subscribes whenever
-         * [AnalyticsUiState.period] changes so the aggregation window follows the existing
-         * Month/Lifetime toggle.
-         */
-        private fun observeLocalAnalytics() {
-            viewModelScope.launch {
-                _state.map { it.period }.distinctUntilChanged().collectLatest { period ->
-                    val range = periodRangeMillis(period)
-                    combine(
-                        TransactionRepository.observeSpendingByDayOfWeek(range?.first, range?.second),
-                        TransactionRepository.observeTopChannelsBySpend(range?.first, range?.second),
-                    ) { dayOfWeek, topChannels -> dayOfWeek to topChannels }
-                        .collect { (dayOfWeek, topChannels) ->
-                            _state.value = _state.value.copy(dayOfWeekSpend = dayOfWeek, topChannels = topChannels)
-                        }
-                }
             }
         }
 

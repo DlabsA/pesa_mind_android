@@ -216,7 +216,8 @@ fun TransactionListScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .imePadding(),
         ) {
             when {
                 // ── Loading skeleton (initial load AND pull-to-refresh) ──────

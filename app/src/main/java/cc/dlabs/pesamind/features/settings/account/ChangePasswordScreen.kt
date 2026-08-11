@@ -55,63 +55,70 @@ fun ChangePasswordScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .imePadding(),
         ) {
-            // ── Current password ─────────────────────────────
-            PasswordField(
-                value = state.currentPassword,
-                onValueChange = { vm.onCurrentPasswordChange(it) },
-                label = "Current Password",
-                showPassword = showCurrent,
-                onToggle = { showCurrent = !showCurrent },
-                teal = teal,
-            )
-
-            // ── New password ─────────────────────────────────
-            PasswordField(
-                value = state.newPassword,
-                onValueChange = { vm.onNewPasswordChange(it) },
-                label = "New Password",
-                showPassword = showNew,
-                onToggle = { showNew = !showNew },
-                teal = teal,
-            )
-
-            // ── Confirm new password ─────────────────────────
-            PasswordField(
-                value = state.confirmPassword,
-                onValueChange = { vm.onConfirmPasswordChange(it) },
-                label = "Confirm New Password",
-                showPassword = showConfirm,
-                onToggle = { showConfirm = !showConfirm },
-                teal = teal,
-                isError = state.error?.contains("match") == true,
-            )
-
-            // ── Password strength indicator ──────────────────
-            if (state.newPassword.isNotEmpty()) {
-                PasswordStrengthBar(password = state.newPassword)
-            }
-
-            // ── Error message ────────────────────────────────
-            if (state.error != null) {
-                Text(
-                    text = state.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // ── Current password ─────────────────────────────
+                PasswordField(
+                    value = state.currentPassword,
+                    onValueChange = { vm.onCurrentPasswordChange(it) },
+                    label = "Current Password",
+                    showPassword = showCurrent,
+                    onToggle = { showCurrent = !showCurrent },
+                    teal = teal,
                 )
+
+                // ── New password ─────────────────────────────────
+                PasswordField(
+                    value = state.newPassword,
+                    onValueChange = { vm.onNewPasswordChange(it) },
+                    label = "New Password",
+                    showPassword = showNew,
+                    onToggle = { showNew = !showNew },
+                    teal = teal,
+                )
+
+                // ── Confirm new password ─────────────────────────
+                PasswordField(
+                    value = state.confirmPassword,
+                    onValueChange = { vm.onConfirmPasswordChange(it) },
+                    label = "Confirm New Password",
+                    showPassword = showConfirm,
+                    onToggle = { showConfirm = !showConfirm },
+                    teal = teal,
+                    isError = state.error?.contains("match") == true,
+                )
+
+                // ── Password strength indicator ──────────────────
+                if (state.newPassword.isNotEmpty()) {
+                    PasswordStrengthBar(password = state.newPassword)
+                }
+
+                // ── Error message ────────────────────────────────
+                if (state.error != null) {
+                    Text(
+                        text = state.error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
 
-            Spacer(Modifier.height(8.dp))
-
-            // ── Submit button ────────────────────────────────
+            // ── Submit button (sticky footer) ────────────────────────────────
             Button(
                 onClick = { vm.submit() },
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 8.dp, bottom = 16.dp)
                         .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = teal),
