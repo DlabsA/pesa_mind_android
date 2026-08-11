@@ -102,7 +102,7 @@ fun ChannelDetailScreen(
         topBar = {
             val channel = state.channel
             DetailScreenTopBar(
-                title = channel?.name ?: "Channel",
+                title = channel?.name ?: "Account",
                 subtitle = channel?.let { displayChannelType(it.channelType) } ?: "",
                 badge = "",
                 onBack = { navController.popBackStack() },
