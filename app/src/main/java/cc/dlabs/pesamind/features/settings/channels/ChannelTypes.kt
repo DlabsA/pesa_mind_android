@@ -12,6 +12,25 @@ object ChannelTypes {
     }
 }
 
+/** Free-tier per-type channel caps — Premium/Enterprise are unlimited, see
+ * [cc.dlabs.pesamind.core.storage.AccountManager.isPremium]. Keyed by [ChannelTypes] constants
+ * so [ChannelRepository.createChannel] never needs its own normalization step. */
+object ChannelLimits {
+    const val FREE_CASH_LIMIT = 1
+    const val FREE_MOBILE_MONEY_LIMIT = 2
+    const val FREE_BANK_LIMIT = 2
+
+    /** Null means no cap applies (including for an unrecognized [channelType] — fail open
+     * rather than guess a limit for a type this object doesn't know about). */
+    fun freeLimitFor(channelType: String): Int? =
+        when (channelType) {
+            ChannelTypes.CASH -> FREE_CASH_LIMIT
+            ChannelTypes.MOBILE_MONEY -> FREE_MOBILE_MONEY_LIMIT
+            ChannelTypes.BANK -> FREE_BANK_LIMIT
+            else -> null
+        }
+}
+
 object ChannelDescMobileMoney {
     const val AIRTELMONEY = "Airtel Money"
     const val MTNMOBILEMONEY = "MTN Mobile Money"

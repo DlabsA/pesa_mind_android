@@ -20,6 +20,7 @@ import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.OutboxPusher
+import cc.dlabs.pesamind.features.settings.channels.ChannelLimits
 import dagger.hilt.EntryPoints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,11 @@ sealed class ChannelCreateOutcome {
     data class Created(val channel: ChannelDetails) : ChannelCreateOutcome()
 
     data class AlreadyExists(val existing: ChannelDetails) : ChannelCreateOutcome()
+
+    /** Free-tier cap for [channelType] already reached — nothing was created. [limit] is
+     * echoed back so callers can build a message without re-deriving it from
+     * [cc.dlabs.pesamind.features.settings.channels.ChannelLimits]. */
+    data class LimitReached(val channelType: String, val limit: Int) : ChannelCreateOutcome()
 }
 
 /**
@@ -154,8 +160,11 @@ object ChannelRepository {
      * never be forced unique. Non-provider callers get exactly the old unconditional-insert
      * behavior (a fresh UUID primary key never collides).
      *
-     * There is no channel-count limit for any tier — every plan may create as many channels as
-     * it wants.
+     * Free-tier accounts are capped per channel type (see
+     * [cc.dlabs.pesamind.features.settings.channels.ChannelLimits]) — checked live via
+     * [AccountManager.isPremium] on every call, not a cached flag, so a lapsed trial or an
+     * about-to-expire subscription can't be used to sneak past the cap. Premium/Enterprise
+     * remain unlimited.
      */
     suspend fun createChannel(
         name: String,
@@ -166,9 +175,16 @@ object ChannelRepository {
         accountNumber: String? = null,
         openingBalance: Double = 0.0,
     ): ChannelCreateOutcome {
+        val userId = currentUserId()
+        val limit = ChannelLimits.freeLimitFor(channelType)
+        if (limit != null && !AccountManager.isPremium()) {
+            val currentCount = channelDao.countByUserIdAndChannelType(userId, channelType)
+            if (currentCount >= limit) {
+                return ChannelCreateOutcome.LimitReached(channelType, limit)
+            }
+        }
         val now = System.currentTimeMillis()
         val normalizedKey = if (isProviderChannelType(channelType)) normalizeSenderKey(channelDesc) else null
-        val userId = currentUserId()
         val outcome =
             database.withTransaction {
                 if (normalizedKey != null) {

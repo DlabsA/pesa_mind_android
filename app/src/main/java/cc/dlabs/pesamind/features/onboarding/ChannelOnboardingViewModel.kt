@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 
 enum class OnboardingStep { INTRO, CASH, MOMO, AIRTEL, BANK, REVIEW }
 
+private const val TAG = "ChannelOnboardingViewModel"
+
 /** Per-channel-type draft state, written to as the user steps through the flow — no network
  * call happens until [ChannelOnboardingViewModel.finish]. [included] is the add/skip toggle. */
 data class ChannelDraft(
@@ -138,6 +140,17 @@ class ChannelOnboardingViewModel : UnifiedViewModel() {
                     when (outcome) {
                         is ChannelCreateOutcome.Created -> outcome.channel
                         is ChannelCreateOutcome.AlreadyExists -> outcome.existing
+                        is ChannelCreateOutcome.LimitReached -> {
+                            // Onboarding's fixed set (1 Cash, 2 MobileMoney, 1 Bank) never
+                            // exceeds today's Free caps, so this only fires for a returning
+                            // user re-entering onboarding with channels from a prior session —
+                            // skip the draft rather than block the rest of the flow.
+                            Log.w(
+                                TAG,
+                                "Onboarding skipped $channelType: Free-tier limit (${outcome.limit}) reached",
+                            )
+                            return
+                        }
                     }
                 batchItems.add(
                     BatchCreateChannelItem(

@@ -168,6 +168,8 @@ class ChannelSenderKeyDedupTest {
                 when (this) {
                     is ChannelCreateOutcome.Created -> channel.id
                     is ChannelCreateOutcome.AlreadyExists -> existing.id
+                    is ChannelCreateOutcome.LimitReached ->
+                        error("Unexpected LimitReached in dedup-race test (Premium tier, no cap should apply)")
                 }
 
             assertEquals(

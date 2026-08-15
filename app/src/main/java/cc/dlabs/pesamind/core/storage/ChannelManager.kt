@@ -243,6 +243,17 @@ object ChannelManager {
                         ChannelInfo(live, live.smsNotificationEnabled)
                     }
                 }
+                is ChannelCreateOutcome.LimitReached -> {
+                    // A Free-tier user has already hit their per-type channel cap — same
+                    // degrade-to-"notifications disabled" outcome as every other failure mode
+                    // here (SMS ingestion never crashes, it just stops auto-capturing for a
+                    // sender it can't create a channel for).
+                    Log.w(
+                        "ChannelManager",
+                        "Auto-create for sender $senderID skipped: Free-tier limit (${outcome.limit}) reached",
+                    )
+                    null
+                }
             }
         } catch (e: Exception) {
             Log.e("ChannelManager", "Error creating channel for sender $senderID: ${e.message}", e)

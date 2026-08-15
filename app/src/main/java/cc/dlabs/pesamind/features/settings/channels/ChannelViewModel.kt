@@ -201,6 +201,15 @@ class ChannelViewModel : UnifiedViewModel() {
                             message = "A channel for this provider already exists: ${outcome.existing.name}",
                         )
                 }
+                is ChannelCreateOutcome.LimitReached -> {
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error =
+                                "Free plan allows up to ${outcome.limit} ${displayChannelType(outcome.channelType)} " +
+                                    "channel${if (outcome.limit == 1) "" else "s"}. Upgrade to Premium for unlimited channels.",
+                        )
+                }
             }
         }
     }

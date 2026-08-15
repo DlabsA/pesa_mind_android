@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
+import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
 import cc.dlabs.pesamind.features.settings.channels.ChannelViewModel
 import java.text.NumberFormat
 
@@ -71,8 +72,25 @@ fun AddTransactionScreen(
     val channelError = channelId.isNotEmpty() && channelId.isBlank()
 
     // ── Channel list from ChannelViewModel ──
+    // Mobile money accounts (M-Pesa, Airtel Money, etc.) are a Premium feature — free-tier
+    // users can still log transactions against Cash/Bank accounts, just not mobile money ones.
     val channelState by channelViewModel.state.collectAsStateWithLifecycle()
-    val channelList = channelState.channels
+    val channelList =
+        if (channelState.isPremium) {
+            channelState.channels
+        } else {
+            channelState.channels.filterNot { it.channelType == ChannelTypes.MOBILE_MONEY }
+        }
+    val hasHiddenMobileMoneyChannels =
+        !channelState.isPremium && channelState.channels.any { it.channelType == ChannelTypes.MOBILE_MONEY }
+
+    // Clear a selection that resolves to a channel hidden from the free tier (e.g. an
+    // initialChannelId deep-linked from an SMS notification for a mobile money channel).
+    LaunchedEffect(channelList, channelId) {
+        if (channelId.isNotEmpty() && channelList.none { it.id == channelId }) {
+            channelId = ""
+        }
+    }
 
     // ── React to ViewModel state changes ──────────────────────────────────────
     LaunchedEffect(state.message) {
@@ -293,6 +311,8 @@ fun AddTransactionScreen(
                                     supportingText =
                                         if (channelError) {
                                             { Text("Account ID cannot be blank") }
+                                        } else if (hasHiddenMobileMoneyChannels) {
+                                            { Text("Mobile money accounts require Premium") }
                                         } else {
                                             null
                                         },
