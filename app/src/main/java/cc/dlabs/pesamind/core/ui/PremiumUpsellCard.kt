@@ -25,9 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,8 +57,7 @@ fun PremiumUpsellCard(
     icon: ImageVector = Icons.Filled.Lock,
 ) {
     val scheme = MaterialTheme.colorScheme
-    // Using Configuration.screenHeightDp to get actual device screen height in dp
-    // and calculating 60% of it for the card height (accounts for insets on VANILLA_ICE_CREAM+)
+
     @Suppress("DEPRECATION")
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     Card(
@@ -69,14 +68,12 @@ fun PremiumUpsellCard(
         border = BorderStroke(1.dp, scheme.primary.copy(alpha = 0.20f)),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(screenHeight * 0.4f)
-                .background(
-                            scheme.surfaceVariant.copy(alpha = 0.30f),
-
-                )
-                .padding(Spacing.Space4.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(screenHeight * 0.4f)
+                    .background(scheme.surfaceVariant.copy(alpha = 0.30f))
+                    .padding(Spacing.Space4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Spacing.Space3.dp, Alignment.CenterVertically),
         ) {
@@ -102,9 +99,10 @@ fun PremiumUpsellCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = scheme.primary,
-                    modifier = Modifier
-                        .padding(Spacing.Space3.dp)
-                        .size(28.dp),
+                    modifier =
+                        Modifier
+                            .padding(Spacing.Space3.dp)
+                            .size(28.dp),
                 )
             }
 
