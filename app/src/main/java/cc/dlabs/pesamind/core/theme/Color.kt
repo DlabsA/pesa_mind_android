@@ -80,7 +80,7 @@ object DarkColors {
     val BorderStrong = Color(0xFF344B49) // Pronounced definition for inputs / active outlines
 
     // Primary (Lime in dark mode — INTENTIONAL FLIP!)
-    val Primary = Color(0xFF10CC68) // Actionable elements / FABs / Toggles
+    val Primary = Color(0xFF93C6A2) // Actionable elements / FABs / Toggles
     val PrimaryHover = Color(0xFFB8F093) // Hover / Pressed state feedback
     val PrimaryForeground = Color(0xFF003934) // High-contrast text ON top of Primary color
 

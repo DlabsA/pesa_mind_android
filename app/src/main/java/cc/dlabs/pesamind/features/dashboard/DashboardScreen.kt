@@ -30,12 +30,14 @@ import cc.dlabs.pesamind.core.network.analytics.*
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.theme.DarkColors
 import cc.dlabs.pesamind.core.theme.LightColors
+import cc.dlabs.pesamind.core.ui.AppCard
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
+import cc.dlabs.pesamind.core.ui.StaggeredCard
 import cc.dlabs.pesamind.features.analytics.AnomaliesCard
 import java.text.NumberFormat
 import java.util.Locale
@@ -355,33 +357,6 @@ private fun DashboardScrollBody(
     }
 }
 
-// ─── Stagger wrapper ──────────────────────────────────────────────────────────
-
-@Composable
-fun StaggeredCard(
-    index: Int,
-    visible: Boolean,
-    content: @Composable () -> Unit,
-) {
-    val delayMs = (index * 70).coerceAtMost(350)
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(380, delayMs, FastOutSlowInEasing),
-        label = "stagger_alpha_$index",
-    )
-    val offsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 28f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-        label = "stagger_offset_$index",
-    )
-    Box(
-        Modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = offsetY
-        },
-    ) { content() }
-}
-
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 @Composable
@@ -651,7 +626,7 @@ private fun DashboardVelocityCard(
         label = "budget_ring",
     )
 
-    DashboardCard(modifier = modifier) {
+    AppCard(modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // Title row
             Row(
@@ -874,7 +849,7 @@ private fun DashboardBudgetCard(
     LaunchedEffect(data) { barTarget = usageFraction.toFloat() }
     val barW by animateFloatAsState(barTarget, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow), label = "budget_bar")
 
-    DashboardCard(modifier = modifier) {
+    AppCard(modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // Header
             Row(
@@ -1058,23 +1033,5 @@ private fun AnomalyBadge(
             color = color,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
         )
-    }
-}
-
-// ─── Shared card shell ────────────────────────────────────────────────────────
-
-@Composable
-private fun DashboardCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-        tonalElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) { content() }
     }
 }

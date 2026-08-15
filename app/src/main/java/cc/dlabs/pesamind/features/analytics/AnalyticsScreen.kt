@@ -43,7 +43,6 @@ import cc.dlabs.pesamind.core.network.models.AnomalyData
 import cc.dlabs.pesamind.core.network.models.AnomalyItem
 import cc.dlabs.pesamind.core.network.models.AnomalyRecommendation
 import cc.dlabs.pesamind.core.network.models.AnomalySection
-import cc.dlabs.pesamind.core.network.models.BudgetLineItem
 import cc.dlabs.pesamind.core.network.models.BudgetVsActualSection
 import cc.dlabs.pesamind.core.network.models.BvaHealth
 import cc.dlabs.pesamind.core.network.models.BvaHealthComponents
@@ -58,6 +57,7 @@ import cc.dlabs.pesamind.core.network.models.MonthlyTrendsSection
 import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
+import cc.dlabs.pesamind.core.ui.AppCard
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
@@ -66,7 +66,7 @@ import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
-import cc.dlabs.pesamind.features.dashboard.StaggeredCard
+import cc.dlabs.pesamind.core.ui.StaggeredCard
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -477,33 +477,6 @@ private fun AnalyticsScrollBody(
     }
 }
 
-// ─── Stagger wrapper ──────────────────────────────────────────────────────────
-
-@Composable
-private fun StaggeredCard(
-    index: Int,
-    visible: Boolean,
-    content: @Composable () -> Unit,
-) {
-    val delayMs = (index * 70).coerceAtMost(350)
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(380, delayMs, FastOutSlowInEasing),
-        label = "stagger_alpha_$index",
-    )
-    val offsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 28f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-        label = "stagger_offset_$index",
-    )
-    Box(
-        Modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = offsetY
-        },
-    ) { content() }
-}
-
 // ─── Period toggle ────────────────────────────────────────────────────────────
 
 @Composable
@@ -565,7 +538,7 @@ private fun SummaryMetricsCard(
     val d = data.data
     val c = data.context
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 "This Month",
@@ -720,7 +693,7 @@ private fun SpendingVelocityCard(
         label = "budget_ring",
     )
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // Title row
             Row(
@@ -978,7 +951,7 @@ private fun MonthlyTrendsCard(
             months.maxOfOrNull { abs(it.valueFor(metric)) }?.takeIf { it > 0 } ?: 1.0
         }
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // ── Header ────────────────────────────────────────────────────
             TrendsHeaderComposable(
@@ -1503,7 +1476,7 @@ fun BudgetVsActualCard(
         label = "bva_bar",
     )
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // ── Header ────────────────────────────────────────────────────
             BvaHeader(
@@ -2025,7 +1998,7 @@ fun ExpenseForecastCard(
     val projProg by animateFloatAsState(projTarget, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessLow), label = "proj_bar")
     val budgetProg by animateFloatAsState(budgetTarget, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow), label = "budget_bar")
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // ── Header ────────────────────────────────────────────────────
             ForecastHeader(
@@ -2459,7 +2432,7 @@ private fun CashFlowCard(
     var animated by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { animated = true }
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2736,7 +2709,7 @@ fun AnomaliesCard(
             else -> AnomalyColors.Low
         }
 
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // ── Header ────────────────────────────────────────────────────
             AnomalyHeader(
@@ -3188,25 +3161,6 @@ private fun HealthScorePill(score: Int) {
     }
 }
 
-// ─── Shared card shell ────────────────────────────────────────────────────────
-
-@Composable
-private fun AnalyticsCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-        tonalElevation = 0.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) { content() }
-    }
-}
-
 /**
  * Inline "this one card failed" placeholder — the backend now computes each analytics section
  * independently and always returns 200, so one section's real failure (e.g. a transient DB
@@ -3220,7 +3174,7 @@ private fun SectionErrorCard(
     message: String,
     modifier: Modifier = Modifier,
 ) {
-    AnalyticsCard(modifier = modifier) {
+    AppCard(modifier = modifier, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f))) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = Icons.Outlined.ErrorOutline,
