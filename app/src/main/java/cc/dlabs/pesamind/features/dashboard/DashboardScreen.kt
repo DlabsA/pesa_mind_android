@@ -358,7 +358,7 @@ private fun DashboardScrollBody(
 // ─── Stagger wrapper ──────────────────────────────────────────────────────────
 
 @Composable
-private fun StaggeredCard(
+fun StaggeredCard(
     index: Int,
     visible: Boolean,
     content: @Composable () -> Unit,

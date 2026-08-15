@@ -25,7 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +57,10 @@ fun PremiumUpsellCard(
     icon: ImageVector = Icons.Filled.Lock,
 ) {
     val scheme = MaterialTheme.colorScheme
+    // Using Configuration.screenHeightDp to get actual device screen height in dp
+    // and calculating 60% of it for the card height (accounts for insets on VANILLA_ICE_CREAM+)
+    @Suppress("DEPRECATION")
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Spacing.Space4.dp),
@@ -67,14 +71,14 @@ fun PremiumUpsellCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(420.dp)
+                .height(screenHeight * 0.4f)
                 .background(
                             scheme.surfaceVariant.copy(alpha = 0.30f),
 
                 )
                 .padding(Spacing.Space4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.Space3.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Space3.dp, Alignment.CenterVertically),
         ) {
             Surface(
                 shape = CircleShape,

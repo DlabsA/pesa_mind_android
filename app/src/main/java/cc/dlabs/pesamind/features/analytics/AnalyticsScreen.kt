@@ -63,8 +63,10 @@ import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
+import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
+import cc.dlabs.pesamind.features.dashboard.StaggeredCard
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -355,6 +357,19 @@ private fun AnalyticsScrollBody(
                         title = "Budget-based insights",
                         modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                     )
+                }
+                if (!state.isPremium) {
+                    item {
+                        StaggeredCard(index = 2, visible = cardsVisible) {
+                            PremiumUpsellCard(
+                                feature = "Full Analytics Insights",
+                                description =
+                                    "Upgrade to access Premium Features.",
+                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
                 }
 
                 // Budget vs Actual
