@@ -135,6 +135,9 @@ class BudgetViewModel
             when (event) {
                 is StateEvent.TransactionCreated, is StateEvent.SyncCompleted ->
                     viewModelScope.launch { fetchStreak(forceNetwork = true) }
+                // Re-read the tier and re-attach the next-month observer, which is
+                // never subscribed on Free (see observeBudgets).
+                is StateEvent.SubscriptionActivated -> loadUserProfile()
                 else -> {}
             }
         }

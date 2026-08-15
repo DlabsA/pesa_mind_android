@@ -62,6 +62,14 @@ sealed class Routes(val route: String) {
 
     object ChangePassword : Routes("change_password")
 
+    /**
+     * The subscription screen — plans, prices, and payment in one place.
+     *
+     * Still spelled "upgrade": it has nine call sites plus the
+     * `pesamind://payment/upgrade` deep link, and the string is part of that
+     * contract. Checkout is no longer a separate route; payment is a sheet on
+     * this screen.
+     */
     object Upgrade : Routes("upgrade")
 
     object Channels : Routes("channels")

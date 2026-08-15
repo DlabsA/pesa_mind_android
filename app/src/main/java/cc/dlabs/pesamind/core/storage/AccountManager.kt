@@ -20,6 +20,7 @@ object AccountManager {
     private val Balance = stringPreferencesKey("balance")
     private val Type = stringPreferencesKey("type")
     private val TrialExpiresAt = stringPreferencesKey("trial_expires_at")
+    private val PremiumExpiresAt = stringPreferencesKey("premium_expires_at")
 
     private lateinit var appContext: Context
 
@@ -88,7 +89,31 @@ object AccountManager {
             type = data[Type] ?: "",
             balance = data[Balance]?.toDoubleOrNull() ?: 0.0,
             trialExpiresAt = data[TrialExpiresAt],
+            premiumExpiresAt = data[PremiumExpiresAt],
         )
+    }
+
+    /**
+     * Records when a *paid* period ends, so "Premium — runs to 12 Oct" can be shown
+     * without a network round-trip.
+     *
+     * Deliberately its own setter rather than another [saveAccount] parameter.
+     * [saveAccount] removes the key when passed null, and Kotlin cannot tell "not
+     * passed" from "passed null" — so a defaulted parameter would be silently wiped
+     * by all five existing callers (`AuthViewModel` x3, `TokenRefreshInterceptor`,
+     * `AccountViewModel`), none of which know anything about subscriptions.
+     *
+     * Null clears it, which is what a lapse back to Free must do.
+     */
+    suspend fun savePremiumExpiry(expiresAt: String?) {
+        if (!isInitialized()) return
+        appContext.dataStore.edit {
+            if (expiresAt != null) {
+                it[PremiumExpiresAt] = expiresAt
+            } else {
+                it.remove(PremiumExpiresAt)
+            }
+        }
     }
 
     /**
@@ -157,6 +182,7 @@ object AccountManager {
             it.remove(Balance)
             it.remove(Type)
             it.remove(TrialExpiresAt)
+            it.remove(PremiumExpiresAt)
         }
     }
 }

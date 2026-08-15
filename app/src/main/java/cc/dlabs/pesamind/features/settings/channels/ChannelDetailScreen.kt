@@ -65,6 +65,7 @@ import cc.dlabs.pesamind.core.ui.ShimmerBox
 import cc.dlabs.pesamind.core.ui.SkeletonCard
 import cc.dlabs.pesamind.core.ui.TransactionCard
 import cc.dlabs.pesamind.core.ui.TransactionDetailSheet
+import cc.dlabs.pesamind.core.ui.asUgx
 import kotlinx.coroutines.launch
 
 /**

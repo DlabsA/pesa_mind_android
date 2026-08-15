@@ -42,6 +42,9 @@ androidxTestCore = "1.6.1"
 # 1.1.0 is still the latest stable release (1.2.0/1.4.0 are alpha-only, confirmed via web
 # search) — same "pin to last confirmed stable" convention as the tink pin above.
 biometric = "1.1.0"
+# Chrome Custom Tabs, for the card 3DS authorization hand-off in subscription
+# checkout. 1.8.0 is the current stable release.
+androidxBrowser = "1.8.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -92,6 +95,7 @@ androidx-room-testing = { group = "androidx.room", name = "room-testing", versio
 androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime-ktx", version.ref = "paging" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidxBrowser" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

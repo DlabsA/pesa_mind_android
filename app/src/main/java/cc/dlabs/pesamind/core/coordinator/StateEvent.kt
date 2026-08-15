@@ -65,6 +65,19 @@ sealed class StateEvent {
 
     data object BudgetUpdated : StateEvent()
 
+    // ─── Subscription Events ───────────────────────────────────────────
+
+    /**
+     * Published by [cc.dlabs.pesamind.features.subscription.SubscriptionViewModel]
+     * once an invoice reaches `paid` and the new tier has been written to
+     * [cc.dlabs.pesamind.core.storage.AccountManager].
+     *
+     * Every ViewModel that gates on `isPremium` reads the tier once in `init` and
+     * never again, and the only other thing that refreshes it mid-session is a JWT
+     * refresh. Without this event a user would pay and watch nothing unlock.
+     */
+    data object SubscriptionActivated : StateEvent()
+
     // ─── Generic Events ────────────────────────────────────────────────
 
     data class ErrorOccurred(

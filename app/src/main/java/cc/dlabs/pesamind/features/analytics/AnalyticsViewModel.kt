@@ -4,9 +4,6 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
-import cc.dlabs.pesamind.core.data.ChannelSpend
-import cc.dlabs.pesamind.core.data.DayOfWeekSpend
-import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.data.monthRangeMillis
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.AnalyticResponse
@@ -17,10 +14,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -100,6 +93,14 @@ class AnalyticsViewModel
 
         override fun onStateEvent(event: StateEvent) {
             when (event) {
+                // A payment just landed: re-read the tier so every gated section
+                // (anomalies, budget vs. actual, lifetime period) unlocks now rather
+                // than at the next JWT refresh.
+                is StateEvent.SubscriptionActivated ->
+                    viewModelScope.launch {
+                        _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
+                    }
+
                 // Auto-refresh when transactions are created
                 is StateEvent.TransactionCreated -> {
                     // Clear synchronously (before the coroutine below is queued) so no

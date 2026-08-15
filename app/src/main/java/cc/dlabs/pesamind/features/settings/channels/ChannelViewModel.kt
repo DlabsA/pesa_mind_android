@@ -92,6 +92,21 @@ class ChannelViewModel : UnifiedViewModel() {
         }
     }
 
+    /**
+     * Re-reads the cached tier when a subscription is activated. The tier is read
+     * once in [init] and never again otherwise, so without this the per-channel SMS
+     * toggle would stay locked until the next JWT refresh for a user who just paid.
+     */
+    override fun onStateEvent(event: StateEvent) {
+        when (event) {
+            is StateEvent.SubscriptionActivated ->
+                viewModelScope.launch {
+                    _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
+                }
+            else -> {}
+        }
+    }
+
     fun refresh() = loadChannels()
 
     fun loadChannelsByType(channelType: String) {

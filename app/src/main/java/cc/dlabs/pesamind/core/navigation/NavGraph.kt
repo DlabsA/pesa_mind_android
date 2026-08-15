@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -38,13 +40,14 @@ import cc.dlabs.pesamind.features.onboarding.OnboardingMoMoScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingReviewScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
 import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
-import cc.dlabs.pesamind.features.settings.account.UpgradeScreen
 import cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen
 import cc.dlabs.pesamind.features.settings.channels.ChannelScreen
 import cc.dlabs.pesamind.features.settings.notifications.TransactionListScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
 import cc.dlabs.pesamind.features.settings.security.SetPinScreen
+import cc.dlabs.pesamind.features.subscription.SubscriptionScreen
+import cc.dlabs.pesamind.features.subscription.SubscriptionViewModel
 import java.util.Calendar
 
 /** Route for the nested onboarding graph — screens within it share one
@@ -81,6 +84,17 @@ fun PesaMindNavGraph(navController: NavHostController) {
             CircularProgressIndicator()
         }
     } else {
+        // A tapped renewal reminder should land on the upgrade screen, not the
+        // dashboard. Handled here rather than in the start-destination logic so it
+        // works identically for a cold start and a resume via onNewIntent.
+        val showUpgrade by PaymentDeepLink.showUpgrade.collectAsState()
+        LaunchedEffect(showUpgrade) {
+            if (showUpgrade) {
+                navController.navigate(Routes.Upgrade.route)
+                PaymentDeepLink.consumeUpgrade()
+            }
+        }
+
         NavHost(navController, startDestination = startDestination!!) {
             composable(Routes.Login.route) { LoginScreen(navController) }
             composable(Routes.Register.route) { RegisterScreen(navController) }
@@ -135,7 +149,18 @@ fun PesaMindNavGraph(navController: NavHostController) {
 
             composable(Routes.AccountSettings.route) { AccountSettingsScreen(navController) }
             composable(Routes.ChangePassword.route) { ChangePasswordScreen(navController) }
-            composable(Routes.Upgrade.route) { UpgradeScreen(navController) }
+            composable(Routes.Upgrade.route) { backStackEntry ->
+                // Scope the ViewModel to this entry so the polling job dies with the
+                // screen, and open any 3DS authorisation URL in a Custom Tab. Uganda
+                // mobile money authorises on the handset and never reaches this.
+                val vm: SubscriptionViewModel = viewModel(backStackEntry)
+                val context = LocalContext.current
+                SubscriptionScreen(
+                    navController = navController,
+                    vm = vm,
+                    onOpenRedirect = { url -> openPaymentAuthorization(context, url) },
+                )
+            }
             composable(Routes.Channels.route) { ChannelScreen(navController) }
             composable(
                 route = Routes.ChannelDetail.route,

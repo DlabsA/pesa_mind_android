@@ -40,6 +40,9 @@ object AuthManager {
         TokenManager.clearLock()
         TokenManager.setChannelsOnboarded(false)
         AccountManager.clearAccount()
+        // A pending invoice belongs to the account that started it — the next
+        // account signing in on this device must not resume someone else's payment.
+        PaymentManager.clearPayments()
         database?.clearAllLocalData()
 
         // Emit logout event so UI can react (navigate to login, show notification, etc.)

@@ -194,6 +194,12 @@ data class Account(
     val type: String = "",
     val balance: Double = 0.0,
     val trialExpiresAt: String? = null,
+    /**
+     * End of a *paid* period, distinct from [trialExpiresAt]. Cached so the
+     * subscription card and the Settings row can show a renewal date offline;
+     * written only by `SubscriptionResumer` from `GET payments/subscription`.
+     */
+    val premiumExpiresAt: String? = null,
 )
 
 data class TransactionRequest(
@@ -285,15 +291,21 @@ data class ChangePasswordRequest(
     val confirm_password: String,
 )
 
+/**
+ * `GET/PATCH users/me`.
+ *
+ * The server nests everything but id/email under `profile` (Go's
+ * `dto.UserResponse` wrapping `ProfileData`). This class used to be flat, with
+ * `username` mapped from a `name` key the server never sends — so on the one path
+ * that reads it (`AccountViewModel.loadProfile` with no cached account) username,
+ * type and balance all deserialised to empty, and the trial expiry was invisible.
+ * [AuthProfile] already models `ProfileData` exactly, so it is reused here rather
+ * than restated.
+ */
 data class UserResponse(
-    val id: String,
-    @SerializedName("name")
-    val username: String,
-    val email: String,
-    @SerializedName(value = "avatar_url", alternate = ["avatarUrl", "AvatarURL"])
-    val avatarUrl: String = "",
-    val balance: Double,
-    val type: String,
+    val id: String = "",
+    val email: String = "",
+    val profile: AuthProfile? = null,
 )
 
 data class ChannelDetails(
@@ -920,4 +932,75 @@ data class AnomalySection(
     val data: AnomalyData,
     val metadata: AnomalyMetadata,
     val recommendations: List<AnomalyRecommendation> = emptyList(),
+)
+
+// ── Payment Models ────────────────────────────────────────────────────────────
+//
+// Subscription checkout. The app never talks to the payment provider directly —
+// Flutterwave v4 credentials are full-access with no publishable-key equivalent,
+// so every provider call happens on the backend.
+
+data class PlanResponse(
+    val code: String = "",
+    val name: String = "",
+    val interval: String = "",
+    val amount: Double = 0.0,
+    val currency: String = "UGX",
+)
+
+/**
+ * Card fields are populated only for the card method. They are held for the
+ * lifetime of one request and never persisted; [cc.dlabs.pesamind.core.network.RedactingLogger]
+ * keeps them out of logcat.
+ */
+data class CheckoutRequest(
+    @SerializedName("plan_code") val planCode: String = "",
+    val method: String = "",
+    val network: String = "",
+    @SerializedName("phone_number") val phoneNumber: String = "",
+    @SerializedName("card_number") val cardNumber: String = "",
+    @SerializedName("card_expiry_month") val cardExpiryMonth: String = "",
+    @SerializedName("card_expiry_year") val cardExpiryYear: String = "",
+    @SerializedName("card_cvv") val cardCvv: String = "",
+    @SerializedName("card_holder_name") val cardHolderName: String = "",
+)
+
+/**
+ * Invoice status is the contract between app and backend:
+ * `pending` | `processing` | `paid` | `failed` | `expired`, the last three terminal.
+ */
+data class InvoiceResponse(
+    val id: String = "",
+    val status: String = "",
+    val amount: Double = 0.0,
+    val currency: String = "UGX",
+    val reference: String = "",
+    @SerializedName("plan_code") val planCode: String = "",
+    @SerializedName("plan_name") val planName: String = "",
+    @SerializedName("failure_reason") val failureReason: String = "",
+    @SerializedName("paid_at") val paidAt: String? = null,
+    @SerializedName("created_at") val createdAt: String = "",
+)
+
+/**
+ * [nextAction] selects the authorisation branch:
+ * - `payment_instruction` — Uganda mobile money. The customer approves with a PIN
+ *   prompt on their handset; the app stays put and polls. [instruction] is the
+ *   customer-facing note to display.
+ * - `redirect_url` — 3DS cards. [redirectUrl] must be opened in a browser tab.
+ */
+data class CheckoutResponse(
+    val invoice: InvoiceResponse = InvoiceResponse(),
+    @SerializedName("next_action") val nextAction: String = "",
+    val instruction: String = "",
+    @SerializedName("redirect_url") val redirectUrl: String = "",
+)
+
+data class SubscriptionResponse(
+    val tier: String = "Free",
+    @SerializedName("is_premium") val isPremium: Boolean = false,
+    @SerializedName("expires_at") val expiresAt: String? = null,
+    @SerializedName("is_trial") val isTrial: Boolean = false,
+    @SerializedName("plan_code") val planCode: String = "",
+    @SerializedName("plan_name") val planName: String = "",
 )

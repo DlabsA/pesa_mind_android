@@ -19,7 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
-import cc.dlabs.pesamind.features.settings.channels.asUgx
+import cc.dlabs.pesamind.core.ui.asUgx
 
 @Composable
 fun OnboardingReviewScreen(

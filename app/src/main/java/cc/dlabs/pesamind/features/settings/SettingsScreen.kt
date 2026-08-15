@@ -33,6 +33,7 @@ import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
+import cc.dlabs.pesamind.features.subscription.SubscriptionPeriod
 import coil3.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -48,6 +49,7 @@ fun SettingsScreen(rootNav: NavHostController) {
 
     var account by remember { mutableStateOf<Account?>(null) }
     var accountError by remember { mutableStateOf<String?>(null) }
+    var trialDaysRemaining by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(Unit) {
         try {
@@ -63,10 +65,29 @@ fun SettingsScreen(rootNav: NavHostController) {
             account = null
             accountError = "Failed to load account details"
         }
+        trialDaysRemaining = AccountManager.trialDaysRemaining()
     }
 
     val displayName = account?.username.orEmpty()
     val displayEmail = account?.email.orEmpty()
+
+    // Tier is read the same way AccountManager.isPremium() derives it, rather than
+    // calling that suspend function again, since the account is already loaded here.
+    val isPremium = account?.type == "Premium" || account?.type == "Enterprise"
+
+    // The paid period end is cached by SubscriptionResumer, so a date can be shown
+    // here without a network round-trip. Falls back to "active" when it hasn't been
+    // synced yet (fresh install, or an account that predates the cached field).
+    val premiumExpiry = SubscriptionPeriod.parse(account?.premiumExpiresAt)
+    val subscriptionSubtitle =
+        when {
+            trialDaysRemaining != null ->
+                "Trial — ${trialDaysRemaining}d left, then Free"
+            isPremium && premiumExpiry != null ->
+                "${account?.type} — runs to ${SubscriptionPeriod.formatDate(premiumExpiry)}"
+            isPremium -> "${account?.type} — active"
+            else -> "Unlock Mobile money and full analytics features"
+        }
 
     // Logout confirmation dialog
     if (showLogoutDialog) {
@@ -198,6 +219,21 @@ fun SettingsScreen(rootNav: NavHostController) {
             title = "Account",
             subtitle = "Username, email",
             onClick = { rootNav.navigate(Routes.AccountSettings.route) },
+        )
+
+        SettingsDivider()
+
+        // Subscription follows the account row and is labelled by tier. It stays a
+        // top-level row rather than living only inside Account: reaching it through
+        // Settings -> Account -> Plan was four levels deep, which left a Free user
+        // with no visible way to pay. The Plan row in Account Settings remains as a
+        // second way in.
+        SettingsRow(
+            icon = if (isPremium) Icons.Filled.Star else Icons.Filled.Lock,
+            iconTint = teal,
+            title = if (isPremium) "Subscription" else "Upgrade to Premium",
+            subtitle = subscriptionSubtitle,
+            onClick = { rootNav.navigate(Routes.Upgrade.route) },
         )
 
         SettingsDivider()

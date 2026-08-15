@@ -54,6 +54,23 @@ fun readDotEnvValue(key: String): String? {
         ?.removeSurrounding("'")
 }
 
+// API base URL. Release is pinned to production and is NOT overridable — a release
+// build accidentally pointing at a laptop would be far worse than the inconvenience.
+// Debug resolves Gradle property -> env var -> .env, so the app can be pointed at a
+// locally-running backend (e.g. -PAPI_BASE_URL=http://192.168.1.5:8099/api/v1/) to
+// exercise features that aren't deployed yet, like subscription checkout.
+val productionApiBaseUrl = "https://api.dlabs.cc/api/v1/"
+val resolvedDebugApiBaseUrl =
+    (findProperty("API_BASE_URL") as String?)
+        ?: System.getenv("API_BASE_URL")
+        ?: readDotEnvValue("API_BASE_URL")
+        ?: productionApiBaseUrl
+
+// Retrofit requires a trailing slash on the base URL, and forgetting it fails at
+// runtime rather than at configuration time — so normalise it here.
+val debugApiBaseUrl =
+    if (resolvedDebugApiBaseUrl.endsWith("/")) resolvedDebugApiBaseUrl else "$resolvedDebugApiBaseUrl/"
+
 val googleAndroidClientId =
     (findProperty("GOOGLE_ANDROID_CLIENT_ID") as String?)
         ?: System.getenv("GOOGLE_ANDROID_CLIENT_ID")
@@ -104,6 +121,7 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
+            buildConfigField("String", "API_BASE_URL", "\"$productionApiBaseUrl\"")
             // SYMBOL_TABLE (not FULL): enough for Play Console to symbolicate native crashes/ANRs
             // from a dependency's bundled .so (this app has no first-party NDK/JNI code of its
             // own) without the larger size of full native debug info. Requires an NDK component
@@ -117,6 +135,7 @@ android {
         debug {
             // Debug builds sign with the default debug keystore — do not reuse release signing.
             buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"$googleAndroidClientId\"")
+            buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
         }
     }
     compileOptions {
@@ -188,6 +207,11 @@ dependencies {
 
     // Google Sign-In
     implementation(libs.google.signin)
+
+    // Chrome Custom Tabs — opens the card 3DS authorization page for subscription
+    // checkout. A Custom Tab, not a WebView: the customer authenticates with their
+    // bank there, and only a Custom Tab shows the real URL and padlock.
+    implementation(libs.androidx.browser)
 
     // Tink + Android Keystore — encrypts TokenManager's DataStore-persisted secrets at rest.
     // Not EncryptedSharedPreferences: deprecated in security-crypto 1.1.0-alpha07 (April 2025)

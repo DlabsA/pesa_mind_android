@@ -117,8 +117,7 @@ import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ProviderDropdown
 import cc.dlabs.pesamind.core.ui.SkeletonCard
 import cc.dlabs.pesamind.core.ui.SyncStatusBadge
-import java.text.NumberFormat
-import java.util.Locale
+import cc.dlabs.pesamind.core.ui.asUgx
 
 // ─── Filter state enum ───────────────────────────────────────────────────────
 
@@ -690,14 +689,9 @@ internal fun ChannelTypeIconView(
 }
 
 // ─── Balance formatting ───────────────────────────────────────────────────────
-// Mirrors the "UGX 1,234,567" convention already used across DashboardScreen,
-// BudgetScreen, TransactionListScreen, etc.
-
-private val ugxFmt = NumberFormat.getNumberInstance(Locale.US)
-
-// internal, not private: reused by the channel-onboarding flow's balance fields
-// (features/onboarding/) rather than duplicating a 4th UGX formatter.
-internal fun Double.asUgx(): String = "UGX ${ugxFmt.format(this)}"
+// Moved to core/ui/CurrencyFormat.kt — a formatter imported by onboarding,
+// channel detail and subscription checkout does not belong in a feature package.
+// Imported above as cc.dlabs.pesamind.core.ui.asUgx.
 
 // ─── Channel Card ─────────────────────────────────────────────────────────────
 @Composable

@@ -36,8 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import cc.dlabs.pesamind.core.data.ChannelSpend
-import cc.dlabs.pesamind.core.data.DayOfWeekSpend
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.analytics.*
 import cc.dlabs.pesamind.core.network.models.AnalyticsRecommendation
@@ -65,11 +63,9 @@ import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
-import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import java.text.NumberFormat
-import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 
@@ -338,17 +334,7 @@ private fun AnalyticsScrollBody(
                                 )
                             }
                         }
-                    } else if (a.anomalies == null && !state.isPremium) {
-                        item {
-                            StaggeredCard(index = 4, visible = cardsVisible) {
-                                PremiumUpsellCard(
-                                    feature = "anomaly detection",
-                                    onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
-                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                                )
-                            }
-                        }
-                    } else if (a.anomalies == null) {
+                    } else if (a.anomalies == null && state.isPremium) {
                         a.errors["anomalies"]?.let { err ->
                             item {
                                 StaggeredCard(index = 4, visible = cardsVisible) {
@@ -381,17 +367,7 @@ private fun AnalyticsScrollBody(
                             )
                         }
                     }
-                } else if (!state.isPremium) {
-                    item {
-                        StaggeredCard(index = 5, visible = cardsVisible) {
-                            PremiumUpsellCard(
-                                feature = "budget vs. actual insights",
-                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
-                    }
-                } else {
+                } else if (state.isPremium) {
                     // A null budget_vs_actual with no entry in `errors` is the legitimate
                     // "no monthly budget set yet" case (see comprehensive_service.go) — only
                     // show a card here when the backend actually recorded a failure.
@@ -418,17 +394,7 @@ private fun AnalyticsScrollBody(
                             )
                         }
                     }
-                } else if (!state.isPremium) {
-                    item {
-                        StaggeredCard(index = 6, visible = cardsVisible) {
-                            PremiumUpsellCard(
-                                feature = "spending velocity",
-                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
-                    }
-                } else {
+                } else if (state.isPremium) {
                     a.errors["spending_velocity"]?.let { err ->
                         item {
                             StaggeredCard(index = 6, visible = cardsVisible) {
@@ -452,17 +418,7 @@ private fun AnalyticsScrollBody(
                             )
                         }
                     }
-                } else if (!state.isPremium) {
-                    item {
-                        StaggeredCard(index = 7, visible = cardsVisible) {
-                            PremiumUpsellCard(
-                                feature = "expense forecasting",
-                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
-                    }
-                } else {
+                } else if (state.isPremium) {
                     a.errors["expense_forecast"]?.let { err ->
                         item {
                             StaggeredCard(index = 7, visible = cardsVisible) {
@@ -486,17 +442,7 @@ private fun AnalyticsScrollBody(
                             )
                         }
                     }
-                } else if (!state.isPremium) {
-                    item {
-                        StaggeredCard(index = 8, visible = cardsVisible) {
-                            PremiumUpsellCard(
-                                feature = "financial health score",
-                                onUpgradeClick = { navController.navigate(Routes.Upgrade.route) },
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        }
-                    }
-                } else {
+                } else if (state.isPremium) {
                     // Same "absent, no error = no budget yet" pattern as the other three
                     // budget-dependent cards above.
                     a.errors["financial_health"]?.let { err ->

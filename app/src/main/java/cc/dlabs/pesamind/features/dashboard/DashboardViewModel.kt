@@ -9,6 +9,7 @@ import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.analytics.DashboardResponse
 import cc.dlabs.pesamind.core.network.analytics.SummaryData
+import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.StreakSessionCache
 import cc.dlabs.pesamind.core.utils.StreakUiHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +53,9 @@ data class DashboardUiState(
     val isRefreshing: Boolean = false,
     val isOffline: Boolean = false,
     val lastUpdated: Date? = null,
+    // Defaults to true so a gated card never flashes an upsell to a paying user
+    // during the async tier read — the same convention as AnalyticsUiState.isPremium.
+    val isPremium: Boolean = true,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -95,6 +99,10 @@ class DashboardViewModel
         private val refreshMutex = Mutex()
 
         init {
+            viewModelScope.launch {
+                _state.update { it.copy(isPremium = AccountManager.isPremium()) }
+            }
+
             // Mirror iOS: observe connectivity, auto-load when connection returns
             viewModelScope.launch {
                 var wasConnected: Boolean? = null
@@ -144,6 +152,18 @@ class DashboardViewModel
 
         override fun onStateEvent(event: StateEvent) {
             when (event) {
+                // A payment landed: re-read the tier so the gated cards swap from an
+                // upsell to real data without waiting for the next JWT refresh.
+                is StateEvent.SubscriptionActivated ->
+                    viewModelScope.launch {
+                        _state.update { it.copy(isPremium = AccountManager.isPremium()) }
+                        try {
+                            refreshSuspend()
+                        } catch (e: Exception) {
+                            Log.e("DashboardViewModel", "Refresh after subscription activation failed", e)
+                        }
+                    }
+
                 // Auto-refresh when transactions are created
                 is StateEvent.TransactionCreated -> {
                     viewModelScope.launch {

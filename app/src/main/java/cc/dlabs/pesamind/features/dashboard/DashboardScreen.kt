@@ -34,6 +34,7 @@ import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
+import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.features.analytics.AnomaliesCard
 import java.text.NumberFormat
@@ -256,6 +257,23 @@ private fun DashboardScrollBody(
                     }
                 }
 
+                // ── Premium upsell — replaces the Financial Health / Spending Velocity /
+                // Anomalies analytics and the budget-based insights below for a Free-tier
+                // account, instead of leaving those slots blank.
+                if (!state.isPremium) {
+                    item {
+                        StaggeredCard(index = 2, visible = cardsVisible) {
+                            PremiumUpsellCard(
+                                feature = "Analytics & budget insights",
+                                description =
+                                    "Upgrade to access Premium Features.",
+                                onUpgradeClick = { navController?.navigate(Routes.Upgrade.route) },
+                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                            )
+                        }
+                    }
+                }
+
                 // ── Financial Health
                 item {
                     StaggeredCard(index = 2, visible = cardsVisible) {
@@ -265,7 +283,7 @@ private fun DashboardScrollBody(
                                 health = financialHealth.data,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
-                        } else {
+                        } else if (state.isPremium) {
                             UnavailableFeatureOverlay(
                                 onNavigate = {
                                     navController?.navigate(Routes.SetYearlyBudget.route)
@@ -289,7 +307,7 @@ private fun DashboardScrollBody(
                                 data = spendingVelocity.data,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
-                        } else {
+                        } else if (state.isPremium) {
                             UnavailableFeatureOverlay(
                                 onNavigate = {
                                     navController?.navigate(Routes.SetYearlyBudget.route)
@@ -317,11 +335,16 @@ private fun DashboardScrollBody(
                 }
 
                 // ── Anomalies (only when present)
-                if ((d.anomalies.data.anomaliesDetected) > 0) {
+                //
+                // `anomalies` is null for a Free-tier account (Premium-gated
+                // server-side), so this must be a safe call — dereferencing it
+                // unconditionally crashed the dashboard for every Free user.
+                val anomalies = d.anomalies
+                if (anomalies != null && anomalies.data.anomaliesDetected > 0) {
                     item {
                         StaggeredCard(index = 5, visible = cardsVisible) {
                             AnomaliesCard(
-                                section = d.anomalies,
+                                section = anomalies,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }

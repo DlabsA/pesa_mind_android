@@ -29,6 +29,13 @@
         <!-- Allow querying system packages for SMS functionality -->
         <package android:name="com.android.systemui" />
         <package android:name="com.google.android.gms" />
+        <!-- Required on API 30+ so Custom Tabs (and the plain-browser fallback) can
+             resolve a handler for the card 3DS authorization page during subscription
+             checkout. Without this, launchUrl silently finds no provider. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 
     <application
@@ -86,15 +93,35 @@
             </intent-filter>
         </receiver>
 
+        <!-- launchMode=singleTask so the payment deep link below returns to the
+             EXISTING task (and its nav back stack) instead of stacking a second
+             MainActivity on top of the one the user left. Paired with onNewIntent. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.PesaMind"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Payment authorization return. The backend's /payments/return verifies
+                 the charge with the provider and then 302s here. Carries no authority
+                 of its own: the app re-reads the invoice over an authenticated call,
+                 because this URL arrives via the customer's own browser and anyone
+                 could invoke it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="payment"
+                    android:scheme="pesamind" />
             </intent-filter>
         </activity>
     </application>

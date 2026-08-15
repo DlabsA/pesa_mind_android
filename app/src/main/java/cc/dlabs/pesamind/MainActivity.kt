@@ -24,18 +24,21 @@ import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.di.WorkerFactoryEntryPoint
+import cc.dlabs.pesamind.core.navigation.PaymentDeepLink
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
+import cc.dlabs.pesamind.core.storage.PaymentManager
 import cc.dlabs.pesamind.core.storage.SyncMetadataManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
 import cc.dlabs.pesamind.core.sync.SyncScheduler
 import cc.dlabs.pesamind.core.theme.PesaMindTheme
 import cc.dlabs.pesamind.features.settings.notifications.MessageMonitoringService
+import cc.dlabs.pesamind.features.subscription.SubscriptionResumer
 import dagger.hilt.EntryPoints
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
@@ -64,6 +67,8 @@ class PesaMindApp : Application(), Configuration.Provider {
         NotificationStorage.init(this)
         ThemeManager.init(this)
         SyncMetadataManager.init(this)
+        PaymentManager.init(this)
+        SubscriptionResumer.init(this)
         // Room-backed repositories (ADR-0004 Slice A1/B) — ChannelRepository/
         // TransactionRepository/BudgetRepository are the source of truth their respective
         // ViewModels read and write through.
@@ -83,6 +88,18 @@ class PesaMindApp : Application(), Configuration.Provider {
                 PrefsToRoomMigrator.migrateIfNeeded(this@PesaMindApp, database)
             } catch (e: Exception) {
                 Log.e("PesaMindApp", "Prefs -> Room migration failed; will retry next launch", e)
+            }
+        }
+
+        // Settle a subscription payment the user walked away from. Stands in for a
+        // payment webhook: a mobile money PIN prompt can be approved seconds after
+        // the app is backgrounded, at which point nothing is polling and the backend
+        // can't push us the result. See SubscriptionResumer.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                SubscriptionResumer.onAppStart()
+            } catch (e: Exception) {
+                Log.e("PesaMindApp", "Pending payment check failed; will retry next launch", e)
             }
         }
 
@@ -119,6 +136,10 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // A payment authorization return may be what launched us (cold start after
+        // the customer completed 3DS in a browser tab).
+        PaymentDeepLink.handle(intent)
+
         setContent {
             val isDarkMode = ThemeManager.darkModeFlow.collectAsState().value
             PesaMindTheme(darkTheme = isDarkMode) {
@@ -131,6 +152,18 @@ class MainActivity : FragmentActivity() {
         startMessageMonitoringService()
 
         requestRequiredPermissions()
+    }
+
+    /**
+     * With `launchMode="singleTask"`, the payment deep link is delivered here rather
+     * than through a fresh [onCreate] — the existing task (and its navigation back
+     * stack, including the checkout screen the customer left) is reused.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Keep getIntent() in step with what was actually delivered.
+        setIntent(intent)
+        PaymentDeepLink.handle(intent)
     }
 
     /**

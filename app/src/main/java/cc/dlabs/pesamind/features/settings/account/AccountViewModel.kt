@@ -1,6 +1,7 @@
 package cc.dlabs.pesamind.features.settings.account
 
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
@@ -35,6 +36,14 @@ class AccountViewModel : UnifiedViewModel() {
         loadProfile()
     }
 
+    /** Refreshes the Plan row the moment a payment lands, rather than on next launch. */
+    override fun onStateEvent(event: StateEvent) {
+        when (event) {
+            is StateEvent.SubscriptionActivated -> loadProfile()
+            else -> {}
+        }
+    }
+
     private fun loadProfile() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
@@ -64,24 +73,31 @@ class AccountViewModel : UnifiedViewModel() {
                 val response = ApiClient.api.getProfile()
                 if (response.isSuccessful) {
                     val user = response.body()
+                    val profile = user?.profile
 
-                    if (user != null) {
+                    if (user != null && profile != null) {
+                        // trialExpiresAt must be passed through: saveAccount removes
+                        // the stored key when it is null, so omitting it here wiped
+                        // the trial expiry and silently killed the countdown on
+                        // every no-cache load.
                         AccountManager.saveAccount(
                             id = user.id,
                             email = user.email,
-                            username = user.username,
-                            avatarUrl = user.avatarUrl,
-                            balance = user.balance.toString(),
-                            type = user.type,
+                            username = profile.username.orEmpty(),
+                            avatarUrl = profile.avatarUrl.orEmpty(),
+                            balance = (profile.balance ?: 0.0).toString(),
+                            type = profile.type.orEmpty(),
+                            trialExpiresAt = profile.trialExpiresAt,
                         )
 
                         _state.value =
                             AccountState(
-                                username = user.username,
+                                username = profile.username.orEmpty(),
                                 email = user.email,
-                                avatarUrl = user.avatarUrl,
-                                balance = user.balance,
-                                type = user.type,
+                                avatarUrl = profile.avatarUrl.orEmpty(),
+                                balance = profile.balance ?: 0.0,
+                                type = profile.type,
+                                trialDaysRemaining = AccountManager.trialDaysRemaining(),
                                 isLoading = false,
                             )
                     } else {

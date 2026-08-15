@@ -18,6 +18,8 @@ import cc.dlabs.pesamind.core.network.models.ChangePasswordRequest
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CheckUsernameRequest
 import cc.dlabs.pesamind.core.network.models.CheckUsernameResponse
+import cc.dlabs.pesamind.core.network.models.CheckoutRequest
+import cc.dlabs.pesamind.core.network.models.CheckoutResponse
 import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupRequest
 import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupResponse
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
@@ -28,12 +30,15 @@ import cc.dlabs.pesamind.core.network.models.GoogleMobileSignInRequest
 import cc.dlabs.pesamind.core.network.models.GoogleMobileSignInResponse
 import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninRequest
 import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninResponse
+import cc.dlabs.pesamind.core.network.models.InvoiceResponse
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
+import cc.dlabs.pesamind.core.network.models.PlanResponse
 import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
 import cc.dlabs.pesamind.core.network.models.ProcessedMessageResponse
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
+import cc.dlabs.pesamind.core.network.models.SubscriptionResponse
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
@@ -272,4 +277,29 @@ interface ApiService {
     suspend fun getAnalytics(
         @Query("period") period: String = "month",
     ): Response<AnalyticResponse>
+
+    // ── Payments ──────────────────────────────────────────────────────────────
+
+    @GET("payments/plans")
+    suspend fun getPlans(): Response<List<PlanResponse>>
+
+    @POST("payments/checkout")
+    suspend fun checkout(
+        @Body body: CheckoutRequest,
+    ): Response<CheckoutResponse>
+
+    /**
+     * Polling target. The backend reconciles a stale invoice against the payment
+     * provider before answering, which is how a payment settles without webhooks.
+     */
+    @GET("payments/invoices/{id}")
+    suspend fun getInvoice(
+        @Path("id") id: String,
+    ): Response<InvoiceResponse>
+
+    @GET("payments/invoices")
+    suspend fun getInvoices(): Response<List<InvoiceResponse>>
+
+    @GET("payments/subscription")
+    suspend fun getSubscription(): Response<SubscriptionResponse>
 }
