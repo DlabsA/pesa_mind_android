@@ -644,6 +644,7 @@ private fun MetricChip(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.20f)),
     ) {
         Column(
             modifier =
@@ -1950,51 +1951,6 @@ private fun BudgetCountChip(
         }
     }
 }
-
-@Composable
-private fun BudgetLineItemRow(item: BudgetLineItem) {
-    val color = if (item.status == "over_budget") LightColors.Expense else LightColors.Income
-    var barTarget by remember(item.category) { mutableStateOf(0f) }
-    LaunchedEffect(item.category) { barTarget = item.usageFraction }
-    val barW by animateFloatAsState(
-        barTarget,
-        spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow),
-        label = "item_${item.category}",
-    )
-
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                item.category,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                if (item.budget > 0) "${item.actual.ugxShort()} / ${item.budget.ugxShort()}" else item.actual.ugxShort(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(color)) {
-            Box(Modifier.fillMaxWidth(barW).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(color))
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                item.status.replace("_", " ").replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.SemiBold),
-                color = color,
-            )
-            item.transactions?.let {
-                Text(
-                    "$it txn${if (it == 1) "" else "s"}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-    }
-}
-
 // ─── Expense Forecast Card ────────────────────────────────────────────────────
 
 // ---------------------------------------------------------------------------
@@ -3245,6 +3201,7 @@ private fun AnalyticsCard(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp,
         tonalElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
     ) {
         Column(modifier = Modifier.padding(16.dp)) { content() }
     }
