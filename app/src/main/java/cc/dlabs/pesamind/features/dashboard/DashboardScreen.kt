@@ -198,7 +198,7 @@ private fun DashboardScrollBody(
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
-            contentPadding = PaddingValues(bottom = Spacing.space20.dp),
+            contentPadding = PaddingValues(bottom = Spacing.Space2.dp),
             verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
