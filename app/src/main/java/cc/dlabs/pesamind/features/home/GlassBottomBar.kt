@@ -1,8 +1,13 @@
 package cc.dlabs.pesamind.features.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,7 +19,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -39,8 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 
-/** Matches the bar's 80dp height minus its 6dp inset and the selected pill's 4dp vertical inset. */
+/** Diameter of an unselected item; also the shared height of the whole item row. */
 private val UnselectedCircleSize = 60.dp
+
+/** Accent circle diameter once an item is selected (smaller, so the pill has breathing room). */
+private val SelectedCircleSize = 44.dp
 
 /**
  * Bar is 80dp + 20dp top/bottom margin + navigationBarsPadding(); screens rendered behind this
@@ -57,9 +64,8 @@ val GlassBottomBarClearance = 120.dp
  * forest/lime light-dark flip is respected automatically.
  *
  * NOTE ON THE "GLASS": a translucent surface only reads as glass if there is content
- * *behind* it. See the integration note — prefer overlaying this over your content
- * (Box) rather than the Scaffold `bottomBar` slot, which reserves space and leaves
- * nothing behind the bar to show through.
+ * *behind* it. Overlay this over your content (Box) rather than the Scaffold `bottomBar`
+ * slot, which reserves space and leaves nothing behind the bar to show through.
  */
 @Composable
 fun GlassBottomBar(
@@ -77,6 +83,9 @@ fun GlassBottomBar(
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 20.dp),
     ) {
+        // Tinted from onSurface (not a fixed White) so the sheen/border stay visible against a
+        // light surface too — mirrors the same fix applied to GlassNavItem's pillColor.
+        val glassTint = MaterialTheme.colorScheme.onSurface
         Row(
             modifier =
                 Modifier
@@ -84,25 +93,25 @@ fun GlassBottomBar(
                     .height(80.dp)
                     .shadow(24.dp, RoundedCornerShape(36.dp), clip = false)
                     .clip(RoundedCornerShape(36.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.97f))
                     .background(
                         Brush.verticalGradient(
                             colors =
                                 listOf(
-                                    Color.White.copy(alpha = 0.05f),
-                                    Color.White.copy(alpha = 0.01f),
+                                    glassTint.copy(alpha = 0.03f),
+                                    glassTint.copy(alpha = 0.01f),
                                     Color.Transparent,
                                 ),
                         ),
                     )
                     .border(
-                        width = 1.dp,
+                        width = 1.5.dp,
                         brush =
                             Brush.verticalGradient(
                                 colors =
                                     listOf(
-                                        Color.White.copy(alpha = 0.14f),
-                                        Color.White.copy(alpha = 0.03f),
+                                        glassTint.copy(alpha = 0.32f),
+                                        glassTint.copy(alpha = 0.12f),
                                     ),
                             ),
                         shape = RoundedCornerShape(36.dp),
@@ -138,58 +147,70 @@ private fun GlassNavItem(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val anim = tween<Color>(durationMillis = 250)
-
-    // Unselected: the whole tappable circle IS the pill (no inset inner circle).
-    // Selected: the pill widens and a smaller accent circle appears inside it.
-    // Tinted from onSurface (not a fixed White) so it stays visible against a light surface too.
     val onSurface = MaterialTheme.colorScheme.onSurface
-    val pillColor by animateColorAsState(
-        targetValue = if (selected) onSurface.copy(alpha = 0.10f) else onSurface.copy(alpha = 0.05f),
-        animationSpec = anim,
-        label = "pillColor",
-    )
-    val circleColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        animationSpec = anim,
-        label = "circleColor",
-    )
-    val iconTint by animateColorAsState(
-        targetValue =
-            if (selected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        animationSpec = anim,
-        label = "iconTint",
-    )
 
+    // One transition drives every animated value off the same `selected` flag, so the circle,
+    // icon, padding and colours all move in lockstep instead of some snapping and others tweening.
+    val transition = updateTransition(targetState = selected, label = "navItemSelection")
+
+    // Size/shape use a gentle spring for a little life; colours use a plain tween (springing a
+    // colour looks muddy). Tune stiffness/damping to taste — higher stiffness = snappier.
+    val circleSize by transition.animateDp(
+        transitionSpec = { spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow) },
+        label = "circleSize",
+    ) { sel -> if (sel) SelectedCircleSize else UnselectedCircleSize }
+
+    val iconSize by transition.animateDp(
+        transitionSpec = { spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow) },
+        label = "iconSize",
+    ) { sel -> if (sel) 20.dp else 22.dp }
+
+    val startPad by transition.animateDp(
+        transitionSpec = { spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow) },
+        label = "startPad",
+    ) { sel -> if (sel) 6.dp else 0.dp }
+
+    val pillColor by transition.animateColor(
+        transitionSpec = { tween(durationMillis = 250, easing = FastOutSlowInEasing) },
+        label = "pillColor",
+    ) { sel -> if (sel) onSurface.copy(alpha = 0.16f) else onSurface.copy(alpha = 0.09f) }
+
+    val circleColor by transition.animateColor(
+        transitionSpec = { tween(durationMillis = 250, easing = FastOutSlowInEasing) },
+        label = "circleColor",
+    ) { sel -> if (sel) MaterialTheme.colorScheme.primary else Color.Transparent }
+
+    val iconTint by transition.animateColor(
+        transitionSpec = { tween(durationMillis = 250, easing = FastOutSlowInEasing) },
+        label = "iconTint",
+    ) { sel ->
+        if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    // Single continuous modifier chain (no per-state branch): fixed height, 50%-rounded so it
+    // reads as a circle when narrow and a pill when the label expands it. Width is wrap-content,
+    // so it grows/shrinks purely from the animating circle + the AnimatedVisibility label.
     Row(
         modifier =
             Modifier
-                .then(
-                    if (selected) {
-                        Modifier.fillMaxHeight().padding(vertical = 4.dp)
-                    } else {
-                        Modifier.size(UnselectedCircleSize)
-                    },
-                )
-                .clip(if (selected) RoundedCornerShape(percent = 50) else CircleShape)
+                .height(UnselectedCircleSize)
+                .clip(RoundedCornerShape(percent = 50))
                 .background(pillColor)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick,
                 )
-                .padding(horizontal = if (selected) 8.dp else 0.dp),
+                // Springs can overshoot past their target (including below 0dp mid-flight
+                // between the 0dp/6dp targets below); padding() throws on negative values.
+                .padding(horizontal = startPad.coerceAtLeast(0.dp)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         Box(
             modifier =
                 Modifier
-                    .then(if (selected) Modifier.size(40.dp) else Modifier.size(UnselectedCircleSize))
+                    .size(circleSize)
                     .clip(CircleShape)
                     .background(circleColor),
             contentAlignment = Alignment.Center,
@@ -198,14 +219,22 @@ private fun GlassNavItem(
                 imageVector = item.icon,
                 contentDescription = item.label,
                 tint = iconTint,
-                modifier = Modifier.size(if (selected) 20.dp else 22.dp),
+                modifier = Modifier.size(iconSize),
             )
         }
 
         AnimatedVisibility(
             visible = selected,
-            enter = expandHorizontally() + fadeIn(),
-            exit = shrinkHorizontally() + fadeOut(),
+            enter =
+                expandHorizontally(
+                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    clip = false,
+                ) + fadeIn(tween(220, delayMillis = 60)),
+            exit =
+                shrinkHorizontally(
+                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    clip = false,
+                ) + fadeOut(tween(120)),
         ) {
             Text(
                 text = item.label,
