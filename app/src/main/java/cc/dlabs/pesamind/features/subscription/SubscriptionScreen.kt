@@ -68,13 +68,12 @@ import java.time.OffsetDateTime
  */
 private val benefits =
     listOf(
+        "Unlimited channels (cash, mobile money, bank)",
         "Automatic SMS capture",
+        "Manual entries for mobile money channels",
         "Full transaction history",
-        "Advanced budgeting",
+        "Advanced budgeting (next-month planning)",
         "Complete analytics suite",
-        "Proactive alerts",
-        "Unlimited manual entries",
-        "PIN & pattern lock",
     )
 
 @OptIn(ExperimentalMaterial3Api::class)
