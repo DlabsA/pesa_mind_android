@@ -14,14 +14,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -41,10 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 
-/** Matches your existing nav item shape (route / icon / label). */
+/** Matches the bar's 80dp height minus its 6dp inset and the selected pill's 4dp vertical inset. */
+private val UnselectedCircleSize = 60.dp
 
 /**
- * Glass, expanding-pill bottom bar.
+ * Glass, expanding-pill bottom bar. Matches your existing nav item shape (route / icon / label).
  *
  * The selected item grows to a pill showing a filled (primary) icon circle + label;
  * unselected items stay as compact tinted circles. Uses theme primary/onPrimary so the
@@ -78,15 +77,13 @@ fun GlassBottomBar(
                     .height(80.dp)
                     .shadow(24.dp, RoundedCornerShape(36.dp), clip = false)
                     .clip(RoundedCornerShape(36.dp))
-                    // base translucent tint (the "glass" body)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.60f))
-                    // top sheen so the edge catches light like frosted glass
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
                     .background(
                         Brush.verticalGradient(
                             colors =
                                 listOf(
-                                    Color.White.copy(alpha = 0.10f),
-                                    Color.White.copy(alpha = 0.02f),
+                                    Color.White.copy(alpha = 0.05f),
+                                    Color.White.copy(alpha = 0.01f),
                                     Color.Transparent,
                                 ),
                         ),
@@ -97,15 +94,15 @@ fun GlassBottomBar(
                             Brush.verticalGradient(
                                 colors =
                                     listOf(
-                                        Color.White.copy(alpha = 0.22f),
-                                        Color.White.copy(alpha = 0.04f),
+                                        Color.White.copy(alpha = 0.14f),
+                                        Color.White.copy(alpha = 0.03f),
                                     ),
                             ),
                         shape = RoundedCornerShape(36.dp),
                     )
                     .padding(6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             items.forEach { item ->
                 GlassNavItem(
@@ -129,25 +126,24 @@ fun GlassBottomBar(
 }
 
 @Composable
-private fun RowScope.GlassNavItem(
+private fun GlassNavItem(
     item: BottomNavItem,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
     val anim = tween<Color>(durationMillis = 250)
 
+    // Unselected: the whole tappable circle IS the pill (no inset inner circle).
+    // Selected: the pill widens and a smaller accent circle appears inside it.
+    // Tinted from onSurface (not a fixed White) so it stays visible against a light surface too.
+    val onSurface = MaterialTheme.colorScheme.onSurface
     val pillColor by animateColorAsState(
-        targetValue = if (selected) Color.White.copy(alpha = 0.05f) else Color.Transparent,
+        targetValue = if (selected) onSurface.copy(alpha = 0.10f) else onSurface.copy(alpha = 0.05f),
         animationSpec = anim,
         label = "pillColor",
     )
     val circleColor by animateColorAsState(
-        targetValue =
-            if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                Color.White.copy(alpha = 0.05f)
-            },
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = anim,
         label = "circleColor",
     )
@@ -165,24 +161,28 @@ private fun RowScope.GlassNavItem(
     Row(
         modifier =
             Modifier
-                // selected pill grows to fill; unselected stay compact circles
-                .then(if (selected) Modifier.weight(1f) else Modifier.width(52.dp))
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(30.dp))
+                .then(
+                    if (selected) {
+                        Modifier.fillMaxHeight().padding(vertical = 4.dp)
+                    } else {
+                        Modifier.size(UnselectedCircleSize)
+                    },
+                )
+                .clip(if (selected) RoundedCornerShape(percent = 50) else CircleShape)
                 .background(pillColor)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick,
                 )
-                .padding(horizontal = 4.dp),
+                .padding(horizontal = if (selected) 8.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (selected) Arrangement.Start else Arrangement.Center,
+        horizontalArrangement = Arrangement.Center,
     ) {
         Box(
             modifier =
                 Modifier
-                    .size(46.dp)
+                    .then(if (selected) Modifier.size(40.dp) else Modifier.size(UnselectedCircleSize))
                     .clip(CircleShape)
                     .background(circleColor),
             contentAlignment = Alignment.Center,
@@ -191,7 +191,7 @@ private fun RowScope.GlassNavItem(
                 imageVector = item.icon,
                 contentDescription = item.label,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(if (selected) 20.dp else 22.dp),
             )
         }
 
@@ -203,7 +203,7 @@ private fun RowScope.GlassNavItem(
             Text(
                 text = item.label,
                 color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 modifier = Modifier.padding(start = 10.dp, end = 8.dp),
