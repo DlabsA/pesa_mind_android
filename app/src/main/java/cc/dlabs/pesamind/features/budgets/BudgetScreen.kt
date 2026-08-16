@@ -3,6 +3,7 @@ package cc.dlabs.pesamind.features.budgets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.OfflineBanner
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.core.ui.StaggeredCard
+import cc.dlabs.pesamind.features.home.GlassBottomBarClearance
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,7 @@ fun BudgetScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             BudgetHeader(
                 state = state,
@@ -105,7 +108,7 @@ fun BudgetScreen(
                         Modifier
                             .fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
-                    contentPadding = PaddingValues(bottom = Spacing.Space2.dp),
+                    contentPadding = PaddingValues(bottom = GlassBottomBarClearance),
                 ) {
                     item { Spacer(Modifier.height(4.dp)) }
 

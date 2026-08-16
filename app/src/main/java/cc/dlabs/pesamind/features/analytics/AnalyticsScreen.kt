@@ -67,6 +67,7 @@ import cc.dlabs.pesamind.core.ui.PremiumUpsellCard
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.core.ui.StaggeredCard
+import cc.dlabs.pesamind.features.home.GlassBottomBarClearance
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -189,7 +190,7 @@ private fun AnalyticsScrollBody(
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
-            contentPadding = PaddingValues(bottom = Spacing.Space2.dp),
+            contentPadding = PaddingValues(bottom = GlassBottomBarClearance),
             verticalArrangement = Arrangement.spacedBy(Spacing.Space4.dp),
             modifier = Modifier.fillMaxSize(),
         ) {

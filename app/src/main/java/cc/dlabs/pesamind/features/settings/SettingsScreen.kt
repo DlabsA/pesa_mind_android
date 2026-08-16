@@ -33,6 +33,7 @@ import cc.dlabs.pesamind.core.network.models.Account
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
+import cc.dlabs.pesamind.features.home.GlassBottomBarClearance
 import cc.dlabs.pesamind.features.subscription.SubscriptionPeriod
 import coil3.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -362,7 +363,7 @@ fun SettingsScreen(rootNav: NavHostController) {
             )
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(GlassBottomBarClearance))
     }
 }
 

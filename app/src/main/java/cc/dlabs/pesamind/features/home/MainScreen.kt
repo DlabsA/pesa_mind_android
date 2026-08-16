@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
@@ -62,7 +63,7 @@ fun MainScreen(rootNav: NavHostController) {
         NavHost(
             navController = navController,
             startDestination = Routes.Home.route,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().statusBarsPadding(),
         ) {
             composable(Routes.Home.route) { DashboardScreen(rootNav) }
             composable(Routes.Analytics.route) { AnalyticsScreen(rootNav) }

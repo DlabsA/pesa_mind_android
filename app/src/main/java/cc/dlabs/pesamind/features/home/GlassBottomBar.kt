@@ -43,6 +43,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 private val UnselectedCircleSize = 60.dp
 
 /**
+ * Bar is 80dp + 20dp top/bottom margin + navigationBarsPadding(); screens rendered behind this
+ * overlay bar (see [GlassBottomBar]'s doc comment) need at least this much bottom clearance in
+ * their scrollable content so the last row isn't hidden behind the floating bar.
+ */
+val GlassBottomBarClearance = 120.dp
+
+/**
  * Glass, expanding-pill bottom bar. Matches your existing nav item shape (route / icon / label).
  *
  * The selected item grows to a pill showing a filled (primary) icon circle + label;
