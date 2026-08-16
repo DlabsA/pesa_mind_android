@@ -1,17 +1,28 @@
 package cc.dlabs.pesamind.features.home
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.features.analytics.AnalyticsScreen
@@ -36,63 +47,49 @@ fun MainScreen(rootNav: NavHostController) {
             BottomNavItem("Settings", Routes.Settings.route, Icons.Filled.Settings),
         )
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-//                tonalElevation = 8.dp
-            ) {
-                val currentEntry by navController.currentBackStackEntryAsState()
-                val current = currentEntry?.destination?.route
-                items.forEach { item ->
-                    NavigationBarItem(
-                        selected = current == item.route,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        colors =
-                            NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                    )
-                }
-            }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { rootNav.navigate(Routes.AddTransaction.createRoute()) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                modifier =
-                    Modifier
-                        .size((Spacing.Space12 + 4).dp)
-                        .offset(y = (-18).dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add transaction", tint = MaterialTheme.colorScheme.onPrimary)
-            }
-        },
-        floatingActionButtonPosition = FabPosition.Center,
-    ) { padding ->
+    // Overlay layout (not Scaffold's bottomBar slot): content runs full-bleed under the
+    // floating bar so the translucent glass has something behind it to show through, and
+    // the FAB is lifted clear of the pills.
+    //
+    // Because content extends under the bar, give each screen ~96.dp of bottom padding in
+    // its scrollable so the last row isn't hidden behind the floating bar + FAB.
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+    ) {
         NavHost(
-            navController,
+            navController = navController,
             startDestination = Routes.Home.route,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.fillMaxSize(),
         ) {
             composable(Routes.Home.route) { DashboardScreen(rootNav) }
             composable(Routes.Analytics.route) { AnalyticsScreen(rootNav) }
             composable(Routes.Tools.route) { BudgetScreen(rootNav) }
             composable(Routes.Settings.route) { SettingsScreen(rootNav) }
+        }
+
+        GlassBottomBar(
+            navController = navController,
+            items = items,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+
+        FloatingActionButton(
+            onClick = { rootNav.navigate(Routes.AddTransaction.route) },
+            containerColor = MaterialTheme.colorScheme.primary,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = (-100).dp)
+                    .size((Spacing.Space12 + 4).dp),
+        ) {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = "Add transaction",
+                tint = MaterialTheme.colorScheme.onPrimary,
+            )
         }
     }
 }
