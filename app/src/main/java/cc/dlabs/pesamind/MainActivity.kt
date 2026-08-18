@@ -6,6 +6,7 @@ import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
@@ -212,13 +213,23 @@ class MainActivity : FragmentActivity() {
 
     /**
      * Build the list of permissions your app needs.
-     * READ_PHONE_STATE is optional for SIM identification (API 26+ READ_PHONE_NUMBERS
-     * is also acceptable, but we'll stick with READ_PHONE_STATE for broad compatibility).
-     * Add READ_PHONE_NUMBERS if targeting newer APIs.
+     * On API 33+ (Tiramisu), `SubscriptionManager.getPhoneNumber()` — used by
+     * `SmsReceiver.getReceivingSimInfo()` to record which MSISDN a mobile money SMS
+     * arrived on — requires READ_PHONE_NUMBERS specifically; READ_PHONE_STATE alone
+     * throws SecurityException there and the number silently falls back to "Unknown".
+     * Both are requested so the pre-33 (`subscriptionInfo.number`) and 33+ paths both work.
+     * POST_NOTIFICATIONS is also API 33+-only (a no-op permission before that) — without it
+     * being requested here, `SMSMessageProcessor.showLocalNotification` silently skips every
+     * transaction notification, same "declared in the manifest but never actually requested"
+     * gap as READ_PHONE_NUMBERS had.
      */
     private fun buildRequiredPermissions(): List<String> {
         val permissions = mutableListOf(Manifest.permission.RECEIVE_SMS)
         permissions.add(Manifest.permission.READ_PHONE_STATE)
+        permissions.add(Manifest.permission.READ_PHONE_NUMBERS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
         return permissions
     }
 
@@ -229,9 +240,14 @@ class MainActivity : FragmentActivity() {
                 Log.e(TAG, "RECEIVE_SMS denied — app cannot monitor transactions")
                 showMandatorySettingsDialog()
             }
-            Manifest.permission.READ_PHONE_STATE in denied -> {
-                // SIM identification will fail – optional, just log and continue
-                Log.w(TAG, "READ_PHONE_STATE denied — SIM slot identification disabled")
+            Manifest.permission.READ_PHONE_STATE in denied || Manifest.permission.READ_PHONE_NUMBERS in denied -> {
+                // SIM/MSISDN identification will fail – optional, just log and continue
+                Log.w(TAG, "READ_PHONE_STATE/READ_PHONE_NUMBERS denied — SIM number identification disabled")
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                Manifest.permission.POST_NOTIFICATIONS in denied -> {
+                // Transaction/alert notifications will fail – optional, just log and continue
+                Log.w(TAG, "POST_NOTIFICATIONS denied — transaction notifications disabled")
             }
         }
     }
