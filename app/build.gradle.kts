@@ -85,8 +85,8 @@ android {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "27"
+        versionCode = 28
+        versionName = "28"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -112,7 +112,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

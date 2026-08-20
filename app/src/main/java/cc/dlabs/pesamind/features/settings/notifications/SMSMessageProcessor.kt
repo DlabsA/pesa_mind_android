@@ -62,6 +62,11 @@ class SMSMessageProcessor(
         // of every message this pipeline sees, regardless of what happens below. Own try/catch:
         // a failure recording it must never block the transaction-creation logic that follows.
         try {
+            Log.d(
+                TAG,
+                "processMessage: senderId=$senderId, simInfo=$simInfo, " +
+                    "receivingSimNumber=$receivingSimNumber, timestamp=$timestamp, content=$content",
+            )
             ProcessedMessageRepository.init(context)
             ProcessedMessageRepository.record(
                 senderId = senderId,

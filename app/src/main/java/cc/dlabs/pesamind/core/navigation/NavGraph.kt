@@ -95,6 +95,16 @@ fun PesaMindNavGraph(navController: NavHostController) {
             }
         }
 
+        // A tapped "SIM cards changed" alert should land on Account Settings, same reasoning
+        // as the upgrade deep link above.
+        val showSimSlots by SimSlotDeepLink.showSimSlots.collectAsState()
+        LaunchedEffect(showSimSlots) {
+            if (showSimSlots) {
+                navController.navigate(Routes.AccountSettings.route)
+                SimSlotDeepLink.consume()
+            }
+        }
+
         NavHost(navController, startDestination = startDestination!!) {
             composable(Routes.Login.route) { LoginScreen(navController) }
             composable(Routes.Register.route) { RegisterScreen(navController) }

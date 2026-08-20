@@ -27,12 +27,14 @@ import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
 import cc.dlabs.pesamind.core.di.WorkerFactoryEntryPoint
 import cc.dlabs.pesamind.core.navigation.PaymentDeepLink
 import cc.dlabs.pesamind.core.navigation.PesaMindNavGraph
+import cc.dlabs.pesamind.core.navigation.SimSlotDeepLink
 import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.AuthManager
 import cc.dlabs.pesamind.core.storage.ChannelManager
 import cc.dlabs.pesamind.core.storage.NotificationStorage
 import cc.dlabs.pesamind.core.storage.PaymentManager
+import cc.dlabs.pesamind.core.storage.SimSlotManager
 import cc.dlabs.pesamind.core.storage.SyncMetadataManager
 import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.storage.TokenManager
@@ -70,6 +72,7 @@ class PesaMindApp : Application(), Configuration.Provider {
         SyncMetadataManager.init(this)
         PaymentManager.init(this)
         SubscriptionResumer.init(this)
+        SimSlotManager.init(this)
         // Room-backed repositories (ADR-0004 Slice A1/B) — ChannelRepository/
         // TransactionRepository/BudgetRepository are the source of truth their respective
         // ViewModels read and write through.
@@ -140,6 +143,21 @@ class MainActivity : FragmentActivity() {
         // A payment authorization return may be what launched us (cold start after
         // the customer completed 3DS in a browser tab).
         PaymentDeepLink.handle(intent)
+        SimSlotDeepLink.handle(intent)
+
+        // Independent of any SMS: a live check of whether the SIM physically in each declared
+        // slot still matches what the user told us in Account Settings > SIM Slots. Runs once
+        // per app open, matching "when the user comes back, they get an alert" — not on every
+        // incoming SMS.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (SimSlotManager.checkForDrift(this@MainActivity)) {
+                    SimSlotManager.postDriftAlert(this@MainActivity)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "SIM slot drift check failed: ${e.message}", e)
+            }
+        }
 
         setContent {
             val isDarkMode = ThemeManager.darkModeFlow.collectAsState().value
@@ -165,6 +183,7 @@ class MainActivity : FragmentActivity() {
         // Keep getIntent() in step with what was actually delivered.
         setIntent(intent)
         PaymentDeepLink.handle(intent)
+        SimSlotDeepLink.handle(intent)
     }
 
     /**

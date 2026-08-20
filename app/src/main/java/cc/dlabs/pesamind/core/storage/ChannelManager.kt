@@ -12,6 +12,7 @@ import cc.dlabs.pesamind.features.settings.channels.ChannelDescBank
 import cc.dlabs.pesamind.features.settings.channels.ChannelDescMobileMoney
 import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
 import cc.dlabs.pesamind.features.settings.notifications.MessageSender
+import cc.dlabs.pesamind.features.settings.notifications.SmsReceiver
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.first
@@ -200,6 +201,24 @@ object ChannelManager {
         // every message through the network branch below, every time).
         val matchingChannel = ChannelRepository.findByNormalizedSenderKey(channelDesc)
         if (matchingChannel != null) {
+            // Self-heal: this channel may have been auto-created while the SIM's own number
+            // was unresolvable (missing READ_PHONE_NUMBERS, or the carrier hadn't provisioned
+            // it yet — see SmsReceiver.getReceivingSimInfo). Nothing else ever revisits that
+            // description after creation, so backfill it here the first time a later message
+            // resolves a real number, rather than leaving the placeholder permanently.
+            if (SmsReceiver.SimInfo.isPlaceholderNumber(matchingChannel.description) &&
+                !SmsReceiver.SimInfo.isPlaceholderNumber(receivingSimNumber)
+            ) {
+                val healed =
+                    ChannelRepository.updateChannel(
+                        id = matchingChannel.id,
+                        name = matchingChannel.name,
+                        description = receivingSimNumber,
+                        channelDesc = matchingChannel.channelDesc,
+                        status = matchingChannel.status,
+                    )
+                return ChannelInfo(healed ?: matchingChannel, matchingChannel.smsNotificationEnabled)
+            }
             return ChannelInfo(matchingChannel, matchingChannel.smsNotificationEnabled)
         }
 

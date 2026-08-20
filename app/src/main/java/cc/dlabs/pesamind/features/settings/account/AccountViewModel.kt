@@ -1,11 +1,13 @@
 package cc.dlabs.pesamind.features.settings.account
 
+import android.content.Context
 import androidx.lifecycle.viewModelScope
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
+import cc.dlabs.pesamind.core.storage.SimSlotManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,11 @@ data class AccountState(
     val type: String? = null,
     // Non-null only while on an active Premium trial — see [AccountManager.trialDaysRemaining].
     val trialDaysRemaining: Int? = null,
+    // ── SIM Slots (local-only, never synced — see SimSlotManager) ──────────────────────────
+    val activeSimSlots: List<SimSlotManager.SimSlot> = emptyList(),
+    val simSlotNumbers: Map<Int, String> = emptyMap(),
+    val simSlotDriftDetected: Boolean = false,
+    val isSavingSimSlots: Boolean = false,
 ) {
     val isPremium: Boolean get() = type == "Premium" || type == "Enterprise"
 }
@@ -171,5 +178,51 @@ class AccountViewModel : UnifiedViewModel() {
 
     fun clearMessage() {
         _state.value = _state.value.copy(successMessage = null, error = null)
+    }
+
+    /**
+     * Populates the SIM Slots section from the device's currently active slots plus whatever
+     * numbers the user has already saved for them — called once from the screen's
+     * `LaunchedEffect(Unit)`, since [SimSlotManager] needs a `Context` this plain `UnifiedViewModel`
+     * doesn't otherwise hold. Local-only (no `launchWithState`/network call, unlike [saveProfile]).
+     */
+    fun loadSimSlots(context: Context) {
+        viewModelScope.launch {
+            val activeSlots = SimSlotManager.getActiveSlots(context)
+            val numbers =
+                activeSlots.associate { slot ->
+                    slot.slotIndex to (SimSlotManager.getNumberForSlot(slot.slotIndex) ?: "")
+                }
+            _state.value =
+                _state.value.copy(
+                    activeSimSlots = activeSlots,
+                    simSlotNumbers = numbers,
+                    simSlotDriftDetected = SimSlotManager.isDriftDetected(),
+                )
+        }
+    }
+
+    fun onSimSlotNumberChange(
+        slotIndex: Int,
+        value: String,
+    ) {
+        _state.value =
+            _state.value.copy(
+                simSlotNumbers = _state.value.simSlotNumbers + (slotIndex to value),
+            )
+    }
+
+    /** Re-saving always clears [AccountState.simSlotDriftDetected] — see [SimSlotManager.saveSlotNumbers]. */
+    fun saveSimSlots(context: Context) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isSavingSimSlots = true)
+            SimSlotManager.saveSlotNumbers(context, _state.value.simSlotNumbers)
+            _state.value =
+                _state.value.copy(
+                    isSavingSimSlots = false,
+                    simSlotDriftDetected = false,
+                    successMessage = "SIM slot numbers saved",
+                )
+        }
     }
 }
