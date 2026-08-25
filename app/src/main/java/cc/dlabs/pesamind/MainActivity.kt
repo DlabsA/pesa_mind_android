@@ -146,18 +146,10 @@ class MainActivity : FragmentActivity() {
         SimSlotDeepLink.handle(intent)
 
         // Independent of any SMS: a live check of whether the SIM physically in each declared
-        // slot still matches what the user told us in Account Settings > SIM Slots. Runs once
-        // per app open, matching "when the user comes back, they get an alert" — not on every
-        // incoming SMS.
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                if (SimSlotManager.checkForDrift(this@MainActivity)) {
-                    SimSlotManager.postDriftAlert(this@MainActivity)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "SIM slot drift check failed: ${e.message}", e)
-            }
-        }
+        // slot still matches what the user told us in Settings > SIM Slots. Not run here
+        // directly — onResume always fires immediately after onCreate too, and does it there
+        // (see override below) so cold-start and every later resume share one code path
+        // instead of double-checking on launch.
 
         setContent {
             val isDarkMode = ThemeManager.darkModeFlow.collectAsState().value
@@ -184,6 +176,28 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         PaymentDeepLink.handle(intent)
         SimSlotDeepLink.handle(intent)
+    }
+
+    /**
+     * Every return to the foreground — not just the [onCreate] cold-start path — re-runs the
+     * SIM-slot drift check, since a swap made while this app was backgrounded is otherwise
+     * never caught until the process happens to be killed and relaunched. `PesaMindNavGraph`
+     * observes [SimSlotManager.driftBlocking] and blocks the app behind a non-dismissible form
+     * whenever this finds (or still has an unresolved) drift.
+     */
+    override fun onResume() {
+        super.onResume()
+        runSimSlotDriftCheck()
+    }
+
+    private fun runSimSlotDriftCheck() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                SimSlotManager.refreshDriftBlockingState(this@MainActivity)
+            } catch (e: Exception) {
+                Log.w(TAG, "SIM slot drift check failed: ${e.message}", e)
+            }
+        }
     }
 
     /**

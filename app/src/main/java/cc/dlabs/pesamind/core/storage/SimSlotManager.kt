@@ -19,6 +19,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cc.dlabs.pesamind.R
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
 private val Context.simSlotDataStore by preferencesDataStore("pesamind_sim_slots")
@@ -47,6 +50,31 @@ object SimSlotManager {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+    }
+
+    /**
+     * True while a detected-but-unresolved SIM change should block normal app use — read by
+     * `PesaMindNavGraph`'s app-wide non-dismissible overlay. Set by [refreshDriftBlockingState]
+     * (called from `MainActivity` on every launch/resume, not just cold start — Android 14+
+     * only allows a SIM-swap check while the app is actively open, never in the background), and
+     * cleared by [saveSlotNumbers] the moment the user resolves it.
+     */
+    private val _driftBlocking = MutableStateFlow(false)
+    val driftBlocking: StateFlow<Boolean> = _driftBlocking.asStateFlow()
+
+    /**
+     * The single entry point `MainActivity` calls on every launch/resume: runs [checkForDrift],
+     * fires the notification only when drift is *newly* found this call (matching
+     * [checkForDrift]'s own already-flagged short-circuit, so re-opening the app while an
+     * earlier drift is still unresolved doesn't re-spam the notification), then syncs
+     * [driftBlocking] to the persisted flag — which re-arms the block on every resume for as
+     * long as it stays unresolved, independent of whether this particular call found anything
+     * new.
+     */
+    suspend fun refreshDriftBlockingState(context: Context) {
+        val newlyDetected = checkForDrift(context)
+        if (newlyDetected) postDriftAlert(context)
+        _driftBlocking.value = isDriftDetected()
     }
 
     data class SimSlot(val slotIndex: Int, val carrierName: String)
@@ -115,6 +143,7 @@ object SimSlotManager {
             }
             prefs[DriftDetected] = false
         }
+        _driftBlocking.value = false
     }
 
     /**

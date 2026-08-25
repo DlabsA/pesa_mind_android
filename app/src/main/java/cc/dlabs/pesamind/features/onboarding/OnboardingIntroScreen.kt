@@ -69,7 +69,7 @@ fun OnboardingIntroScreen(
         Spacer(Modifier.height(Spacing.Space8.dp))
 
         Button(
-            onClick = { navController.navigate(Routes.OnboardingCash.route) },
+            onClick = { navController.navigate(Routes.OnboardingSimSlots.route) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             enabled = !state.isSaving,

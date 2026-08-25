@@ -53,41 +53,66 @@ interface ChannelDao {
     ): List<ChannelEntity>
 
     /**
-     * Case-insensitive provider/bank channel lookup, **live channels only**. This is the query
-     * `ChannelManager.isSmsAllowedForSender` uses to decide "does an active channel already
-     * exist for this sender" before attaching a transaction to it — a soft-deleted row must
-     * never be silently treated as the active channel here (that would attach new SMS
-     * transactions to a channel the user believes is gone). For the insert-time race guard that
-     * must also see tombstones, use [findByNormalizedSenderKey] instead.
+     * Exact provider+number lookup, **live channels only** — the query
+     * `ChannelManager.isSmsAllowedForSender` uses first to decide "does an active channel
+     * already exist for this exact sender+receiving-number" before attaching a transaction to
+     * it — a soft-deleted row must never be silently treated as the active channel here (that
+     * would attach new SMS transactions to a channel the user believes is gone). For the
+     * insert-time race guard that must also see tombstones, use
+     * [findByNormalizedSenderKeyAndReceivingNumber] instead. For the "how many live channels
+     * exist for this provider at all, regardless of number" fallback (ambiguous-match
+     * handling), use [findAllLiveByNormalizedSenderKey].
      */
     @Query(
         "SELECT * FROM channels WHERE userId = :userId AND normalizedSenderKey = :normalizedSenderKey " +
-            "AND deletedAt IS NULL LIMIT 1",
+            "AND receivingNumber = :receivingNumber AND deletedAt IS NULL LIMIT 1",
     )
-    suspend fun findLiveByNormalizedSenderKey(
+    suspend fun findLiveByNormalizedSenderKeyAndReceivingNumber(
         userId: String,
         normalizedSenderKey: String,
+        receivingNumber: String,
     ): ChannelEntity?
 
     /**
-     * Case-insensitive provider/bank channel lookup, **including soft-deleted rows** —
-     * `normalizedSenderKey` is a pre-normalized (trim+lowercase) column, so this is a plain
-     * indexed equality match, not a `LIKE`/`COLLATE` scan. Includes tombstones deliberately: the
-     * column is unique-indexed *across* soft-deletes (mirrors `smsSourceKey`'s reasoning, not
-     * `serverId`'s), so an insert attempt can conflict with an already-deleted row and this is
-     * the query used to find that conflicting row again afterward (see
-     * [cc.dlabs.pesamind.core.data.ChannelRepository]'s revive-on-conflict handling). Scoped by
-     * [ChannelEntity.userId] — the unique index this mirrors is now `(userId,
-     * normalizedSenderKey)`, not `normalizedSenderKey` alone, so a different account's row (even
-     * soft-deleted) must never match here (see MIGRATION_5_6's doc comment for the bug this
-     * fixes). For deciding "does an active channel already exist," use
-     * [findLiveByNormalizedSenderKey] instead — this one is for insert-time conflict resolution
-     * only.
+     * All live channels sharing a provider ([normalizedSenderKey]), regardless of
+     * [ChannelEntity.receivingNumber] — the fallback [cc.dlabs.pesamind.core.data.ChannelRepository.findByNormalizedSenderKey]
+     * uses when an exact receiving-number match misses (or the receiving number couldn't be
+     * resolved at all): exactly one result means there's no real ambiguity even without a
+     * number match; more than one means the caller must not guess which one an incoming SMS
+     * belongs to.
      */
-    @Query("SELECT * FROM channels WHERE userId = :userId AND normalizedSenderKey = :normalizedSenderKey LIMIT 1")
-    suspend fun findByNormalizedSenderKey(
+    @Query(
+        "SELECT * FROM channels WHERE userId = :userId AND normalizedSenderKey = :normalizedSenderKey " +
+            "AND deletedAt IS NULL",
+    )
+    suspend fun findAllLiveByNormalizedSenderKey(
         userId: String,
         normalizedSenderKey: String,
+    ): List<ChannelEntity>
+
+    /**
+     * Exact provider+number lookup, **including soft-deleted rows** — `normalizedSenderKey` is
+     * a pre-normalized (trim+lowercase) column and `receivingNumber` is pre-normalized digits
+     * (or the `UNSPECIFIED` sentinel), so this is a plain indexed equality match, not a
+     * `LIKE`/`COLLATE` scan. Includes tombstones deliberately: this pair is unique-indexed
+     * *across* soft-deletes (mirrors `smsSourceKey`'s reasoning, not `serverId`'s), so an insert
+     * attempt can conflict with an already-deleted row and this is the query used to find that
+     * conflicting row again afterward (see [cc.dlabs.pesamind.core.data.ChannelRepository]'s
+     * revive-on-conflict handling). Scoped by [ChannelEntity.userId] — the unique index this
+     * mirrors is `(userId, normalizedSenderKey, receivingNumber)`, so a different account's row
+     * (even soft-deleted) must never match here (see MIGRATION_5_6's doc comment for the bug
+     * this fixes for the userId scoping itself). For deciding "does an active channel already
+     * exist," use [findLiveByNormalizedSenderKeyAndReceivingNumber] instead — this one is for
+     * insert-time conflict resolution only.
+     */
+    @Query(
+        "SELECT * FROM channels WHERE userId = :userId AND normalizedSenderKey = :normalizedSenderKey " +
+            "AND receivingNumber = :receivingNumber LIMIT 1",
+    )
+    suspend fun findByNormalizedSenderKeyAndReceivingNumber(
+        userId: String,
+        normalizedSenderKey: String,
+        receivingNumber: String,
     ): ChannelEntity?
 
     /** Deliberately includes soft-deleted rows (no `deletedAt IS NULL` filter) — pull

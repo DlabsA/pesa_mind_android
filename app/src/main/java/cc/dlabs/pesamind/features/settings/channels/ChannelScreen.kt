@@ -454,8 +454,8 @@ fun ChannelScreen(
             showStatusField = false,
             isSaving = state.isSaving,
             onDismiss = { showCreateDialog = false },
-            onConfirm = { name, description, type, channelDescription, status, openingBalance ->
-                vm.createChannel(name, description, type, channelDescription, status, openingBalance)
+            onConfirm = { name, description, type, channelDescription, status, openingBalance, accountNumber ->
+                vm.createChannel(name, description, type, channelDescription, status, openingBalance, accountNumber)
                 showCreateDialog = false
             },
         )
@@ -473,13 +473,14 @@ fun ChannelScreen(
             initialStatus = channel.status,
             isSaving = state.isSaving,
             onDismiss = { editingChannel = null },
-            onConfirm = { name, description, _, channelDescription, status, _ ->
+            onConfirm = { name, description, _, channelDescription, status, _, accountNumber ->
                 vm.updateChannel(
                     id = channel.id,
                     name = name,
                     description = description,
                     channelDescription = channelDescription,
                     status = status,
+                    accountNumber = accountNumber,
                 )
                 editingChannel = null
             },
@@ -1091,7 +1092,12 @@ private fun ChannelFormDialog(
     initialStatus: Boolean = true,
     isSaving: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String, String, Boolean, Double) -> Unit,
+    // Trailing String? is the account/receiving number — for MOBILE_MONEY this is the same
+    // value as `effectiveDescription` (the number the user just typed in this form), so
+    // ChannelRepository can also populate `accountNumber`/`receivingNumber` for SMS-matching
+    // disambiguation without a second input field. Null for CASH/BANK (no dedicated number
+    // field in this form today).
+    onConfirm: (String, String, String, String, Boolean, Double, String?) -> Unit,
     isTypeEditable: Boolean = true,
     showStatusField: Boolean = true,
     subtitle: String? = null,
@@ -1458,6 +1464,7 @@ private fun ChannelFormDialog(
                                     effectiveProvider.trim(),
                                     formState.status,
                                     effectiveOpeningBalance,
+                                    if (formState.type == ChannelTypes.MOBILE_MONEY) effectiveDescription.trim() else null,
                                 )
                             }
                         },

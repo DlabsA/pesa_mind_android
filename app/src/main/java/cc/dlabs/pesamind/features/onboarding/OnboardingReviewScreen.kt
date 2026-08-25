@@ -36,13 +36,13 @@ fun OnboardingReviewScreen(
         }
     }
 
+    // MoMo/Airtel accountNumber is composed (country code + digits) for display here — see
+    // ChannelDraft.effectiveMobileNumber's doc comment; Bank/Cash keep their raw account number
+    // as-is (a bank account number isn't a phone number, so it must never go through this).
     val included =
-        listOfNotNull(
-            state.cash.takeIf { it.included },
-            state.momo.takeIf { it.included },
-            state.airtel.takeIf { it.included },
-            state.bank.takeIf { it.included },
-        )
+        listOfNotNull(state.cash.takeIf { it.included }, state.bank.takeIf { it.included }) +
+            state.momo.filter { it.included }.map { it.copy(accountNumber = it.effectiveMobileNumber()) } +
+            state.airtel.filter { it.included }.map { it.copy(accountNumber = it.effectiveMobileNumber()) }
 
     OnboardingStepScaffold(
         title = "Review",
@@ -52,8 +52,8 @@ fun OnboardingReviewScreen(
             } else {
                 "These channels will be created:"
             },
-        stepIndex = 4,
-        totalSteps = 4,
+        stepIndex = 6,
+        totalSteps = 6,
         onBack = { navController.popBackStack() },
         onSkip = null,
         onNext = vm::finish,

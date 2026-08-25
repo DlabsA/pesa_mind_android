@@ -224,6 +224,16 @@ fun SettingsScreen(rootNav: NavHostController) {
 
         SettingsDivider()
 
+        SettingsRow(
+            icon = Icons.Filled.SimCard,
+            iconTint = teal,
+            title = "SIM Slots",
+            subtitle = "Map SIM cards to phone numbers",
+            onClick = { rootNav.navigate(Routes.SimSlots.route) },
+        )
+
+        SettingsDivider()
+
         // Subscription follows the account row and is labelled by tier. It stays a
         // top-level row rather than living only inside Account: reaching it through
         // Settings -> Account -> Plan was four levels deep, which left a Free user

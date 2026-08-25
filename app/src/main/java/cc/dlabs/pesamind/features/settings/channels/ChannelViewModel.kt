@@ -5,9 +5,11 @@ import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.database.entity.ChannelEntity
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.SyncScheduler
+import cc.dlabs.pesamind.core.utils.PhoneNumberNormalizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -145,6 +147,11 @@ class ChannelViewModel : UnifiedViewModel() {
         channelDescription: String,
         status: Boolean = true,
         openingBalance: Double = 0.0,
+        // Phone number (MobileMoney/Airtel) or bank account number — see ChannelEntity's doc
+        // comment for why this drives both `accountNumber` and the SMS-matching
+        // `receivingNumber` key. Null/blank is valid (existing single-channel-per-provider
+        // behavior is unaffected either way).
+        accountNumber: String? = null,
     ) {
         val normalizedType = ChannelTypes.normalizeOrNull(channelType)
         val normalizedChannelDesc =
@@ -182,7 +189,10 @@ class ChannelViewModel : UnifiedViewModel() {
                         channelType = normalizedType,
                         channelDesc = normalizedChannelDesc ?: "Cash",
                         status = status,
+                        accountNumber = accountNumber?.trim()?.ifBlank { null },
                         openingBalance = openingBalance,
+                        receivingNumber =
+                            PhoneNumberNormalizer.normalize(accountNumber) ?: ChannelEntity.UNSPECIFIED_RECEIVING_NUMBER,
                     )
             ) {
                 is ChannelCreateOutcome.Created -> {
@@ -220,6 +230,9 @@ class ChannelViewModel : UnifiedViewModel() {
         description: String,
         channelDescription: String,
         status: Boolean,
+        // Null means "leave the existing account number/receiving number as-is" — see
+        // ChannelRepository.updateChannel's doc comment.
+        accountNumber: String? = null,
     ) {
         if (id.isBlank()) {
             _state.value = _state.value.copy(error = "Invalid channel id")
@@ -230,7 +243,14 @@ class ChannelViewModel : UnifiedViewModel() {
             _state.value = _state.value.copy(isSaving = true, error = null)
             try {
                 val updated =
-                    ChannelRepository.updateChannel(id, name.trim(), description.trim(), channelDescription.trim(), status)
+                    ChannelRepository.updateChannel(
+                        id,
+                        name.trim(),
+                        description.trim(),
+                        channelDescription.trim(),
+                        status,
+                        accountNumber = accountNumber?.trim()?.ifBlank { null },
+                    )
                 _state.value =
                     if (updated != null) {
                         publishEvent(StateEvent.ChannelUpdated(channelId = id, channelName = updated.name))

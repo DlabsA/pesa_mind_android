@@ -20,6 +20,7 @@ import cc.dlabs.pesamind.core.network.NetworkMonitor
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.sync.OutboxPusher
+import cc.dlabs.pesamind.core.utils.PhoneNumberNormalizer
 import cc.dlabs.pesamind.features.settings.channels.ChannelLimits
 import dagger.hilt.EntryPoints
 import kotlinx.coroutines.CoroutineScope
@@ -174,6 +175,12 @@ object ChannelRepository {
         status: Boolean,
         accountNumber: String? = null,
         openingBalance: Double = 0.0,
+        // Normalized separately from [accountNumber] even though they're usually the same
+        // user-entered value — see ChannelEntity's doc comment for why this participates in
+        // uniqueness and [accountNumber] doesn't. Callers with a resolved receiving number
+        // (SMS ingestion) or a user-entered account number (onboarding/settings) should pass
+        // the same normalized value for both.
+        receivingNumber: String = ChannelEntity.UNSPECIFIED_RECEIVING_NUMBER,
     ): ChannelCreateOutcome {
         val userId = currentUserId()
         val limit = ChannelLimits.freeLimitFor(channelType)
@@ -188,11 +195,11 @@ object ChannelRepository {
         val outcome =
             database.withTransaction {
                 if (normalizedKey != null) {
-                    channelDao.findByNormalizedSenderKey(userId, normalizedKey)?.let {
-                        // Found a pre-existing row under this provider's normalizedSenderKey —
-                        // live or (rarely, see ChannelEntity's doc comment) soft-deleted. Either
-                        // way, nothing is inserted, so the caller must be told "already exists,"
-                        // not "created" — see ChannelViewModel's handling of AlreadyExists.
+                    channelDao.findByNormalizedSenderKeyAndReceivingNumber(userId, normalizedKey, receivingNumber)?.let {
+                        // Found a pre-existing row under this exact provider+number pair — live
+                        // or (rarely, see ChannelEntity's doc comment) soft-deleted. Either way,
+                        // nothing is inserted, so the caller must be told "already exists," not
+                        // "created" — see ChannelViewModel's handling of AlreadyExists.
                         return@withTransaction ChannelCreateOutcome.AlreadyExists(it.toDetails())
                     }
                 }
@@ -209,6 +216,7 @@ object ChannelRepository {
                         normalizedSenderKey = normalizedKey,
                         availableBalance = openingBalance,
                         accountNumber = accountNumber,
+                        receivingNumber = receivingNumber,
                         smsNotificationEnabled = true,
                         syncStatus = SyncStatus.PENDING,
                         dirty = true,
@@ -218,9 +226,10 @@ object ChannelRepository {
                     )
                 val rowId = channelDao.insertIgnore(entity)
                 if (rowId == -1L) {
-                    // Lost a race against a concurrent insert for the same provider — return the
-                    // row that actually won instead of a second, discarded one.
-                    val winner = channelDao.findByNormalizedSenderKey(userId, normalizedKey!!)!!
+                    // Lost a race against a concurrent insert for the same provider+number —
+                    // return the row that actually won instead of a second, discarded one.
+                    val winner =
+                        channelDao.findByNormalizedSenderKeyAndReceivingNumber(userId, normalizedKey!!, receivingNumber)!!
                     return@withTransaction ChannelCreateOutcome.AlreadyExists(winner.toDetails())
                 }
                 outboxDao.upsert(newOutboxEntry(OutboxEntityType.CHANNEL, entity.id, OutboxOperation.CREATE, now))
@@ -244,6 +253,10 @@ object ChannelRepository {
         description: String,
         channelDesc: String,
         status: Boolean,
+        // Null means "leave as-is" (most callers only touch name/description/channelDesc/status
+        // today) — pass an explicit value to actually change the account number, since this
+        // also drives [ChannelEntity.receivingNumber] and thus the provider-uniqueness key.
+        accountNumber: String? = null,
     ): ChannelDetails? {
         val updated =
             database.withTransaction {
@@ -257,6 +270,11 @@ object ChannelRepository {
                         normalizedSenderKey =
                             if (isProviderChannelType(existing.channelType)) normalizeSenderKey(channelDesc) else null,
                         status = status,
+                        accountNumber = accountNumber ?: existing.accountNumber,
+                        receivingNumber =
+                            accountNumber?.let {
+                                PhoneNumberNormalizer.normalize(it) ?: ChannelEntity.UNSPECIFIED_RECEIVING_NUMBER
+                            } ?: existing.receivingNumber,
                         dirty = true,
                         syncStatus = SyncStatus.PENDING,
                         updatedAt = now,
@@ -329,20 +347,65 @@ object ChannelRepository {
     /**
      * Case-insensitive, local-only, **live-channels-only** lookup for provider/bank channels
      * (mobile money, bank), keyed on the normalized form [ChannelEntity.normalizedSenderKey]
-     * stores. Used by [cc.dlabs.pesamind.core.storage.ChannelManager.isSmsAllowedForSender] to
-     * decide whether an active channel already exists for a sender before attaching a
+     * stores, disambiguated by [receivingNumber] when more than one channel shares a provider.
+     * Used by [cc.dlabs.pesamind.core.storage.ChannelManager.isSmsAllowedForSender] to decide
+     * whether an active channel already exists for a sender+number before attaching a
      * transaction to it — deliberately excludes soft-deleted rows (unlike the DAO-level
-     * [ChannelDao.findByNormalizedSenderKey] used internally by [createChannel]/
-     * [reconcileFromServer]'s conflict resolution), so a channel the user deleted is never
-     * silently treated as active. Always succeeds for a *live* provider channel this
-     * repository itself created, regardless of the exact casing the caller's [channelDesc]
-     * happens to be in.
+     * [ChannelDao.findByNormalizedSenderKeyAndReceivingNumber] used internally by
+     * [createChannel]/[reconcileFromServer]'s conflict resolution), so a channel the user
+     * deleted is never silently treated as active.
+     *
+     * Resolution order:
+     * 1. Exact `(normalizedSenderKey, receivingNumber)` match — the common case once numbers are
+     *    resolved/entered.
+     * 2. If that misses (including when [receivingNumber] is the `UNSPECIFIED` sentinel because
+     *    it couldn't be resolved for this SMS), fall back to every live channel sharing the
+     *    provider: exactly one → no real ambiguity, return it; zero → null (falls through to
+     *    auto-create); **more than one → null**, never guess which one an incoming SMS belongs
+     *    to. A dropped/unattributed SMS is strictly better than silently corrupting the wrong
+     *    account's balance.
      */
-    suspend fun findByNormalizedSenderKey(channelDesc: String): ChannelDetails? =
-        channelDao.findLiveByNormalizedSenderKey(currentUserId(), normalizeSenderKey(channelDesc))?.toDetails()
+    suspend fun findByNormalizedSenderKey(
+        channelDesc: String,
+        receivingNumber: String = ChannelEntity.UNSPECIFIED_RECEIVING_NUMBER,
+    ): ChannelDetails? {
+        val userId = currentUserId()
+        val key = normalizeSenderKey(channelDesc)
+        channelDao.findLiveByNormalizedSenderKeyAndReceivingNumber(userId, key, receivingNumber)?.let {
+            return it.toDetails()
+        }
+        val candidates = channelDao.findAllLiveByNormalizedSenderKey(userId, key)
+        return when (candidates.size) {
+            0 -> null
+            1 -> candidates.first().toDetails()
+            else -> {
+                Log.w(
+                    TAG,
+                    "Ambiguous channel match for provider key '$key': ${candidates.size} live channels, " +
+                        "receiving number '$receivingNumber' didn't exact-match any — refusing to guess",
+                )
+                null
+            }
+        }
+    }
 
     /** Trim+lowercase fold used for [ChannelEntity.normalizedSenderKey] — see its doc comment. */
     fun normalizeSenderKey(channelDesc: String): String = channelDesc.trim().lowercase(Locale.ROOT)
+
+    /**
+     * True when 2+ live channels already share [channelDesc]'s provider key — i.e. a `null`
+     * from [findByNormalizedSenderKey] means genuine ambiguity (multiple candidates, none an
+     * exact receiving-number match), not "no channel exists yet for this provider." Used by
+     * [cc.dlabs.pesamind.core.storage.ChannelManager.isSmsAllowedForSender] to decide whether
+     * that `null` should fall through to auto-create (the "no channel yet" case) or drop the
+     * SMS instead (the ambiguous case) — auto-creating here would silently produce a *third*
+     * channel for the provider rather than either guessing or dropping, which is worse than
+     * both of the outcomes [findByNormalizedSenderKey]'s doc comment already commits to.
+     */
+    suspend fun hasAmbiguousChannelsForProvider(channelDesc: String): Boolean {
+        val candidates = channelDao.findAllLiveByNormalizedSenderKey(currentUserId(), normalizeSenderKey(channelDesc))
+        return candidates.size > 1
+    }
 
     /**
      * Pull-reconciliation primitive (ADR-0004 invariant: "one live row per serverId, never
@@ -390,7 +453,11 @@ object ChannelRepository {
                             availableBalance = details.availableBalance,
                             accountNumber = details.accountNumber,
                             // Not backfilled here — see this method's doc comment for why an
-                            // already-known row's normalizedSenderKey is left exactly as-is.
+                            // already-known row's normalizedSenderKey/receivingNumber are left
+                            // exactly as-is (same reasoning applies to receivingNumber: the
+                            // server has no dedicated field for it, and blindly re-deriving it
+                            // from accountNumber on every pull risks the same freeze-on-conflict
+                            // hazard this method's doc comment already worked through).
                             syncStatus = SyncStatus.SYNCED,
                             updatedAt = now,
                         )
@@ -407,14 +474,22 @@ object ChannelRepository {
                     val sessionUserId = currentUserId()
                     val normalizedKey =
                         if (isProviderChannelType(details.channelType)) normalizeSenderKey(details.channelDesc) else null
+                    // Server has no dedicated receiving-number field — best-effort derive one
+                    // from account_number (the same value onboarding/settings enter) so a
+                    // server-pulled row still participates correctly in the local
+                    // provider+number uniqueness, falling back to the sentinel when unresolvable.
+                    val receivingNumber =
+                        PhoneNumberNormalizer.normalize(details.accountNumber) ?: ChannelEntity.UNSPECIFIED_RECEIVING_NUMBER
                     if (normalizedKey != null) {
-                        channelDao.findByNormalizedSenderKey(sessionUserId, normalizedKey)?.let {
-                            // A different serverId, same real provider — a pre-existing local
-                            // duplicate (plausible for existing users, see ADR-0004) or a
-                            // concurrent SMS auto-create that already won. Either way, this
-                            // pulled row must not become a second local row for one provider.
-                            return@withTransaction it.toDetails()
-                        }
+                        channelDao.findByNormalizedSenderKeyAndReceivingNumber(sessionUserId, normalizedKey, receivingNumber)
+                            ?.let {
+                                // A different serverId, same real provider+number — a
+                                // pre-existing local duplicate (plausible for existing users, see
+                                // ADR-0004) or a concurrent SMS auto-create that already won.
+                                // Either way, this pulled row must not become a second local row
+                                // for the same provider+number.
+                                return@withTransaction it.toDetails()
+                            }
                     }
                     val inserted =
                         ChannelEntity(
@@ -429,6 +504,7 @@ object ChannelRepository {
                             normalizedSenderKey = normalizedKey,
                             availableBalance = details.availableBalance,
                             accountNumber = details.accountNumber,
+                            receivingNumber = receivingNumber,
                             smsNotificationEnabled = details.smsNotificationEnabled,
                             syncStatus = SyncStatus.SYNCED,
                             dirty = false,
@@ -438,8 +514,9 @@ object ChannelRepository {
                         )
                     val rowId = channelDao.insertIgnore(inserted)
                     if (rowId == -1L) {
-                        // Lost a race against a concurrent insert for the same provider.
-                        channelDao.findByNormalizedSenderKey(sessionUserId, normalizedKey!!)!!.toDetails()
+                        // Lost a race against a concurrent insert for the same provider+number.
+                        channelDao.findByNormalizedSenderKeyAndReceivingNumber(sessionUserId, normalizedKey!!, receivingNumber)!!
+                            .toDetails()
                     } else {
                         inserted.toDetails()
                     }

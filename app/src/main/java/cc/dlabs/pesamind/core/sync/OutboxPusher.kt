@@ -2,6 +2,7 @@ package cc.dlabs.pesamind.core.sync
 
 import android.util.Log
 import cc.dlabs.pesamind.core.data.BudgetRepository
+import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.PushCompletionDecision
 import cc.dlabs.pesamind.core.database.PushCompletionResolver
@@ -22,6 +23,7 @@ import cc.dlabs.pesamind.core.database.entity.TransactionEntity
 import cc.dlabs.pesamind.core.database.entity.YearlyBudgetEntity
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionRequest
+import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
 import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
@@ -32,6 +34,7 @@ import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
 import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
+import cc.dlabs.pesamind.core.utils.PhoneNumberNormalizer
 import com.google.gson.Gson
 import java.io.IOException
 
@@ -124,35 +127,48 @@ class OutboxPusher(
         return try {
             when (current.operation) {
                 OutboxOperation.CREATE -> {
-                    val response =
-                        api.createChannel(
-                            CreateChannelRequest(
-                                id = entity.id,
-                                name = entity.name,
-                                channelType = entity.channelType,
-                                description = entity.description,
-                                channelDesc = entity.channelDesc,
-                                status = entity.status,
-                                accountNumber = entity.accountNumber,
-                                openingBalance = entity.availableBalance,
-                            ),
-                        )
-                    when {
-                        response.isSuccessful ->
-                            finishChannelPush(current, channelDao, outboxDao, dispatchUpdatedAt, response.body()?.id?.ifBlank { null })
-                        isPermanentFailureCode(response.code()) -> {
-                            markChannelPermanentFailure(
-                                current,
-                                entity,
-                                channelDao,
-                                outboxDao,
-                                "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                    // Reuse a server channel that already matches this provider+number instead of
+                    // blindly POSTing a new one — see findExistingServerChannel's doc comment.
+                    val existingServerChannel = findExistingServerChannel(entity)
+                    if (existingServerChannel != null) {
+                        finishChannelPush(current, channelDao, outboxDao, dispatchUpdatedAt, existingServerChannel.id)
+                    } else {
+                        val response =
+                            api.createChannel(
+                                CreateChannelRequest(
+                                    id = entity.id,
+                                    name = entity.name,
+                                    channelType = entity.channelType,
+                                    description = entity.description,
+                                    channelDesc = entity.channelDesc,
+                                    status = entity.status,
+                                    accountNumber = entity.accountNumber,
+                                    openingBalance = entity.availableBalance,
+                                ),
                             )
-                            PushResult.PermanentFailure
-                        }
-                        else -> {
-                            markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
-                            PushResult.TransientFailure
+                        when {
+                            response.isSuccessful ->
+                                finishChannelPush(
+                                    current,
+                                    channelDao,
+                                    outboxDao,
+                                    dispatchUpdatedAt,
+                                    response.body()?.id?.ifBlank { null },
+                                )
+                            isPermanentFailureCode(response.code()) -> {
+                                markChannelPermanentFailure(
+                                    current,
+                                    entity,
+                                    channelDao,
+                                    outboxDao,
+                                    "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                                )
+                                PushResult.PermanentFailure
+                            }
+                            else -> {
+                                markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
+                                PushResult.TransientFailure
+                            }
                         }
                     }
                 }
@@ -211,6 +227,59 @@ class OutboxPusher(
         } catch (e: IOException) {
             markTransientFailure(current, outboxDao, e.message ?: "network error")
             PushResult.TransientFailure
+        }
+    }
+
+    /**
+     * Before creating a brand-new channel server-side, check whether one matching this exact
+     * provider+number already exists there — e.g. a channel the user set up through onboarding
+     * (or on another device) while this device separately auto-created its own local row for the
+     * same provider from an incoming SMS while offline. Those two rows carry different client
+     * UUIDs, so [CreateChannelRequest.id]'s create-idempotency key does nothing here — it only
+     * dedupes a *retry* of the exact same request, not two genuinely different local rows that
+     * happen to describe the same real-world channel. Without this check, coming back online
+     * would silently create a second, duplicate channel server-side instead of attaching this
+     * device's cached transactions to the one that already exists.
+     *
+     * Matches on [ChannelRepository.normalizeSenderKey] of [ChannelDetails.channelDesc] — the
+     * same case-insensitive provider key [ChannelRepository.findByNormalizedSenderKey] already
+     * uses for the equivalent local-only lookup — disambiguated by [ChannelDetails.description]
+     * when more than one server channel shares the provider, NOT `account_number`: the backend
+     * has no real account-number field of its own — every channel-create call site (this one
+     * included; see `CreateChannelRequest.accountNumber`'s doc comment) sends the phone/account
+     * number through `description`, and that's what the server actually stores and echoes back.
+     * Compared via [PhoneNumberNormalizer.normalize] against [ChannelEntity.receivingNumber]
+     * (already normalized the same way) rather than a raw string match, since two devices can
+     * format the same number differently (leading zero, country code, ...). Returns null (falls
+     * through to a normal create) rather than ever guessing, same as the local resolution's own
+     * ambiguity rule. Skipped entirely for CASH channels ([ChannelEntity.normalizedSenderKey] is
+     * null for those — see [ChannelRepository]'s doc comment on why CASH is exempt from this
+     * uniqueness key), since many legitimately share the same "Cash" description.
+     */
+    private suspend fun findExistingServerChannel(entity: ChannelEntity): ChannelDetails? {
+        val key = entity.normalizedSenderKey ?: return null
+        val response =
+            try {
+                api.getChannels()
+            } catch (e: IOException) {
+                return null
+            }
+        if (!response.isSuccessful) return null
+        val candidates = response.body().orEmpty().filter { ChannelRepository.normalizeSenderKey(it.channelDesc) == key }
+        return when (candidates.size) {
+            0 -> null
+            1 -> candidates.first()
+            else -> {
+                val match = candidates.firstOrNull { PhoneNumberNormalizer.normalize(it.description) == entity.receivingNumber }
+                if (match == null) {
+                    Log.w(
+                        TAG,
+                        "Ambiguous server channel match for provider key '$key': ${candidates.size} server " +
+                            "channels, none matched receiving number '${entity.receivingNumber}' — falling through to create",
+                    )
+                }
+                match
+            }
         }
     }
 

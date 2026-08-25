@@ -247,3 +247,29 @@ val MIGRATION_6_7 =
             db.execSQL("ALTER TABLE `yearly_budgets` ADD COLUMN `lastSyncedTransactionsJson` TEXT DEFAULT NULL")
         }
     }
+
+/**
+ * v7 -> v8: adds `channels.receivingNumber` and widens the provider-uniqueness index from
+ * `(userId, normalizedSenderKey)` to `(userId, normalizedSenderKey, receivingNumber)`, so a
+ * user can have more than one channel for the same provider (e.g. two MTN MoMo lines) told
+ * apart by which phone number actually receives each one's SMS — see
+ * [cc.dlabs.pesamind.core.database.entity.ChannelEntity]'s doc comment for the full design
+ * (including why the new column defaults to the `UNSPECIFIED` sentinel rather than `NULL`).
+ *
+ * `DEFAULT 'UNSPECIFIED'` backfills every pre-existing row for free: since it's the same
+ * sentinel for all of them, each existing single-channel-per-provider row keeps sole ownership
+ * of its `(normalizedSenderKey, 'UNSPECIFIED')` pair and nothing about its matching behavior
+ * changes until the user (or a resolved SIM-slot mapping) supplies a real number going forward.
+ */
+val MIGRATION_7_8 =
+    object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `channels` ADD COLUMN `receivingNumber` TEXT NOT NULL DEFAULT 'UNSPECIFIED'")
+            db.execSQL("DROP INDEX IF EXISTS `index_channels_userId_normalizedSenderKey`")
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                    "`index_channels_userId_normalizedSenderKey_receivingNumber` " +
+                    "ON `channels` (`userId`, `normalizedSenderKey`, `receivingNumber`)",
+            )
+        }
+    }

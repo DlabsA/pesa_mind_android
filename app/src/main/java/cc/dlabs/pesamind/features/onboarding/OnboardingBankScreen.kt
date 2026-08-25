@@ -31,8 +31,8 @@ fun OnboardingBankScreen(
     OnboardingStepScaffold(
         title = "Bank account",
         subtitle = "Add a bank account to track transfers and payments through it.",
-        stepIndex = 4,
-        totalSteps = 4,
+        stepIndex = 5,
+        totalSteps = 6,
         onBack = { navController.popBackStack() },
         onSkip = {
             vm.setBankIncluded(false)

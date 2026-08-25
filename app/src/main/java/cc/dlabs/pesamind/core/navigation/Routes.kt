@@ -19,6 +19,8 @@ sealed class Routes(val route: String) {
     // Post-signup channel onboarding (one-shot, skippable, batch-creates up to 4 channels)
     object ChannelOnboardingIntro : Routes("onboarding_intro")
 
+    object OnboardingSimSlots : Routes("onboarding_sim_slots")
+
     object OnboardingCash : Routes("onboarding_cash")
 
     object OnboardingMoMo : Routes("onboarding_momo")
@@ -59,6 +61,8 @@ sealed class Routes(val route: String) {
 
     //
     object AccountSettings : Routes("account_settings")
+
+    object SimSlots : Routes("sim_slots")
 
     object ChangePassword : Routes("change_password")
 

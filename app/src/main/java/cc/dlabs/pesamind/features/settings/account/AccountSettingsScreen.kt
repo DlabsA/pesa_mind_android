@@ -14,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -37,9 +36,6 @@ fun AccountSettingsScreen(
 
     val teal = MaterialTheme.colorScheme.primary
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-
-    LaunchedEffect(Unit) { vm.loadSimSlots(context) }
 
     // Show success or error in snackbar
     LaunchedEffect(state.successMessage, state.error) {
@@ -266,90 +262,6 @@ fun AccountSettingsScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Change Password", fontWeight = FontWeight.SemiBold)
-            }
-
-            // ── SIM Slots section ─────────────────────────────
-            // Only shown when the device actually reports active SIM slots — a fallback
-            // mapping with no slot to attach it to isn't a choice worth presenting, and this
-            // also naturally hides the whole section on a single-SIM device with no permission
-            // or telephony support.
-            if (state.activeSimSlots.isNotEmpty()) {
-                HorizontalDivider()
-
-                Text(
-                    "SIM Slots",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    color = Color.Gray,
-                )
-                Text(
-                    "Some phones can't tell us a SIM's own number automatically. If a mobile " +
-                        "money SMS shows an unresolved number, enter it here so we know which " +
-                        "SIM slot it belongs to.",
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                )
-
-                if (state.simSlotDriftDetected) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.errorContainer,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Filled.Warning,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                "We noticed a SIM card change. Please confirm the numbers below.",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                        }
-                    }
-                }
-
-                state.activeSimSlots.forEach { slot ->
-                    OutlinedTextField(
-                        value = state.simSlotNumbers[slot.slotIndex] ?: "",
-                        onValueChange = { vm.onSimSlotNumberChange(slot.slotIndex, it) },
-                        label = { Text("SIM ${slot.slotIndex + 1} — ${slot.carrierName}") },
-                        leadingIcon = {
-                            Icon(Icons.Filled.SimCard, contentDescription = null, tint = teal)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true,
-                    )
-                }
-
-                Button(
-                    onClick = { vm.saveSimSlots(context) },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = teal),
-                    enabled = !state.isSavingSimSlots,
-                ) {
-                    if (state.isSavingSimSlots) {
-                        CircularProgressIndicator(
-                            color = Color.White,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    } else {
-                        Text("Save SIM Numbers", fontWeight = FontWeight.SemiBold)
-                    }
-                }
             }
         }
     }

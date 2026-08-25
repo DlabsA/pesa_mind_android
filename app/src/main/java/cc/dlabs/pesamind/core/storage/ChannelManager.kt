@@ -7,7 +7,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cc.dlabs.pesamind.core.data.ChannelCreateOutcome
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.database.entity.ChannelEntity
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
+import cc.dlabs.pesamind.core.utils.PhoneNumberNormalizer
 import cc.dlabs.pesamind.features.settings.channels.ChannelDescBank
 import cc.dlabs.pesamind.features.settings.channels.ChannelDescMobileMoney
 import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
@@ -195,11 +197,20 @@ object ChannelManager {
             return null
         }
 
+        // Normalized once, reused for both the lookup and the auto-create branch below — see
+        // ChannelEntity's doc comment for why the sentinel (not a raw unresolved value) is what
+        // participates in provider+number matching/uniqueness.
+        val normalizedReceivingNumber =
+            PhoneNumberNormalizer.normalize(receivingSimNumber) ?: ChannelEntity.UNSPECIFIED_RECEIVING_NUMBER
+
         // Fast, local-only, case-insensitive lookup — this is now the path that actually
         // succeeds offline for a sender this method has already auto-created a channel for
         // (previously this always missed due to the key mismatch above, silently forcing
-        // every message through the network branch below, every time).
-        val matchingChannel = ChannelRepository.findByNormalizedSenderKey(channelDesc)
+        // every message through the network branch below, every time). Disambiguates by
+        // receiving number when more than one channel shares this provider — see
+        // [ChannelRepository.findByNormalizedSenderKey]'s doc comment for the exact fallback
+        // rules (never guesses when genuinely ambiguous).
+        val matchingChannel = ChannelRepository.findByNormalizedSenderKey(channelDesc, normalizedReceivingNumber)
         if (matchingChannel != null) {
             // Self-heal: this channel may have been auto-created while the SIM's own number
             // was unresolvable (missing READ_PHONE_NUMBERS, or the carrier hadn't provisioned
@@ -222,6 +233,21 @@ object ChannelManager {
             return ChannelInfo(matchingChannel, matchingChannel.smsNotificationEnabled)
         }
 
+        // A null match above is ambiguous — not "no channel yet" — when 2+ live channels
+        // already share this provider (see [ChannelRepository.hasAmbiguousChannelsForProvider]'s
+        // doc comment). Auto-creating here would silently produce a *third* channel instead of
+        // either guessing or dropping the SMS, which is worse than both — so this must check
+        // ambiguity before ever reaching the auto-create branch below.
+        if (ChannelRepository.hasAmbiguousChannelsForProvider(channelDesc)) {
+            Log.w(
+                "ChannelManager",
+                "Ambiguous channel match for sender $senderID: multiple channels share this provider and " +
+                    "the receiving number couldn't disambiguate — dropping this SMS rather than guessing " +
+                    "or creating a duplicate channel",
+            )
+            return null
+        }
+
         // Local-first as of Slice A3: goes through ChannelRepository.createChannel (Room +
         // outbox), same write path as every other channel mutation since Slice A1, instead of
         // calling ApiClient.api.createChannel() directly. This closes the confidence-48 gap
@@ -241,17 +267,24 @@ object ChannelManager {
                         channelType = channelType,
                         channelDesc = channelDesc,
                         status = true,
+                        // Previously never set on this (SMS auto-create) path, unlike manual
+                        // onboarding — left every auto-created channel's accountNumber
+                        // permanently null. Fixed here so future same-provider disambiguation
+                        // has a real number to work with going forward.
+                        accountNumber = receivingSimNumber,
+                        receivingNumber = normalizedReceivingNumber,
                     )
             ) {
                 is ChannelCreateOutcome.Created -> ChannelInfo(outcome.channel, outcome.channel.smsNotificationEnabled)
                 is ChannelCreateOutcome.AlreadyExists -> {
                     // createChannel's own atomic dedup-on-insert can resolve AlreadyExists to a
-                    // row that is itself soft-deleted (normalizedSenderKey stays unique *across*
-                    // soft-deletes, see ChannelEntity's doc comment) — re-checking liveness here
-                    // (the live-only lookup, not the tombstone-inclusive one createChannel used
-                    // internally) is what stops a new SMS transaction from being silently
-                    // attached to a channel the user already deleted.
-                    val live = ChannelRepository.findByNormalizedSenderKey(channelDesc)
+                    // row that is itself soft-deleted (normalizedSenderKey+receivingNumber stays
+                    // unique *across* soft-deletes, see ChannelEntity's doc comment) —
+                    // re-checking liveness here (the live-only lookup, not the
+                    // tombstone-inclusive one createChannel used internally) is what stops a new
+                    // SMS transaction from being silently attached to a channel the user already
+                    // deleted.
+                    val live = ChannelRepository.findByNormalizedSenderKey(channelDesc, normalizedReceivingNumber)
                     if (live == null) {
                         Log.w(
                             "ChannelManager",
