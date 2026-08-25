@@ -29,6 +29,9 @@ object CheckoutValidator {
     private val MTN_PREFIXES = setOf("77", "78", "76", "39")
     private val AIRTEL_PREFIXES = setOf("70", "75", "74", "20")
 
+    /** Flutterwave's upper bound on card expiry year, relative to the current year. */
+    private const val MAX_EXPIRY_YEARS_OUT = 10
+
     /**
      * Converts the forms Ugandan users actually type into the 9 significant digits
      * the API expects alongside country code 256:
@@ -203,6 +206,15 @@ object CheckoutValidator {
             }
         // A card is valid through the last day of its expiry month.
         if (year < nowYear || (year == nowYear && month < nowMonth)) {
+            return CardResult.Invalid("That card has expired")
+        }
+        // Flutterwave rejects a charge with "Card expiry year out of range" past this
+        // point (confirmed against the sandbox: current year + 10 is accepted, + 11 is
+        // not) — catching it here means a typo'd year is a form error, not a 502 after
+        // a round trip through payment-method creation and charge creation. Reported as
+        // "expired" rather than "out of range": a year this far out is never a real
+        // card, so the same message as an actually-expired card is the honest one.
+        if (year > nowYear + MAX_EXPIRY_YEARS_OUT) {
             return CardResult.Invalid("That card has expired")
         }
 

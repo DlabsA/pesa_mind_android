@@ -150,6 +150,22 @@ class CheckoutValidatorTest {
     }
 
     @Test
+    fun `rejects a card expiry year past Flutterwave's accepted range`() {
+        // Confirmed against the sandbox: current year + 10 is accepted, + 11 is
+        // rejected with "Card expiry year out of range" — after the payment method
+        // and charge have already been created upstream.
+        val atBound = CheckoutValidator.validateCard("5531886652142950", "09", "36", "564", 2026, 8)
+        assertTrue(atBound is CheckoutValidator.CardResult.Valid)
+
+        val pastBound = CheckoutValidator.validateCard("5531886652142950", "09", "37", "564", 2026, 8)
+        assertTrue(pastBound is CheckoutValidator.CardResult.Invalid)
+        assertEquals(
+            "That card has expired",
+            (pastBound as CheckoutValidator.CardResult.Invalid).message,
+        )
+    }
+
+    @Test
     fun `rejects an out-of-range month and a malformed year`() {
         assertTrue(
             CheckoutValidator.validateCard("5531886652142950", "13", "32", "564", 2026, 8)
