@@ -46,6 +46,7 @@ import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UserResponse
+import cc.dlabs.pesamind.core.network.models.VerifyPlayPurchaseRequest
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -302,4 +303,16 @@ interface ApiService {
 
     @GET("payments/subscription")
     suspend fun getSubscription(): Response<SubscriptionResponse>
+
+    /**
+     * Settles a Google Play Billing purchase already completed via
+     * [cc.dlabs.pesamind.core.billing.PlayBillingManager]. Unlike [checkout], the
+     * purchase has already happened by the time this is called — this is purely
+     * server-side verification against the Play Developer API before entitlement
+     * is granted.
+     */
+    @POST("payments/play/verify")
+    suspend fun verifyPlayPurchase(
+        @Body body: VerifyPlayPurchaseRequest,
+    ): Response<InvoiceResponse>
 }

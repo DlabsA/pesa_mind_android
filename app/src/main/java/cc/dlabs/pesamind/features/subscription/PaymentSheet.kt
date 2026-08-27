@@ -16,9 +16,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Shop
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,20 +32,10 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cc.dlabs.pesamind.core.theme.Spacing
@@ -59,12 +49,15 @@ import cc.dlabs.pesamind.core.ui.asUgx
  * card. Keeping the card visible behind the sheet also means dismissing lands back
  * on the plan rather than on a sales pitch they have already read.
  *
- * All payment data is entered here — there is no hosted provider page. Uganda
- * mobile money authorises with a PIN prompt on the customer's handset, so the
- * common path never leaves the app; only 3DS cards hand off to a browser tab.
+ * Uganda mobile money is entered here directly and authorises with a PIN prompt
+ * on the customer's handset, so it never leaves the app. Google Play Billing
+ * has no fields here at all — tapping its option hands off to Play's own
+ * purchase UI via [onLaunchPlayPurchase].
  *
  * @param onOpenRedirect invoked with an authorisation URL when the provider asks
  *   for a browser redirect. Hoisted so this stays free of Custom Tabs plumbing.
+ * @param onLaunchPlayPurchase invoked when the customer chooses to subscribe via
+ *   Google Play. Hoisted so this stays free of BillingClient/Activity plumbing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,12 +68,10 @@ fun PaymentSheet(
     onSelectMethod: (PaymentMethod) -> Unit,
     onSelectNetwork: (String) -> Unit,
     onPhoneChange: (String) -> Unit,
-    onCardNumberChange: (String) -> Unit,
-    onCardExpiryChange: (String) -> Unit,
-    onCardCvvChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onRetry: () -> Unit,
     onOpenRedirect: (String) -> Unit,
+    onLaunchPlayPurchase: () -> Unit,
 ) {
     // Hand off to the browser exactly once per redirect URL.
     LaunchedEffect(state.redirectUrl) {
@@ -111,10 +102,8 @@ fun PaymentSheet(
                         onSelectMethod = onSelectMethod,
                         onSelectNetwork = onSelectNetwork,
                         onPhoneChange = onPhoneChange,
-                        onCardNumberChange = onCardNumberChange,
-                        onCardExpiryChange = onCardExpiryChange,
-                        onCardCvvChange = onCardCvvChange,
                         onSubmit = onSubmit,
+                        onLaunchPlayPurchase = onLaunchPlayPurchase,
                     )
 
                 CheckoutStage.AWAITING_AUTHORIZATION,
@@ -136,10 +125,8 @@ private fun ColumnScope.PaymentForm(
     onSelectMethod: (PaymentMethod) -> Unit,
     onSelectNetwork: (String) -> Unit,
     onPhoneChange: (String) -> Unit,
-    onCardNumberChange: (String) -> Unit,
-    onCardExpiryChange: (String) -> Unit,
-    onCardCvvChange: (String) -> Unit,
     onSubmit: () -> Unit,
+    onLaunchPlayPurchase: () -> Unit,
 ) {
     val plan = state.selectedPlan
 
@@ -170,18 +157,18 @@ private fun ColumnScope.PaymentForm(
             leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, contentDescription = null) },
         )
         FilterChip(
-            selected = state.method == PaymentMethod.CARD,
-            onClick = { onSelectMethod(PaymentMethod.CARD) },
-            label = { Text("Card") },
-            leadingIcon = { Icon(Icons.Outlined.CreditCard, contentDescription = null) },
+            selected = state.method == PaymentMethod.GOOGLE_PLAY,
+            onClick = { onSelectMethod(PaymentMethod.GOOGLE_PLAY) },
+            label = { Text("Google Play") },
+            leadingIcon = { Icon(Icons.Outlined.Shop, contentDescription = null) },
         )
     }
 
     when (state.method) {
         PaymentMethod.MOBILE_MONEY ->
             MobileMoneyFields(state, onSelectNetwork, onPhoneChange)
-        PaymentMethod.CARD ->
-            CardFields(state, onCardNumberChange, onCardExpiryChange, onCardCvvChange)
+        PaymentMethod.GOOGLE_PLAY ->
+            GooglePlayNotice()
     }
 
     state.error?.let { message ->
@@ -203,7 +190,7 @@ private fun ColumnScope.PaymentForm(
     }
 
     Button(
-        onClick = onSubmit,
+        onClick = if (state.method == PaymentMethod.GOOGLE_PLAY) onLaunchPlayPurchase else onSubmit,
         enabled = !state.isSubmitting,
         modifier = Modifier.fillMaxWidth().padding(top = Spacing.Space2.dp),
     ) {
@@ -249,90 +236,18 @@ private fun ColumnScope.MobileMoneyFields(
 }
 
 /**
- * Draws the raw digits held in state as `MM/YY`.
- *
- * A [VisualTransformation] rather than rewriting the text in `onValueChange`:
- * rewriting leaves the caret where it was, so inserting a slash at index 2 left the
- * caret to the *left* of the digit just typed and `0,9,3,2` came out as `09/23`.
- * Here the state stays four plain digits and only the rendering carries the slash,
- * so the caret is never moved and the numeric keypad never needs a `/` key.
- *
- * Both offset mappings are clamped. An out-of-range offset here is the standard way
- * a masked field crashes, and a crash on the payment screen costs a sale.
+ * Google Play has no fields of its own here — tapping "Pay" hands off straight
+ * to Play's purchase UI (card entry, saved payment methods, etc. all live
+ * there). This is just the explanation shown before that handoff.
  */
-private val CardExpiryTransformation =
-    VisualTransformation { text ->
-        val digits = text.text
-        val formatted = CheckoutValidator.formatCardExpiryInput(digits)
-        // The slash lands after the month, so every offset past it shifts by one.
-        val shifted = formatted.contains('/')
-        TransformedText(
-            AnnotatedString(formatted),
-            object : OffsetMapping {
-                override fun originalToTransformed(offset: Int): Int =
-                    (if (shifted && offset > 2) offset + 1 else offset)
-                        .coerceIn(0, formatted.length)
-
-                override fun transformedToOriginal(offset: Int): Int =
-                    (if (shifted && offset > 2) offset - 1 else offset)
-                        .coerceIn(0, digits.length)
-            },
-        )
-    }
-
 @Composable
-private fun ColumnScope.CardFields(
-    state: SubscriptionUiState,
-    onCardNumberChange: (String) -> Unit,
-    onCardExpiryChange: (String) -> Unit,
-    onCardCvvChange: (String) -> Unit,
-) {
-    OutlinedTextField(
-        value = state.cardNumber,
-        onValueChange = onCardNumberChange,
-        label = { Text("Card number") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth(),
+private fun ColumnScope.GooglePlayNotice() {
+    Text(
+        text = "You'll complete this purchase through Google Play using your Play Store payment method.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = Spacing.Space1.dp),
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Space2.dp)) {
-        // The caret is held here, not in the ViewModel, because normalising can
-        // grow the text: typing "6" becomes "06", and Compose would leave the
-        // caret mid-string so the next digit landed inside the month ("05/6"
-        // from 6 then 5). Every edit to a four-digit expiry appends, so pinning
-        // the caret to the end is both correct and the only stable choice.
-        var expiryField by remember {
-            mutableStateOf(TextFieldValue(state.cardExpiry, TextRange(state.cardExpiry.length)))
-        }
-        // The ViewModel stays the source of truth — resync when it resets the
-        // form, which submit() does when it clears the card fields.
-        LaunchedEffect(state.cardExpiry) {
-            if (expiryField.text != state.cardExpiry) {
-                expiryField = TextFieldValue(state.cardExpiry, TextRange(state.cardExpiry.length))
-            }
-        }
-        OutlinedTextField(
-            value = expiryField,
-            onValueChange = { input ->
-                val digits = CheckoutValidator.normalizeCardExpiryDigits(input.text)
-                expiryField = TextFieldValue(digits, TextRange(digits.length))
-                onCardExpiryChange(digits)
-            },
-            label = { Text("MM/YY") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            visualTransformation = CardExpiryTransformation,
-            modifier = Modifier.weight(1f),
-        )
-        OutlinedTextField(
-            value = state.cardCvv,
-            onValueChange = onCardCvvChange,
-            label = { Text("CVV") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            modifier = Modifier.weight(1f),
-        )
-    }
 }
 
 // ─── Waiting and result ───────────────────────────────────────────────────────

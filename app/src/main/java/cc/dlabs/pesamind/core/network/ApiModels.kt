@@ -936,9 +936,16 @@ data class AnomalySection(
 
 // ── Payment Models ────────────────────────────────────────────────────────────
 //
-// Subscription checkout. The app never talks to the payment provider directly —
-// Flutterwave v4 credentials are full-access with no publishable-key equivalent,
-// so every provider call happens on the backend.
+// Subscription checkout. For mobile money, the app never talks to the payment
+// provider directly — Flutterwave v4 credentials are full-access with no
+// publishable-key equivalent, so every provider call happens on the backend.
+//
+// Google Play Billing is the one exception: the app talks to Play directly
+// through PlayBillingManager, because that's the whole point of Play Billing
+// Library and there is no way around it. But a purchase token is never treated
+// as entitlement on its own — every purchase still has to be verified
+// server-side via [ApiService.verifyPlayPurchase] before Premium is granted,
+// exactly like every other payment method.
 
 data class PlanResponse(
     val code: String = "",
@@ -946,23 +953,30 @@ data class PlanResponse(
     val interval: String = "",
     val amount: Double = 0.0,
     val currency: String = "UGX",
+    @SerializedName("play_product_id") val playProductId: String = "",
 )
 
 /**
- * Card fields are populated only for the card method. They are held for the
- * lifetime of one request and never persisted; [cc.dlabs.pesamind.core.network.RedactingLogger]
- * keeps them out of logcat.
+ * Mobile money checkout only. Card is no longer offered on this (Play-distributed)
+ * build — see [VerifyPlayPurchaseRequest] for the Google Play Billing path that
+ * replaced it. The backend's card fields still exist (kept dormant for a future
+ * non-Play channel) but this client never sends them.
  */
 data class CheckoutRequest(
     @SerializedName("plan_code") val planCode: String = "",
     val method: String = "",
     val network: String = "",
     @SerializedName("phone_number") val phoneNumber: String = "",
-    @SerializedName("card_number") val cardNumber: String = "",
-    @SerializedName("card_expiry_month") val cardExpiryMonth: String = "",
-    @SerializedName("card_expiry_year") val cardExpiryYear: String = "",
-    @SerializedName("card_cvv") val cardCvv: String = "",
-    @SerializedName("card_holder_name") val cardHolderName: String = "",
+)
+
+/**
+ * Submitted after [cc.dlabs.pesamind.core.billing.PlayBillingManager.launchPurchase]
+ * completes. The purchase token is never trusted as entitlement on its own — the
+ * backend re-verifies it against the Play Developer API before granting Premium.
+ */
+data class VerifyPlayPurchaseRequest(
+    @SerializedName("product_id") val productId: String = "",
+    @SerializedName("purchase_token") val purchaseToken: String = "",
 )
 
 /**

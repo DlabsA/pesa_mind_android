@@ -77,6 +77,21 @@ val googleAndroidClientId =
         ?: readDotEnvValue("GOOGLE_ANDROID_CLIENT_ID")
         ?: "884168293120-cngr633jrrkuq5hcuv0cqv19latmfb9j.apps.googleusercontent.com"
 
+configurations.all {
+    resolutionStrategy {
+        // Play Billing Library 8.x/9.x's published Gradle module metadata pulls in
+        // kotlin-stdlib 2.2.10 transitively, which bumps it project-wide even though
+        // this project's Kotlin Gradle plugin is pinned to 2.1.0. That mismatch makes
+        // kapt's Dagger/Hilt annotation processor (whose bundled kotlinx-metadata-jvm
+        // reader tops out at metadata version 2.1.0) fail reading @Metadata on any
+        // class compiled against the bumped stdlib — not specific to billing's own
+        // code, it breaks kapt for the whole module. Pin back to the stdlib version
+        // matching our Kotlin plugin; billing-ktx's actual API surface doesn't require
+        // 2.2-only stdlib features, so this is safe.
+        force("org.jetbrains.kotlin:kotlin-stdlib:2.1.10")
+    }
+}
+
 android {
     namespace = "cc.dlabs.pesamind"
     compileSdk = 36
@@ -84,9 +99,9 @@ android {
     defaultConfig {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 28
-        versionName = "28"
+        targetSdk = 36
+        versionCode = 34
+        versionName = "34"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -112,8 +127,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Disabled: R8 minification obfuscates Gson-serialized DTO field names, and every
+            // package that isn't covered by an explicit proguard keep rule silently breaks
+            // request/response parsing in this build type only (see proguard-rules.pro history —
+            // this already broke Google Sign-In and the dashboard fetch in two different DTO
+            // packages). Not worth the size/perf tradeoff until the API models are stable and a
+            // keep-rule audit process exists.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -214,6 +235,12 @@ dependencies {
     // checkout. A Custom Tab, not a WebView: the customer authenticates with their
     // bank there, and only a Custom Tab shows the real URL and padlock.
     implementation(libs.androidx.browser)
+
+    // Google Play Billing Library — subscription purchases routed through Play's
+    // own billing system, as required by Play Store policy for digital
+    // subscriptions sold in-app. Replaces the card-via-Flutterwave checkout
+    // option on this (Play-distributed) build; mobile money is unaffected.
+    implementation(libs.billing.ktx)
 
     // Tink + Android Keystore — encrypts TokenManager's DataStore-persisted secrets at rest.
     // Not EncryptedSharedPreferences: deprecated in security-crypto 1.1.0-alpha07 (April 2025)

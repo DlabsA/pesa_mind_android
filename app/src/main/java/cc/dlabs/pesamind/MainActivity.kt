@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.compose.rememberNavController
 import androidx.work.Configuration
+import cc.dlabs.pesamind.core.billing.PlayBillingManager
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.data.ProcessedMessageRepository
@@ -71,6 +72,7 @@ class PesaMindApp : Application(), Configuration.Provider {
         ThemeManager.init(this)
         SyncMetadataManager.init(this)
         PaymentManager.init(this)
+        PlayBillingManager.init(this)
         SubscriptionResumer.init(this)
         SimSlotManager.init(this)
         // Room-backed repositories (ADR-0004 Slice A1/B) — ChannelRepository/

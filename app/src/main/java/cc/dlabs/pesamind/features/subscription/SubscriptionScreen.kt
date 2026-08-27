@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.subscription
 
+import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -85,6 +87,10 @@ fun SubscriptionScreen(
 ) {
     val state by vm.state.collectAsState()
     val returnedInvoiceId by PaymentDeepLink.returnedInvoiceId.collectAsState()
+    // Google Play Billing's launchBillingFlow needs the hosting Activity, not just
+    // a Context — LocalContext.current is the Activity itself here since this
+    // screen is always composed inside one (see PesaMindNavGraph).
+    val activity = LocalContext.current as? Activity
 
     // Sheet visibility is explicit local UI state, not derived from `stage`.
     // Deriving it would make dismissing during the wait reopen the sheet on the
@@ -169,12 +175,10 @@ fun SubscriptionScreen(
             onSelectMethod = vm::selectMethod,
             onSelectNetwork = vm::selectNetwork,
             onPhoneChange = vm::updatePhoneNumber,
-            onCardNumberChange = vm::updateCardNumber,
-            onCardExpiryChange = vm::updateCardExpiry,
-            onCardCvvChange = vm::updateCardCvv,
             onSubmit = vm::submit,
             onRetry = vm::retry,
             onOpenRedirect = onOpenRedirect,
+            onLaunchPlayPurchase = { activity?.let(vm::launchPlayPurchase) },
         )
     }
 }

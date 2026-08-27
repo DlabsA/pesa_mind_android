@@ -2,9 +2,11 @@ package cc.dlabs.pesamind.features.subscription
 
 import android.content.Context
 import android.util.Log
+import cc.dlabs.pesamind.core.billing.PlayBillingManager
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedStateCoordinator
 import cc.dlabs.pesamind.core.network.ApiClient
+import cc.dlabs.pesamind.core.network.models.VerifyPlayPurchaseRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
 import cc.dlabs.pesamind.core.storage.PaymentManager
 import cc.dlabs.pesamind.core.storage.TokenManager
@@ -45,9 +47,45 @@ object SubscriptionResumer {
     suspend fun onAppStart() {
         if (!TokenManager.isLoggedIn()) return
         resumeIfPending()
+        resumeUnverifiedPlayPurchases()
         // Quiet: no SubscriptionActivated on a routine launch, or every gated
         // ViewModel would refetch on every cold start for no reason.
         refreshEntitlement(publish = false)
+    }
+
+    /**
+     * Finds Google Play purchases Play already recorded but this app never
+     * finished verifying with the backend — the process can die between
+     * [PlayBillingManager.launchPurchase] returning and the verify call
+     * completing. Without this, that purchase token is stranded: Play thinks it
+     * is unhandled and will auto-refund it after 3 days, and the user paid for
+     * nothing.
+     */
+    private suspend fun resumeUnverifiedPlayPurchases() {
+        val purchases =
+            try {
+                PlayBillingManager.unverifiedPurchases()
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't check for unverified Play purchases, will retry next launch", e)
+                return
+            }
+        for (purchase in purchases) {
+            val productId = purchase.products.firstOrNull() ?: continue
+            try {
+                val response =
+                    ApiClient.api.verifyPlayPurchase(
+                        VerifyPlayPurchaseRequest(productId = productId, purchaseToken = purchase.purchaseToken),
+                    )
+                if (response.isSuccessful) {
+                    PlayBillingManager.acknowledge(purchase.purchaseToken)
+                    Log.i(TAG, "Settled a Play purchase completed while the app was closed")
+                } else {
+                    Log.w(TAG, "Couldn't verify a pending Play purchase (${response.code()}), will retry next launch")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Play purchase verification failed, will retry next launch", e)
+            }
+        }
     }
 
     /**

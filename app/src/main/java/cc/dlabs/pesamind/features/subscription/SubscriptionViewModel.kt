@@ -1,7 +1,9 @@
 package cc.dlabs.pesamind.features.subscription
 
+import android.app.Activity
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import cc.dlabs.pesamind.core.billing.PlayBillingManager
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedViewModel
 import cc.dlabs.pesamind.core.network.ApiClient
@@ -9,6 +11,7 @@ import cc.dlabs.pesamind.core.network.models.CheckoutRequest
 import cc.dlabs.pesamind.core.network.models.InvoiceResponse
 import cc.dlabs.pesamind.core.network.models.PlanResponse
 import cc.dlabs.pesamind.core.network.models.SubscriptionResponse
+import cc.dlabs.pesamind.core.network.models.VerifyPlayPurchaseRequest
 import cc.dlabs.pesamind.core.storage.PaymentManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -36,8 +39,13 @@ enum class CheckoutStage {
     SETTLED,
 }
 
-/** Payment methods offered on the checkout form. */
-enum class PaymentMethod { MOBILE_MONEY, CARD }
+/**
+ * Payment methods offered on the checkout form. GOOGLE_PLAY routes through
+ * [PlayBillingManager] rather than the checkout form fields below — Play Store
+ * policy requires digital subscriptions sold in-app to go through Play's own
+ * billing, so this replaced the previous card-via-Flutterwave option.
+ */
+enum class PaymentMethod { MOBILE_MONEY, GOOGLE_PLAY }
 
 /**
  * Single UiState for the whole subscription flow, per the one-state-per-screen rule
@@ -58,10 +66,6 @@ data class SubscriptionUiState(
     // Mobile money form
     val phoneNumber: String = "",
     val network: String = CheckoutValidator.NETWORK_MTN,
-    // Card form. Never persisted; cleared as soon as checkout is submitted.
-    val cardNumber: String = "",
-    val cardExpiry: String = "",
-    val cardCvv: String = "",
     val isSubmitting: Boolean = false,
     val invoice: InvoiceResponse? = null,
     /** Customer-facing note from the provider, e.g. "authorise on 256772…". */
@@ -204,27 +208,13 @@ class SubscriptionViewModel : UnifiedViewModel() {
         _state.value = _state.value.copy(network = network, error = null)
     }
 
-    fun updateCardNumber(value: String) {
-        _state.value = _state.value.copy(cardNumber = value, error = null)
-    }
+    // ─── Checkout (mobile money) ────────────────────────────────────────────────
 
-    fun updateCardExpiry(value: String) {
-        // Four plain digits, MMYY, month kept to 01..12 as they type. The slash the
-        // customer sees is drawn by the field's VisualTransformation, never stored —
-        // keeping it out of the state is what stops the caret jumping when it lands.
-        _state.value =
-            _state.value.copy(
-                cardExpiry = CheckoutValidator.normalizeCardExpiryDigits(value),
-                error = null,
-            )
-    }
-
-    fun updateCardCvv(value: String) {
-        _state.value = _state.value.copy(cardCvv = value, error = null)
-    }
-
-    // ─── Checkout ─────────────────────────────────────────────────────────────
-
+    /**
+     * Submits the mobile money checkout form. The GOOGLE_PLAY method does not use
+     * this — see [launchPlayPurchase] — since a Play purchase happens first, on
+     * Play's own UI, rather than being built from form fields and posted.
+     */
     fun submit() {
         val current = _state.value
         if (current.isSubmitting) return
@@ -235,47 +225,18 @@ class SubscriptionViewModel : UnifiedViewModel() {
         }
 
         val request =
-            when (current.method) {
-                PaymentMethod.MOBILE_MONEY -> {
-                    when (val result = CheckoutValidator.validateMobileMoney(current.phoneNumber, current.network)) {
-                        is CheckoutValidator.MobileMoneyResult.Invalid -> {
-                            _state.value = current.copy(error = result.message)
-                            return
-                        }
-                        is CheckoutValidator.MobileMoneyResult.Valid ->
-                            CheckoutRequest(
-                                planCode = plan.code,
-                                method = METHOD_MOBILE_MONEY,
-                                network = result.network,
-                                phoneNumber = result.msisdn,
-                            )
-                    }
+            when (val result = CheckoutValidator.validateMobileMoney(current.phoneNumber, current.network)) {
+                is CheckoutValidator.MobileMoneyResult.Invalid -> {
+                    _state.value = current.copy(error = result.message)
+                    return
                 }
-                PaymentMethod.CARD -> {
-                    val (expiryMonth, expiryYear) = CheckoutValidator.splitCardExpiry(current.cardExpiry)
-                    val result =
-                        CheckoutValidator.validateCard(
-                            rawNumber = current.cardNumber,
-                            rawExpiryMonth = expiryMonth,
-                            rawExpiryYear = expiryYear,
-                            rawCvv = current.cardCvv,
-                        )
-                    when (result) {
-                        is CheckoutValidator.CardResult.Invalid -> {
-                            _state.value = current.copy(error = result.message)
-                            return
-                        }
-                        is CheckoutValidator.CardResult.Valid ->
-                            CheckoutRequest(
-                                planCode = plan.code,
-                                method = METHOD_CARD,
-                                cardNumber = result.number,
-                                cardExpiryMonth = result.expiryMonth,
-                                cardExpiryYear = result.expiryYear,
-                                cardCvv = result.cvv,
-                            )
-                    }
-                }
+                is CheckoutValidator.MobileMoneyResult.Valid ->
+                    CheckoutRequest(
+                        planCode = plan.code,
+                        method = METHOD_MOBILE_MONEY,
+                        network = result.network,
+                        phoneNumber = result.msisdn,
+                    )
             }
 
         viewModelScope.launch {
@@ -312,11 +273,6 @@ class SubscriptionViewModel : UnifiedViewModel() {
                         instruction = body.instruction,
                         redirectUrl = body.redirectUrl,
                         statusMessage = body.instruction.ifBlank { "Waiting for your confirmation…" },
-                        // Card details are dropped the moment they leave this
-                        // ViewModel; they are never held past submission.
-                        cardNumber = "",
-                        cardExpiry = "",
-                        cardCvv = "",
                     )
 
                 startPolling(body.invoice.id)
@@ -328,6 +284,88 @@ class SubscriptionViewModel : UnifiedViewModel() {
                         error = "Couldn't start the payment. Check your connection and try again.",
                     )
             }
+        }
+    }
+
+    // ─── Checkout (Google Play Billing) ─────────────────────────────────────────
+
+    /**
+     * Launches the Play purchase UI for the selected plan and, on success, sends
+     * the resulting purchase token to the backend for verification.
+     *
+     * Unlike [submit], nothing is posted first — Play's own UI runs the purchase,
+     * and only the result is reported to the backend. There is also nothing to
+     * poll: [PlayBillingManager.launchPurchase] suspends until Play itself
+     * resolves the purchase, and [verifyPlayPurchase] settles synchronously.
+     */
+    fun launchPlayPurchase(activity: Activity) {
+        val current = _state.value
+        if (current.isSubmitting) return
+        val plan = current.selectedPlan
+        if (plan == null) {
+            _state.value = current.copy(error = "Choose a plan first")
+            return
+        }
+        if (plan.playProductId.isBlank()) {
+            _state.value = current.copy(error = "This plan isn't available for purchase yet.")
+            return
+        }
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isSubmitting = true, error = null)
+
+            val offerings = PlayBillingManager.queryOfferings(listOf(plan.playProductId))
+            val productDetails = offerings.firstOrNull { it.productId == plan.playProductId }
+            if (productDetails == null) {
+                _state.value =
+                    _state.value.copy(isSubmitting = false, error = "This plan isn't available for purchase right now.")
+                return@launch
+            }
+
+            when (val result = PlayBillingManager.launchPurchase(activity, productDetails)) {
+                is PlayBillingManager.PurchaseResult.Success ->
+                    verifyPlayPurchase(result.productId, result.purchaseToken)
+                PlayBillingManager.PurchaseResult.UserCancelled ->
+                    _state.value = _state.value.copy(isSubmitting = false)
+                is PlayBillingManager.PurchaseResult.Error ->
+                    _state.value = _state.value.copy(isSubmitting = false, error = result.message)
+            }
+        }
+    }
+
+    private suspend fun verifyPlayPurchase(
+        productId: String,
+        purchaseToken: String,
+    ) {
+        try {
+            val response =
+                ApiClient.api.verifyPlayPurchase(
+                    VerifyPlayPurchaseRequest(productId = productId, purchaseToken = purchaseToken),
+                )
+            val invoice = response.body()
+            if (!response.isSuccessful || invoice == null) {
+                _state.value =
+                    _state.value.copy(
+                        isSubmitting = false,
+                        error = "Couldn't confirm your purchase (${response.code()}). It will be retried automatically.",
+                    )
+                return
+            }
+
+            // Acknowledge only now — after the backend has recorded the purchase.
+            // Acknowledging first and having the verify call fail would leave a
+            // purchase Play considers handled but the backend never granted.
+            PlayBillingManager.acknowledge(purchaseToken)
+
+            _state.value = _state.value.copy(isSubmitting = false)
+            onSettled(invoice)
+        } catch (e: Exception) {
+            Log.e(TAG, "Play purchase verification failed", e)
+            _state.value =
+                _state.value.copy(
+                    isSubmitting = false,
+                    error = "Couldn't confirm your purchase. Check your connection — it will be retried automatically.",
+                )
         }
     }
 
@@ -485,7 +523,6 @@ class SubscriptionViewModel : UnifiedViewModel() {
     companion object {
         private const val TAG = "SubscriptionViewModel"
         private const val METHOD_MOBILE_MONEY = "mobile_money"
-        private const val METHOD_CARD = "card"
         private const val NEXT_ACTION_REDIRECT = "redirect_url"
     }
 }
