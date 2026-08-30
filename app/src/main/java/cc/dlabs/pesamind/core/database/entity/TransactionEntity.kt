@@ -45,6 +45,18 @@ import cc.dlabs.pesamind.core.database.SyncStatus
             childColumns = ["channelId"],
             onDelete = ForeignKey.SET_NULL,
         ),
+        ForeignKey(
+            entity = DebtCreditEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["debtCreditId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+        ForeignKey(
+            entity = SavingGoalEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["savingGoalId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["serverId"]),
@@ -53,6 +65,8 @@ import cc.dlabs.pesamind.core.database.SyncStatus
         Index(value = ["updatedAt"]),
         Index(value = ["userId", "smsSourceKey"], unique = true),
         Index(value = ["channelId", "providerTransactionId"], unique = true),
+        Index(value = ["debtCreditId"]),
+        Index(value = ["savingGoalId"]),
     ],
 )
 data class TransactionEntity(
@@ -73,4 +87,9 @@ data class TransactionEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long?,
+    // Local DebtCreditEntity/SavingGoalEntity id — never a server id. Mutually exclusive
+    // (app-layer enforced, matching the backend); set at creation time via the "choose a
+    // purpose" flow, or after the fact via DebtCreditRepository/SavingGoalRepository.linkTransaction.
+    val debtCreditId: String? = null,
+    val savingGoalId: String? = null,
 )

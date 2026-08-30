@@ -194,6 +194,7 @@ fun SettingsScreen(rootNav: NavHostController) {
                         text = displayName,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                     Text(
                         text = displayEmail,
@@ -275,6 +276,26 @@ fun SettingsScreen(rootNav: NavHostController) {
             title = "Transactions",
             subtitle = "View recent Transactions",
             onClick = { rootNav.navigate(Routes.TransactionList.route) },
+        )
+
+        SettingsDivider()
+
+        SettingsRow(
+            icon = Icons.Filled.Handshake,
+            iconTint = teal,
+            title = "Lent & Borrowed",
+            subtitle = "Track money you've lent or borrowed",
+            onClick = { rootNav.navigate(Routes.LentBorrowed.route) },
+        )
+
+        SettingsDivider()
+
+        SettingsRow(
+            icon = Icons.Filled.Savings,
+            iconTint = teal,
+            title = "Saving Goals",
+            subtitle = "Track progress toward a target",
+            onClick = { rootNav.navigate(Routes.SavingGoals.route) },
         )
 
         // ── Section: Preferences ─────────────────────────────
@@ -433,7 +454,12 @@ private fun SettingsRow(
 
         // Text
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            Text(
+                title,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             if (subtitle != null) {
                 Text(subtitle, fontSize = 12.sp, color = Color.Gray)
             }
@@ -488,7 +514,12 @@ private fun SettingsToggleRow(
 
         // Text
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            Text(
+                title,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             if (subtitle != null) {
                 Text(subtitle, fontSize = 12.sp, color = Color.Gray)
             }

@@ -21,7 +21,6 @@ object ApiClient {
 
     private val client =
         OkHttpClient.Builder()
-            // Add Token Authentication Interceptor (FIRST - modifies request)
             .addInterceptor { chain ->
                 try {
                     val token = runBlocking { TokenManager.getToken() }

@@ -122,8 +122,12 @@ class TransactionViewModel : UnifiedViewModel() {
         amount: Double,
         type: String,
         note: String,
+        debtCreditId: String? = null,
+        savingGoalId: String? = null,
     ) {
-        viewModelScope.launch { createTransactionAwaited(channelID, amount, type, note) }
+        viewModelScope.launch {
+            createTransactionAwaited(channelID, amount, type, note, debtCreditId = debtCreditId, savingGoalId = savingGoalId)
+        }
     }
 
     /**
@@ -145,6 +149,8 @@ class TransactionViewModel : UnifiedViewModel() {
         note: String,
         smsSourceKey: String? = null,
         providerTransactionId: String? = null,
+        debtCreditId: String? = null,
+        savingGoalId: String? = null,
     ): TransactionCreationResult {
         val validationError = validateTransactionInput(channelID, amount, type, note)
         if (validationError != null) {
@@ -153,7 +159,8 @@ class TransactionViewModel : UnifiedViewModel() {
         }
 
         _state.value = _state.value.copy(isSaving = true, error = null)
-        val result = performCreateTransaction(channelID, amount, type, note, smsSourceKey, providerTransactionId)
+        val result =
+            performCreateTransaction(channelID, amount, type, note, smsSourceKey, providerTransactionId, debtCreditId, savingGoalId)
         _state.value =
             when (result) {
                 is TransactionCreationResult.Success ->
@@ -186,6 +193,8 @@ class TransactionViewModel : UnifiedViewModel() {
         note: String,
         smsSourceKey: String? = null,
         providerTransactionId: String? = null,
+        debtCreditId: String? = null,
+        savingGoalId: String? = null,
     ): TransactionCreationResult {
         val normalizedType =
             TransactionTypes.normalizeOrNull(type)
@@ -202,6 +211,8 @@ class TransactionViewModel : UnifiedViewModel() {
                     username = currentUsername(),
                     smsSourceKey = smsSourceKey,
                     providerTransactionId = providerTransactionId,
+                    debtCreditId = debtCreditId,
+                    savingGoalId = savingGoalId,
                 )
             if (outcome is TransactionInsertOutcome.Inserted) {
                 // Trigger a real SyncWorker run (push-then-pull) so StateEvent.SyncCompleted

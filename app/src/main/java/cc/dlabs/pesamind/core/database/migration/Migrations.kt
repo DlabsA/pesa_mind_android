@@ -273,3 +273,65 @@ val MIGRATION_7_8 =
             )
         }
     }
+
+/**
+ * v8 -> v9: adds "Lent & Borrowed" (`debt_credits`) and "Saving Goals" (`saving_goals`) —
+ * new tables, both mirroring the existing local-first entity shape (client-UUID `id`, nullable
+ * `serverId`, sync bookkeeping columns). Also adds `transactions.debtCreditId`/`savingGoalId`,
+ * nullable local FKs (mutually exclusive, app-layer enforced) letting a transaction attach to
+ * at most one debt/credit or saving goal — mirrors `transactions.channelId`'s existing
+ * SET NULL-on-parent-delete shape.
+ */
+val MIGRATION_8_9 =
+    object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `debt_credits` (
+                    `id` TEXT NOT NULL, `serverId` TEXT, `userId` TEXT NOT NULL,
+                    `direction` TEXT NOT NULL, `counterpartyName` TEXT NOT NULL,
+                    `counterpartyPhone` TEXT, `counterpartyPhoneNormalized` TEXT,
+                    `originalAmount` REAL NOT NULL, `outstanding` REAL NOT NULL,
+                    `note` TEXT NOT NULL, `dueAt` INTEGER, `reminderOffsetsCsv` TEXT NOT NULL,
+                    `settledAt` INTEGER, `syncStatus` TEXT NOT NULL, `dirty` INTEGER NOT NULL,
+                    `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_debt_credits_serverId` ON `debt_credits` (`serverId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_debt_credits_userId` ON `debt_credits` (`userId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_debt_credits_syncStatus` ON `debt_credits` (`syncStatus`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_debt_credits_updatedAt` ON `debt_credits` (`updatedAt`)")
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_debt_credits_userId_settledAt` " +
+                    "ON `debt_credits` (`userId`, `settledAt`)",
+            )
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `saving_goals` (
+                    `id` TEXT NOT NULL, `serverId` TEXT, `userId` TEXT NOT NULL,
+                    `name` TEXT NOT NULL, `targetAmount` REAL NOT NULL, `progress` REAL NOT NULL,
+                    `note` TEXT NOT NULL, `targetAt` INTEGER, `reminderOffsetsCsv` TEXT NOT NULL,
+                    `achievedAt` INTEGER, `syncStatus` TEXT NOT NULL, `dirty` INTEGER NOT NULL,
+                    `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_saving_goals_serverId` ON `saving_goals` (`serverId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_saving_goals_userId` ON `saving_goals` (`userId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_saving_goals_syncStatus` ON `saving_goals` (`syncStatus`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_saving_goals_updatedAt` ON `saving_goals` (`updatedAt`)")
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_saving_goals_userId_achievedAt` " +
+                    "ON `saving_goals` (`userId`, `achievedAt`)",
+            )
+
+            db.execSQL("ALTER TABLE `transactions` ADD COLUMN `debtCreditId` TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE `transactions` ADD COLUMN `savingGoalId` TEXT DEFAULT NULL")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_debtCreditId` ON `transactions` (`debtCreditId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_savingGoalId` ON `transactions` (`savingGoalId`)")
+        }
+    }

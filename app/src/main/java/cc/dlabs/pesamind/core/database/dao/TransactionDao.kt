@@ -107,4 +107,22 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
+
+    /** Candidates for the "pick an existing transaction" Add-payment picker — transactions
+     * not yet linked to any debt/credit. */
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL AND debtCreditId IS NULL ORDER BY createdAt DESC")
+    fun observeUnlinkedToDebtCredit(userId: String): Flow<List<TransactionEntity>>
+
+    /** Same as [observeUnlinkedToDebtCredit], for the Add-contribution picker. */
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL AND savingGoalId IS NULL ORDER BY createdAt DESC")
+    fun observeUnlinkedToSavingGoal(userId: String): Flow<List<TransactionEntity>>
+
+    /** Live linked-transactions list for a debt/credit's detail screen — kept locally
+     * reactive rather than trusting the last-fetched hydrated array from the API. */
+    @Query("SELECT * FROM transactions WHERE debtCreditId = :debtCreditId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    fun observeByDebtCredit(debtCreditId: String): Flow<List<TransactionEntity>>
+
+    /** Same as [observeByDebtCredit], for a saving goal's detail screen. */
+    @Query("SELECT * FROM transactions WHERE savingGoalId = :savingGoalId AND deletedAt IS NULL ORDER BY createdAt DESC")
+    fun observeBySavingGoal(savingGoalId: String): Flow<List<TransactionEntity>>
 }

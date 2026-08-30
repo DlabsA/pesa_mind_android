@@ -21,7 +21,9 @@ import androidx.work.Configuration
 import cc.dlabs.pesamind.core.billing.PlayBillingManager
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.DebtCreditRepository
 import cc.dlabs.pesamind.core.data.ProcessedMessageRepository
+import cc.dlabs.pesamind.core.data.SavingGoalRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.migration.PrefsToRoomMigrator
 import cc.dlabs.pesamind.core.di.DatabaseEntryPoint
@@ -75,13 +77,12 @@ class PesaMindApp : Application(), Configuration.Provider {
         PlayBillingManager.init(this)
         SubscriptionResumer.init(this)
         SimSlotManager.init(this)
-        // Room-backed repositories (ADR-0004 Slice A1/B) — ChannelRepository/
-        // TransactionRepository/BudgetRepository are the source of truth their respective
-        // ViewModels read and write through.
         ChannelRepository.init(this)
         TransactionRepository.init(this)
         BudgetRepository.init(this)
         ProcessedMessageRepository.init(this)
+        DebtCreditRepository.init(this)
+        SavingGoalRepository.init(this)
 
         // One-time prefs-blob -> Room import (idempotent, safe to fire on every launch).
         // See docs/decisions/ADR-0004-offline-first.md. Caught, not propagated: this runs

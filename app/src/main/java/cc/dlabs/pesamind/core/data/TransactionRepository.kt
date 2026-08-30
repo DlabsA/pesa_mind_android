@@ -130,6 +130,28 @@ object TransactionRepository {
             emitAll(transactionDao.observeByChannel(userId, channelId).map { list -> list.map { it.toDetails() } })
         }
 
+    /** Live linked-transactions list for a debt/credit's detail screen. */
+    fun observeByDebtCredit(debtCreditId: String): Flow<List<TransactionDetails>> =
+        flow { emitAll(transactionDao.observeByDebtCredit(debtCreditId).map { list -> list.map { it.toDetails() } }) }
+
+    /** Candidates for the "pick an existing transaction" Add-payment picker. */
+    fun observeUnlinkedToDebtCredit(): Flow<List<TransactionDetails>> =
+        flow {
+            val userId = AccountManager.currentUserIdOrEmpty()
+            emitAll(transactionDao.observeUnlinkedToDebtCredit(userId).map { list -> list.map { it.toDetails() } })
+        }
+
+    /** Live linked-transactions list for a saving goal's detail screen. */
+    fun observeBySavingGoal(savingGoalId: String): Flow<List<TransactionDetails>> =
+        flow { emitAll(transactionDao.observeBySavingGoal(savingGoalId).map { list -> list.map { it.toDetails() } }) }
+
+    /** Candidates for the "pick an existing transaction" Add-contribution picker. */
+    fun observeUnlinkedToSavingGoal(): Flow<List<TransactionDetails>> =
+        flow {
+            val userId = AccountManager.currentUserIdOrEmpty()
+            emitAll(transactionDao.observeUnlinkedToSavingGoal(userId).map { list -> list.map { it.toDetails() } })
+        }
+
     /**
      * Targeted pull, scoped to one channel — a cheaper alternative to a full-list pull for
      * [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen], reusing
@@ -272,6 +294,12 @@ object TransactionRepository {
         username: String,
         smsSourceKey: String? = null,
         providerTransactionId: String? = null,
+        // Optional, mutually exclusive — local DebtCreditEntity/SavingGoalEntity id, set by the
+        // "choose a purpose" flow (AddTransactionScreen). Never both at once (enforced by the
+        // caller, same as the backend). Resolved to a *server* id at push time — see
+        // OutboxPusher.pushTransactionEntry.
+        debtCreditId: String? = null,
+        savingGoalId: String? = null,
     ): TransactionInsertOutcome {
         val now = System.currentTimeMillis()
         val userId = AccountManager.currentUserIdOrEmpty()
@@ -299,6 +327,8 @@ object TransactionRepository {
                         createdAt = now,
                         updatedAt = now,
                         deletedAt = null,
+                        debtCreditId = debtCreditId,
+                        savingGoalId = savingGoalId,
                     )
                 val rowId = transactionDao.insertIgnore(entity)
                 if (rowId == -1L) {
@@ -355,6 +385,14 @@ object TransactionRepository {
     ): TransactionDetails =
         database.withTransaction {
             val now = System.currentTimeMillis()
+            // Resolve the pulled debt_credit_id/saving_goal_id (server ids) back to local rows
+            // — both are real server ids on this DTO (unlike channelId's name-matching hack), so
+            // this is a direct findByServerId lookup. Null when the parent hasn't been pulled
+            // locally yet; a later pull run (after pullDebtCredits/pullSavingGoals has inserted
+            // it) backfills this on its own next pass.
+            val resolvedDebtCreditId = details.debtCreditServerId?.let { database.debtCreditDao().findByServerId(it)?.id }
+            val resolvedSavingGoalId = details.savingGoalServerId?.let { database.savingGoalDao().findByServerId(it)?.id }
+
             // findByServerId deliberately includes soft-deleted rows so ReconcileResolver can
             // see (and refuse to touch) a tombstone instead of missing it and inserting a live
             // duplicate for the same serverId — see ReconcileResolver's doc comment.
@@ -378,6 +416,8 @@ object TransactionRepository {
                             // next ordinary sync instead of requiring another Room wipe.
                             createdAt = parseServerTimestampMillis(details.serverCreatedAt) ?: existing.createdAt,
                             updatedAt = now,
+                            debtCreditId = resolvedDebtCreditId ?: existing.debtCreditId,
+                            savingGoalId = resolvedSavingGoalId ?: existing.savingGoalId,
                         )
                     transactionDao.update(updated)
                     updated.toDetails()
@@ -412,6 +452,8 @@ object TransactionRepository {
                             createdAt = parseServerTimestampMillis(details.serverCreatedAt) ?: now,
                             updatedAt = now,
                             deletedAt = null,
+                            debtCreditId = resolvedDebtCreditId,
+                            savingGoalId = resolvedSavingGoalId,
                         )
                     transactionDao.upsert(inserted)
                     inserted.toDetails()

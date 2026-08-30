@@ -43,11 +43,38 @@ sealed class Routes(val route: String) {
     object Home : Routes("home")
 
     // Sub-screens
-    object AddTransaction : Routes("add_transaction?channelId={channelId}") {
+    object AddTransaction : Routes("add_transaction?channelId={channelId}&debtCreditId={debtCreditId}&savingGoalId={savingGoalId}") {
         /** [channelId] pre-selects a channel (e.g. the "Add Transaction" pill on a channel
-         * card) — omit for the plain, empty-picker entry point used elsewhere. */
-        fun createRoute(channelId: String? = null): String =
-            if (channelId.isNullOrBlank()) "add_transaction" else "add_transaction?channelId=$channelId"
+         * card) — omit for the plain, empty-picker entry point used elsewhere. [debtCreditId]/
+         * [savingGoalId] pre-select a Purpose (the "Add payment"/"Add contribution" entry
+         * points from a debt/goal detail screen) — at most one of these two is ever passed. */
+        fun createRoute(
+            channelId: String? = null,
+            debtCreditId: String? = null,
+            savingGoalId: String? = null,
+        ): String {
+            val params =
+                listOfNotNull(
+                    channelId?.takeIf { it.isNotBlank() }?.let { "channelId=$it" },
+                    debtCreditId?.takeIf { it.isNotBlank() }?.let { "debtCreditId=$it" },
+                    savingGoalId?.takeIf { it.isNotBlank() }?.let { "savingGoalId=$it" },
+                )
+            return if (params.isEmpty()) "add_transaction" else "add_transaction?${params.joinToString("&")}"
+        }
+    }
+
+    // Lent & Borrowed
+    object LentBorrowed : Routes("lent_borrowed")
+
+    object LentBorrowedDetail : Routes("lent_borrowed_detail/{debtCreditId}") {
+        fun createRoute(debtCreditId: String) = "lent_borrowed_detail/$debtCreditId"
+    }
+
+    // Saving Goals
+    object SavingGoals : Routes("saving_goals")
+
+    object SavingGoalDetail : Routes("saving_goal_detail/{savingGoalId}") {
+        fun createRoute(savingGoalId: String) = "saving_goal_detail/$savingGoalId"
     }
 //    object Accounts : Routes("accounts")
 //    object BudgetDetail : Routes("budget_detail")

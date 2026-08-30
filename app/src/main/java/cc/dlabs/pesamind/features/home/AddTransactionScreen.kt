@@ -34,7 +34,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.theme.*
+import cc.dlabs.pesamind.core.ui.PesaMindStrings
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
+import cc.dlabs.pesamind.features.lentborrowed.DebtCreditPicker
+import cc.dlabs.pesamind.features.lentborrowed.DebtCreditViewModel
+import cc.dlabs.pesamind.features.savinggoals.SavingGoalPicker
+import cc.dlabs.pesamind.features.savinggoals.SavingGoalViewModel
 import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
 import cc.dlabs.pesamind.features.settings.channels.ChannelViewModel
 import java.text.NumberFormat
@@ -46,13 +51,19 @@ const val TYPE_INCOME = "income"
 const val TYPE_EXPENSE = "expense"
 const val TYPE_SAVING = "saving"
 
+private enum class PurposeType { NONE, LENT, BORROWED, SAVING_GOAL }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
     navController: NavHostController,
     initialChannelId: String? = null,
+    initialDebtCreditId: String? = null,
+    initialSavingGoalId: String? = null,
     viewModel: TransactionViewModel = viewModel(),
     channelViewModel: ChannelViewModel = viewModel(),
+    debtCreditViewModel: DebtCreditViewModel = viewModel(),
+    savingGoalViewModel: SavingGoalViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -64,6 +75,33 @@ fun AddTransactionScreen(
     var amountText by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var txType by remember { mutableStateOf(TYPE_EXPENSE) }
+
+    // ── "Choose a purpose" state — Lent & Borrowed / Saving Goals (Premium only) ─────
+    var purpose by remember {
+        mutableStateOf(
+            when {
+                initialDebtCreditId != null -> PurposeType.LENT // direction refined once the debt loads, see below
+                initialSavingGoalId != null -> PurposeType.SAVING_GOAL
+                else -> PurposeType.NONE
+            },
+        )
+    }
+    var debtCreditId by remember { mutableStateOf(initialDebtCreditId) }
+    var savingGoalId by remember { mutableStateOf(initialSavingGoalId) }
+    var showDebtPicker by remember { mutableStateOf(false) }
+    var showGoalPicker by remember { mutableStateOf(false) }
+    val debtCreditState by debtCreditViewModel.state.collectAsStateWithLifecycle()
+    val savingGoalState by savingGoalViewModel.state.collectAsStateWithLifecycle()
+
+    // Refine the chip selection to the debt's real direction once it's loaded (a pre-selected
+    // debt from a detail screen's "Add payment" button doesn't know lent vs. borrowed up front).
+    LaunchedEffect(debtCreditId, debtCreditState.debts) {
+        debtCreditId?.let { id ->
+            debtCreditState.debts.find { it.id == id }?.let { debt ->
+                purpose = if (debt.direction == "borrowed") PurposeType.BORROWED else PurposeType.LENT
+            }
+        }
+    }
 
     // ── Inline validation ─────────────────────────────────────────────────────
     val amountError =
@@ -353,6 +391,80 @@ fun AddTransactionScreen(
                             }
                         }
 
+                        // ── Purpose chip row (Lent & Borrowed / Saving Goals) ────────
+                        // Premium-only feature — full hide, not a hint, since a free user has
+                        // nothing to link to anyway (mirrors the mobile-money-channel-hiding
+                        // precedent above, which uses a hint instead only because Cash/Bank
+                        // remain usable for that feature).
+                        if (channelState.isPremium) {
+                            LabeledField(label = "Purpose") {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf(
+                                        PurposeType.NONE to "None",
+                                        PurposeType.LENT to PesaMindStrings.DebtCredit.LENT_LABEL,
+                                        PurposeType.BORROWED to PesaMindStrings.DebtCredit.BORROWED_LABEL,
+                                        PurposeType.SAVING_GOAL to PesaMindStrings.SavingGoal.FEATURE_NAME,
+                                    ).forEach { (value, label) ->
+                                        FilterChip(
+                                            selected = purpose == value,
+                                            onClick = {
+                                                purpose = value
+                                                debtCreditId = null
+                                                savingGoalId = null
+                                            },
+                                            label = { Text(label) },
+                                        )
+                                    }
+                                }
+                            }
+
+                            when (purpose) {
+                                PurposeType.LENT, PurposeType.BORROWED -> {
+                                    val direction = if (purpose == PurposeType.BORROWED) "borrowed" else "lent"
+                                    val selectedName = debtCreditState.debts.find { it.id == debtCreditId }?.counterpartyName
+                                    OutlinedButton(onClick = { showDebtPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(selectedName ?: "Choose who this is with")
+                                    }
+                                    if (showDebtPicker) {
+                                        DebtCreditPicker(
+                                            direction = direction,
+                                            debts = debtCreditState.debts.filter { it.direction == direction },
+                                            onSelect = {
+                                                debtCreditId = it
+                                                showDebtPicker = false
+                                            },
+                                            onDismiss = { showDebtPicker = false },
+                                            onCreated = { newId ->
+                                                debtCreditId = newId
+                                                showDebtPicker = false
+                                            },
+                                        )
+                                    }
+                                }
+                                PurposeType.SAVING_GOAL -> {
+                                    val selectedName = savingGoalState.goals.find { it.id == savingGoalId }?.name
+                                    OutlinedButton(onClick = { showGoalPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(selectedName ?: "Choose a goal")
+                                    }
+                                    if (showGoalPicker) {
+                                        SavingGoalPicker(
+                                            goals = savingGoalState.goals,
+                                            onSelect = {
+                                                savingGoalId = it
+                                                showGoalPicker = false
+                                            },
+                                            onDismiss = { showGoalPicker = false },
+                                            onCreated = { newId ->
+                                                savingGoalId = newId
+                                                showGoalPicker = false
+                                            },
+                                        )
+                                    }
+                                }
+                                PurposeType.NONE -> Unit
+                            }
+                        }
+
                         // ── Note field ────────────────────────────────────────────
                         LabeledField(label = "Note") {
                             OutlinedTextField(
@@ -416,6 +528,8 @@ fun AddTransactionScreen(
                         amount = amountText.toDouble(),
                         type = txType,
                         note = note.trim(),
+                        debtCreditId = if (purpose == PurposeType.LENT || purpose == PurposeType.BORROWED) debtCreditId else null,
+                        savingGoalId = if (purpose == PurposeType.SAVING_GOAL) savingGoalId else null,
                     )
                 },
                 color = accentColor,

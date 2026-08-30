@@ -4,18 +4,22 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
+import cc.dlabs.pesamind.core.database.dao.DebtCreditDao
 import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
 import cc.dlabs.pesamind.core.database.dao.ProcessedMessageDao
 import cc.dlabs.pesamind.core.database.dao.ProfileDao
+import cc.dlabs.pesamind.core.database.dao.SavingGoalDao
 import cc.dlabs.pesamind.core.database.dao.TombstoneDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
 import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
 import cc.dlabs.pesamind.core.database.entity.ChannelEntity
+import cc.dlabs.pesamind.core.database.entity.DebtCreditEntity
 import cc.dlabs.pesamind.core.database.entity.MonthlyBudgetEntity
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.ProcessedMessageEntity
 import cc.dlabs.pesamind.core.database.entity.ProfileEntity
+import cc.dlabs.pesamind.core.database.entity.SavingGoalEntity
 import cc.dlabs.pesamind.core.database.entity.Tombstone
 import cc.dlabs.pesamind.core.database.entity.TransactionEntity
 import cc.dlabs.pesamind.core.database.entity.YearlyBudgetEntity
@@ -34,8 +38,10 @@ const val DATABASE_NAME = "pesamind.db"
         OutboxEntry::class,
         Tombstone::class,
         ProcessedMessageEntity::class,
+        DebtCreditEntity::class,
+        SavingGoalEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -55,6 +61,10 @@ abstract class PesaMindDatabase : RoomDatabase() {
     abstract fun tombstoneDao(): TombstoneDao
 
     abstract fun processedMessageDao(): ProcessedMessageDao
+
+    abstract fun debtCreditDao(): DebtCreditDao
+
+    abstract fun savingGoalDao(): SavingGoalDao
 
     /**
      * Full local-data wipe, run on logout so no account's cached channels/transactions/budgets

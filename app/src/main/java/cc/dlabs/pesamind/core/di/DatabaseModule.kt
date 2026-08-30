@@ -6,10 +6,12 @@ import cc.dlabs.pesamind.BuildConfig
 import cc.dlabs.pesamind.core.database.DATABASE_NAME
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
+import cc.dlabs.pesamind.core.database.dao.DebtCreditDao
 import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
 import cc.dlabs.pesamind.core.database.dao.ProcessedMessageDao
 import cc.dlabs.pesamind.core.database.dao.ProfileDao
+import cc.dlabs.pesamind.core.database.dao.SavingGoalDao
 import cc.dlabs.pesamind.core.database.dao.TombstoneDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
 import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
@@ -20,6 +22,7 @@ import cc.dlabs.pesamind.core.database.migration.MIGRATION_4_5
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_5_6
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_6_7
 import cc.dlabs.pesamind.core.database.migration.MIGRATION_7_8
+import cc.dlabs.pesamind.core.database.migration.MIGRATION_8_9
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -44,6 +47,7 @@ object DatabaseModule {
                 MIGRATION_5_6,
                 MIGRATION_6_7,
                 MIGRATION_7_8,
+                MIGRATION_8_9,
             )
             .apply {
                 // Debug builds only: a dev device can end up with a local schema *ahead* of
@@ -81,4 +85,10 @@ object DatabaseModule {
 
     @Provides
     fun provideProcessedMessageDao(db: PesaMindDatabase): ProcessedMessageDao = db.processedMessageDao()
+
+    @Provides
+    fun provideDebtCreditDao(db: PesaMindDatabase): DebtCreditDao = db.debtCreditDao()
+
+    @Provides
+    fun provideSavingGoalDao(db: PesaMindDatabase): SavingGoalDao = db.savingGoalDao()
 }

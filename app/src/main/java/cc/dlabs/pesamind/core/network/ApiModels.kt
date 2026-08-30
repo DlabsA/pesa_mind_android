@@ -212,6 +212,13 @@ data class TransactionRequest(
     val note: String = "",
     @SerializedName("channel_details_id")
     val channelId: String = "",
+    // Optional, mutually exclusive — links this transaction to a debt/credit or saving goal
+    // at creation time (the "choose a purpose" flow). Both are *server* ids, resolved from the
+    // local FK's own serverId at push time — see OutboxPusher.pushTransactionEntry.
+    @SerializedName("debt_credit_id")
+    val debtCreditServerId: String? = null,
+    @SerializedName("saving_goal_id")
+    val savingGoalServerId: String? = null,
 )
 
 data class TransactionDetails(
@@ -238,6 +245,13 @@ data class TransactionDetails(
     // date, corrupting any local date-range filter (see that function's doc comment).
     @SerializedName("created_at")
     val serverCreatedAt: String? = null,
+    // Server ids (not local) — resolved to a local DebtCreditEntity/SavingGoalEntity id in
+    // TransactionRepository.reconcileFromServer, mirroring how [resolvedChannelId] is passed
+    // in alongside this DTO rather than stored on it directly.
+    @SerializedName("debt_credit_id")
+    val debtCreditServerId: String? = null,
+    @SerializedName("saving_goal_id")
+    val savingGoalServerId: String? = null,
 )
 
 data class ProcessedMessageRequest(
@@ -1017,4 +1031,107 @@ data class SubscriptionResponse(
     @SerializedName("is_trial") val isTrial: Boolean = false,
     @SerializedName("plan_code") val planCode: String = "",
     @SerializedName("plan_name") val planName: String = "",
+)
+
+// ── Lent & Borrowed / Saving Goals ────────────────────────────────────────────
+
+/** A transaction line item embedded in a debt/credit or saving goal's hydrated response —
+ * enough to render without a second fetch. Shared shape for both domains. */
+data class LinkedTransactionSummary(
+    val id: String = "",
+    val amount: Double = 0.0,
+    val type: String = "",
+    @SerializedName("occurred_at") val occurredAt: String? = null,
+    @SerializedName("channel_name") val channelName: String? = null,
+    @SerializedName("created_at") val createdAt: String = "",
+)
+
+data class CreateDebtCreditRequest(
+    // Client-generated idempotency key — see TransactionRequest.id for the same pattern.
+    val id: String? = null,
+    val direction: String,
+    @SerializedName("counterparty_name") val counterpartyName: String,
+    @SerializedName("counterparty_phone") val counterpartyPhone: String? = null,
+    @SerializedName("original_amount") val originalAmount: Double,
+    val note: String? = null,
+    @SerializedName("occurred_at") val occurredAt: String,
+    @SerializedName("due_date") val dueDate: String? = null,
+    @SerializedName("reminder_offsets") val reminderOffsets: List<Int>? = null,
+)
+
+/** Edits metadata only — never `original_amount`, which moves solely via linked transactions. */
+data class UpdateDebtCreditRequest(
+    @SerializedName("counterparty_name") val counterpartyName: String? = null,
+    @SerializedName("counterparty_phone") val counterpartyPhone: String? = null,
+    val note: String? = null,
+    @SerializedName("due_date") val dueDate: String? = null,
+    @SerializedName("reminder_offsets") val reminderOffsets: List<Int>? = null,
+)
+
+data class DebtCreditResponse(
+    val id: String = "",
+    // "lent" | "borrowed" — the raw enum value; never rendered directly, see
+    // PesaMindStrings.DebtCredit.directionLabel.
+    val direction: String = "",
+    @SerializedName("counterparty_name") val counterpartyName: String = "",
+    @SerializedName("counterparty_phone") val counterpartyPhone: String? = null,
+    @SerializedName("original_amount") val originalAmount: Double = 0.0,
+    // Server-computed.
+    val outstanding: Double = 0.0,
+    val note: String? = null,
+    @SerializedName("occurred_at") val occurredAt: String = "",
+    @SerializedName("due_date") val dueDate: String? = null,
+    @SerializedName("reminder_offsets") val reminderOffsets: List<Int>? = null,
+    @SerializedName("settled_at") val settledAt: String? = null,
+    // "active" | "settled" — server-computed, precomputed alongside outstanding/settledAt.
+    val status: String = "active",
+    val transactions: List<LinkedTransactionSummary> = emptyList(),
+    @SerializedName("created_at") val createdAt: String = "",
+    @SerializedName("updated_at") val updatedAt: String = "",
+    // Local-only field (mirrors ChannelDetails/TransactionDetails's @Transient pattern): this
+    // class does dual duty as both the API response DTO and the local repository's "details"
+    // display model — never sent to or read from the server, populated from DebtCreditEntity.syncStatus.
+    @Transient
+    val syncStatus: SyncStatus = SyncStatus.SYNCED,
+)
+
+data class CreateSavingGoalRequest(
+    val id: String? = null,
+    val name: String,
+    @SerializedName("target_amount") val targetAmount: Double,
+    val note: String? = null,
+    @SerializedName("target_date") val targetDate: String? = null,
+    @SerializedName("reminder_offsets") val reminderOffsets: List<Int>? = null,
+)
+
+/** Edits metadata only — never `target_amount`. */
+data class UpdateSavingGoalRequest(
+    val name: String? = null,
+    val note: String? = null,
+    @SerializedName("target_date") val targetDate: String? = null,
+    @SerializedName("reminder_offsets") val reminderOffsets: List<Int>? = null,
+)
+
+data class SavingGoalResponse(
+    val id: String = "",
+    val name: String = "",
+    @SerializedName("target_amount") val targetAmount: Double = 0.0,
+    // Server-computed.
+    val progress: Double = 0.0,
+    val note: String? = null,
+    @SerializedName("target_date") val targetDate: String? = null,
+    @SerializedName("reminder_offsets") val reminderOffsets: List<Int>? = null,
+    @SerializedName("achieved_at") val achievedAt: String? = null,
+    // "active" | "achieved" — server-computed, precomputed alongside progress/achievedAt.
+    val status: String = "active",
+    val transactions: List<LinkedTransactionSummary> = emptyList(),
+    @SerializedName("created_at") val createdAt: String = "",
+    @SerializedName("updated_at") val updatedAt: String = "",
+    // Local-only field — see DebtCreditResponse.syncStatus's identical doc comment.
+    @Transient
+    val syncStatus: SyncStatus = SyncStatus.SYNCED,
+)
+
+data class LinkTransactionRequest(
+    @SerializedName("transaction_id") val transactionId: String,
 )

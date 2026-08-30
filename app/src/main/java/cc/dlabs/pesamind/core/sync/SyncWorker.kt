@@ -9,6 +9,8 @@ import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedStateCoordinator
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.DebtCreditRepository
+import cc.dlabs.pesamind.core.data.SavingGoalRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.SyncStatus
@@ -61,6 +63,8 @@ class SyncWorker
         private val justSyncedTransactionServerIds = mutableSetOf<String>()
         private val justSyncedYearlyBudgetServerIds = mutableSetOf<String>()
         private val justSyncedMonthlyBudgetServerIds = mutableSetOf<String>()
+        private val justSyncedDebtCreditServerIds = mutableSetOf<String>()
+        private val justSyncedSavingGoalServerIds = mutableSetOf<String>()
 
         override suspend fun doWork(): Result {
             // Early auth check: if user is not logged in, fail gracefully.
@@ -93,17 +97,22 @@ class SyncWorker
          * was legitimately skipped — false if any row hit a transient (network/5xx) failure. */
         private suspend fun pushOutbox(): Boolean {
             resurrectFailedRows()
-            // Channels before transactions: a transaction create needs its channel's
-            // *serverId* to populate `channel_details_id` — that only exists once the
-            // channel's own outbox entry has drained. See OutboxPusher.pushTransactionEntry's
-            // skip branch. Same reasoning for yearly budgets before monthly budgets — see
-            // OutboxPusher.pushMonthlyBudgetEntry's skip branch.
+            // Channels, debt/credits, and saving goals before transactions: a transaction create
+            // needs its channel's *serverId* to populate `channel_details_id` — and, when linked
+            // via the "choose a purpose" flow, its debt/goal's serverId for `debt_credit_id`/
+            // `saving_goal_id` — all of which only exist once that parent's own outbox entry has
+            // drained. See OutboxPusher.pushTransactionEntry's skip branches. Same reasoning for
+            // yearly budgets before monthly budgets — see OutboxPusher.pushMonthlyBudgetEntry's
+            // skip branch.
             val channelsClean = pushChannelOutbox()
+            val debtCreditsClean = pushDebtCreditOutbox()
+            val savingGoalsClean = pushSavingGoalOutbox()
             val transactionsClean = pushTransactionOutbox()
             val yearlyBudgetsClean = pushYearlyBudgetOutbox()
             val monthlyBudgetsClean = pushMonthlyBudgetOutbox()
             val processedMessagesClean = pushProcessedMessageOutbox()
-            return channelsClean && transactionsClean && yearlyBudgetsClean && monthlyBudgetsClean && processedMessagesClean
+            return channelsClean && debtCreditsClean && savingGoalsClean && transactionsClean &&
+                yearlyBudgetsClean && monthlyBudgetsClean && processedMessagesClean
         }
 
         /** A row a *previous* run's process death left claimed but unresolved is invisible
@@ -167,6 +176,38 @@ class SyncWorker
             for (entityId in pendingEntityIds) {
                 when (val result = outboxPusher.pushTransactionEntry(entityId)) {
                     is OutboxPusher.PushResult.Success -> result.serverId?.let { justSyncedTransactionServerIds.add(it) }
+                    OutboxPusher.PushResult.TransientFailure -> clean = false
+                    OutboxPusher.PushResult.PermanentFailure, OutboxPusher.PushResult.Skipped -> Unit
+                }
+            }
+            return clean
+        }
+
+        private suspend fun pushDebtCreditOutbox(): Boolean {
+            val outboxDao = database.outboxDao()
+            reclaimStaleSyncingRows(outboxDao, OutboxEntityType.DEBT_CREDIT)
+            val pendingEntityIds =
+                outboxDao.getByStatus(SyncStatus.PENDING).filter { it.entityType == OutboxEntityType.DEBT_CREDIT }.map { it.entityId }
+            var clean = true
+            for (entityId in pendingEntityIds) {
+                when (val result = outboxPusher.pushDebtCreditEntry(entityId)) {
+                    is OutboxPusher.PushResult.Success -> result.serverId?.let { justSyncedDebtCreditServerIds.add(it) }
+                    OutboxPusher.PushResult.TransientFailure -> clean = false
+                    OutboxPusher.PushResult.PermanentFailure, OutboxPusher.PushResult.Skipped -> Unit
+                }
+            }
+            return clean
+        }
+
+        private suspend fun pushSavingGoalOutbox(): Boolean {
+            val outboxDao = database.outboxDao()
+            reclaimStaleSyncingRows(outboxDao, OutboxEntityType.SAVING_GOAL)
+            val pendingEntityIds =
+                outboxDao.getByStatus(SyncStatus.PENDING).filter { it.entityType == OutboxEntityType.SAVING_GOAL }.map { it.entityId }
+            var clean = true
+            for (entityId in pendingEntityIds) {
+                when (val result = outboxPusher.pushSavingGoalEntry(entityId)) {
+                    is OutboxPusher.PushResult.Success -> result.serverId?.let { justSyncedSavingGoalServerIds.add(it) }
                     OutboxPusher.PushResult.TransientFailure -> clean = false
                     OutboxPusher.PushResult.PermanentFailure, OutboxPusher.PushResult.Skipped -> Unit
                 }
@@ -243,6 +284,11 @@ class SyncWorker
         private suspend fun pullChanges(): Boolean =
             try {
                 pullChannels()
+                // Debt/credits and saving goals before transactions: pullTransactions resolves
+                // each pulled transaction's debt_credit_id/saving_goal_id (server ids) back to
+                // local rows, which must exist locally first — same reasoning as channels above.
+                pullDebtCredits()
+                pullSavingGoals()
                 pullTransactions()
                 // Yearly before monthly: reconcileMonthlyFromServer resolves each pulled
                 // monthly budget's yearly_budget_id (a server id) back to a local yearly
@@ -255,6 +301,47 @@ class SyncWorker
                 Log.w(TAG, "Pull phase failed, will retry next run", e)
                 false
             }
+
+        private suspend fun pullDebtCredits() {
+            val response = api.getDebtCredits()
+            if (!response.isSuccessful) throw IOException("getDebtCredits failed: HTTP ${response.code()}")
+            val remote = response.body().orEmpty()
+            val remoteServerIds = remote.mapNotNull { it.id.ifBlank { null } }.toSet()
+
+            for (details in remote) {
+                DebtCreditRepository.reconcileFromServer(details)
+            }
+
+            val debtCreditDao = database.debtCreditDao()
+            val now = System.currentTimeMillis()
+            // See applyServerSideDeletions's doc comment — same just-synced-this-run guard.
+            debtCreditDao.getAllIncludingDeleted()
+                .filter {
+                    it.serverId != null && it.deletedAt == null && !it.dirty &&
+                        it.serverId !in remoteServerIds && it.serverId !in justSyncedDebtCreditServerIds
+                }
+                .forEach { debtCreditDao.update(it.copy(deletedAt = now, syncStatus = SyncStatus.SYNCED, updatedAt = now)) }
+        }
+
+        private suspend fun pullSavingGoals() {
+            val response = api.getSavingGoals()
+            if (!response.isSuccessful) throw IOException("getSavingGoals failed: HTTP ${response.code()}")
+            val remote = response.body().orEmpty()
+            val remoteServerIds = remote.mapNotNull { it.id.ifBlank { null } }.toSet()
+
+            for (details in remote) {
+                SavingGoalRepository.reconcileFromServer(details)
+            }
+
+            val savingGoalDao = database.savingGoalDao()
+            val now = System.currentTimeMillis()
+            savingGoalDao.getAllIncludingDeleted()
+                .filter {
+                    it.serverId != null && it.deletedAt == null && !it.dirty &&
+                        it.serverId !in remoteServerIds && it.serverId !in justSyncedSavingGoalServerIds
+                }
+                .forEach { savingGoalDao.update(it.copy(deletedAt = now, syncStatus = SyncStatus.SYNCED, updatedAt = now)) }
+        }
 
         private suspend fun pullChannels() {
             val response = api.getChannels()

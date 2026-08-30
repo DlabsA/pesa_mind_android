@@ -23,14 +23,18 @@ import cc.dlabs.pesamind.core.network.models.CheckoutResponse
 import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupRequest
 import cc.dlabs.pesamind.core.network.models.CompleteGoogleSignupResponse
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.core.network.models.CreateDebtCreditRequest
 import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.CreateSavingGoalRequest
 import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.DebtCreditResponse
 import cc.dlabs.pesamind.core.network.models.ExpenseForecastSection
 import cc.dlabs.pesamind.core.network.models.GoogleMobileSignInRequest
 import cc.dlabs.pesamind.core.network.models.GoogleMobileSignInResponse
 import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninRequest
 import cc.dlabs.pesamind.core.network.models.GooglePlatformSigninResponse
 import cc.dlabs.pesamind.core.network.models.InvoiceResponse
+import cc.dlabs.pesamind.core.network.models.LinkTransactionRequest
 import cc.dlabs.pesamind.core.network.models.LoginRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.PlanResponse
@@ -38,12 +42,15 @@ import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
 import cc.dlabs.pesamind.core.network.models.ProcessedMessageResponse
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
+import cc.dlabs.pesamind.core.network.models.SavingGoalResponse
 import cc.dlabs.pesamind.core.network.models.SubscriptionResponse
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
+import cc.dlabs.pesamind.core.network.models.UpdateDebtCreditRequest
 import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UpdateProfileRequest
+import cc.dlabs.pesamind.core.network.models.UpdateSavingGoalRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UserResponse
 import cc.dlabs.pesamind.core.network.models.VerifyPlayPurchaseRequest
@@ -166,6 +173,74 @@ interface ApiService {
     suspend fun createProcessedMessage(
         @Body body: ProcessedMessageRequest,
     ): Response<ProcessedMessageResponse>
+
+    // ── Lent & Borrowed / Saving Goals ───────────────────────────────────────
+
+    @GET("debt-credits")
+    suspend fun getDebtCredits(
+        @Query("status") status: String = "all",
+    ): Response<List<DebtCreditResponse>>
+
+    @POST("debt-credits")
+    suspend fun createDebtCredit(
+        @Body body: CreateDebtCreditRequest,
+    ): Response<DebtCreditResponse>
+
+    @PATCH("debt-credits/{id}")
+    suspend fun updateDebtCredit(
+        @Path("id") id: String,
+        @Body body: UpdateDebtCreditRequest,
+    ): Response<DebtCreditResponse>
+
+    @DELETE("debt-credits/{id}")
+    suspend fun deleteDebtCredit(
+        @Path("id") id: String,
+    ): Response<ApiMessageResponse>
+
+    @POST("debt-credits/{id}/link-transaction")
+    suspend fun linkDebtCreditTransaction(
+        @Path("id") id: String,
+        @Body body: LinkTransactionRequest,
+    ): Response<DebtCreditResponse>
+
+    @POST("debt-credits/{id}/unlink-transaction")
+    suspend fun unlinkDebtCreditTransaction(
+        @Path("id") id: String,
+        @Body body: LinkTransactionRequest,
+    ): Response<DebtCreditResponse>
+
+    @GET("saving-goals")
+    suspend fun getSavingGoals(
+        @Query("status") status: String = "all",
+    ): Response<List<SavingGoalResponse>>
+
+    @POST("saving-goals")
+    suspend fun createSavingGoal(
+        @Body body: CreateSavingGoalRequest,
+    ): Response<SavingGoalResponse>
+
+    @PATCH("saving-goals/{id}")
+    suspend fun updateSavingGoal(
+        @Path("id") id: String,
+        @Body body: UpdateSavingGoalRequest,
+    ): Response<SavingGoalResponse>
+
+    @DELETE("saving-goals/{id}")
+    suspend fun deleteSavingGoal(
+        @Path("id") id: String,
+    ): Response<ApiMessageResponse>
+
+    @POST("saving-goals/{id}/link-transaction")
+    suspend fun linkSavingGoalTransaction(
+        @Path("id") id: String,
+        @Body body: LinkTransactionRequest,
+    ): Response<SavingGoalResponse>
+
+    @POST("saving-goals/{id}/unlink-transaction")
+    suspend fun unlinkSavingGoalTransaction(
+        @Path("id") id: String,
+        @Body body: LinkTransactionRequest,
+    ): Response<SavingGoalResponse>
 
     // Budget endpoints
     @GET("budgets/monthly")

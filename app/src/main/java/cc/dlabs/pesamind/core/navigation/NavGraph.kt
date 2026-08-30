@@ -47,6 +47,8 @@ import cc.dlabs.pesamind.features.budgets.SetMonthlyBudgetScreen
 import cc.dlabs.pesamind.features.budgets.YearlyBudgetDetailScreen
 import cc.dlabs.pesamind.features.home.AddTransactionScreen
 import cc.dlabs.pesamind.features.home.MainScreen
+import cc.dlabs.pesamind.features.lentborrowed.LentBorrowedDetailScreen
+import cc.dlabs.pesamind.features.lentborrowed.LentBorrowedListScreen
 import cc.dlabs.pesamind.features.onboarding.ChannelOnboardingViewModel
 import cc.dlabs.pesamind.features.onboarding.OnboardingAirtelScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingBankScreen
@@ -55,6 +57,8 @@ import cc.dlabs.pesamind.features.onboarding.OnboardingIntroScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingMoMoScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingReviewScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingSimSlotsScreen
+import cc.dlabs.pesamind.features.savinggoals.SavingGoalDetailScreen
+import cc.dlabs.pesamind.features.savinggoals.SavingGoalListScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
 import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
 import cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen
@@ -218,14 +222,46 @@ fun PesaMindNavGraph(navController: NavHostController) {
                             nullable = true
                             defaultValue = null
                         },
+                        navArgument("debtCreditId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument("savingGoalId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
                     ),
             ) { backStackEntry ->
                 AddTransactionScreen(
                     navController,
                     initialChannelId = backStackEntry.arguments?.getString("channelId"),
+                    initialDebtCreditId = backStackEntry.arguments?.getString("debtCreditId"),
+                    initialSavingGoalId = backStackEntry.arguments?.getString("savingGoalId"),
                 )
             }
             composable(Routes.TransactionList.route) { TransactionListScreen(navController) }
+            composable(Routes.LentBorrowed.route) { LentBorrowedListScreen(navController) }
+            composable(
+                route = Routes.LentBorrowedDetail.route,
+                arguments = listOf(navArgument("debtCreditId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val debtCreditId = backStackEntry.arguments?.getString("debtCreditId")
+                if (debtCreditId != null) {
+                    LentBorrowedDetailScreen(navController, debtCreditId)
+                }
+            }
+            composable(Routes.SavingGoals.route) { SavingGoalListScreen(navController) }
+            composable(
+                route = Routes.SavingGoalDetail.route,
+                arguments = listOf(navArgument("savingGoalId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val savingGoalId = backStackEntry.arguments?.getString("savingGoalId")
+                if (savingGoalId != null) {
+                    SavingGoalDetailScreen(navController, savingGoalId)
+                }
+            }
             composable(
                 route = Routes.SetMonthlyBudget.route,
                 arguments =

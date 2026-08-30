@@ -3,35 +3,44 @@ package cc.dlabs.pesamind.core.sync
 import android.util.Log
 import cc.dlabs.pesamind.core.data.BudgetRepository
 import cc.dlabs.pesamind.core.data.ChannelRepository
+import cc.dlabs.pesamind.core.data.formatRfc3339
 import cc.dlabs.pesamind.core.database.PesaMindDatabase
 import cc.dlabs.pesamind.core.database.PushCompletionDecision
 import cc.dlabs.pesamind.core.database.PushCompletionResolver
 import cc.dlabs.pesamind.core.database.SyncStatus
 import cc.dlabs.pesamind.core.database.dao.ChannelDao
+import cc.dlabs.pesamind.core.database.dao.DebtCreditDao
 import cc.dlabs.pesamind.core.database.dao.MonthlyBudgetDao
 import cc.dlabs.pesamind.core.database.dao.OutboxDao
 import cc.dlabs.pesamind.core.database.dao.ProcessedMessageDao
+import cc.dlabs.pesamind.core.database.dao.SavingGoalDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
 import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
 import cc.dlabs.pesamind.core.database.entity.ChannelEntity
+import cc.dlabs.pesamind.core.database.entity.DebtCreditEntity
 import cc.dlabs.pesamind.core.database.entity.MonthlyBudgetEntity
 import cc.dlabs.pesamind.core.database.entity.OutboxEntityType
 import cc.dlabs.pesamind.core.database.entity.OutboxEntry
 import cc.dlabs.pesamind.core.database.entity.OutboxOperation
 import cc.dlabs.pesamind.core.database.entity.ProcessedMessageEntity
+import cc.dlabs.pesamind.core.database.entity.SavingGoalEntity
 import cc.dlabs.pesamind.core.database.entity.TransactionEntity
 import cc.dlabs.pesamind.core.database.entity.YearlyBudgetEntity
 import cc.dlabs.pesamind.core.network.ApiService
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionRequest
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.CreateChannelRequest
+import cc.dlabs.pesamind.core.network.models.CreateDebtCreditRequest
 import cc.dlabs.pesamind.core.network.models.CreateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.CreateSavingGoalRequest
 import cc.dlabs.pesamind.core.network.models.CreateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.MonthlyBudgetResponse
 import cc.dlabs.pesamind.core.network.models.ProcessedMessageRequest
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
 import cc.dlabs.pesamind.core.network.models.UpdateChannelRequest
+import cc.dlabs.pesamind.core.network.models.UpdateDebtCreditRequest
 import cc.dlabs.pesamind.core.network.models.UpdateMonthlyBudgetRequest
+import cc.dlabs.pesamind.core.network.models.UpdateSavingGoalRequest
 import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
 import cc.dlabs.pesamind.core.utils.PhoneNumberNormalizer
@@ -338,6 +347,321 @@ class OutboxPusher(
         outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
     }
 
+    // ── Debt/Credit (Lent & Borrowed) ──────────────────────────────────────────
+
+    /** Mirrors [pushChannelEntry]'s five-step shape exactly — this domain supports the same
+     * CREATE/UPDATE/DELETE trio server-side (unlike transactions, which only support create). */
+    suspend fun pushDebtCreditEntry(entityId: String): PushResult {
+        val outboxDao = database.outboxDao()
+        val debtCreditDao = database.debtCreditDao()
+
+        val current = outboxDao.findFor(OutboxEntityType.DEBT_CREDIT, entityId) ?: return PushResult.Skipped
+        if (current.status != SyncStatus.PENDING) return PushResult.Skipped
+
+        val entity = debtCreditDao.getById(entityId)
+        if (entity == null) {
+            outboxDao.delete(current.id)
+            return PushResult.Skipped
+        }
+        if (current.operation != OutboxOperation.CREATE && entity.serverId == null) {
+            markDebtCreditPermanentFailure(
+                current,
+                entity,
+                debtCreditDao,
+                outboxDao,
+                "Invariant violation: ${current.operation} with no serverId",
+            )
+            return PushResult.PermanentFailure
+        }
+
+        val now = System.currentTimeMillis()
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
+        val dispatchUpdatedAt = entity.updatedAt
+
+        return try {
+            if (current.operation == OutboxOperation.DELETE) {
+                val deleteResponse = api.deleteDebtCredit(entity.serverId!!)
+                return when {
+                    deleteResponse.isSuccessful -> {
+                        debtCreditDao.hardDelete(entity.id)
+                        outboxDao.delete(current.id)
+                        PushResult.Success(null)
+                    }
+                    isPermanentFailureCode(deleteResponse.code()) -> {
+                        markDebtCreditPermanentFailure(
+                            current,
+                            entity,
+                            debtCreditDao,
+                            outboxDao,
+                            "HTTP ${deleteResponse.code()}: ${deleteResponse.errorBody()?.string()}",
+                        )
+                        PushResult.PermanentFailure
+                    }
+                    else -> {
+                        markTransientFailure(current, outboxDao, "HTTP ${deleteResponse.code()}")
+                        PushResult.TransientFailure
+                    }
+                }
+            }
+            val response =
+                when (current.operation) {
+                    OutboxOperation.CREATE ->
+                        api.createDebtCredit(
+                            CreateDebtCreditRequest(
+                                id = entity.id,
+                                direction = entity.direction,
+                                counterpartyName = entity.counterpartyName,
+                                counterpartyPhone = entity.counterpartyPhone,
+                                originalAmount = entity.originalAmount,
+                                note = entity.note,
+                                occurredAt = formatRfc3339(entity.createdAt),
+                                dueDate = entity.dueAt?.let { formatRfc3339(it) },
+                                reminderOffsets = entity.reminderOffsets,
+                            ),
+                        )
+                    OutboxOperation.UPDATE ->
+                        api.updateDebtCredit(
+                            entity.serverId!!,
+                            UpdateDebtCreditRequest(
+                                counterpartyName = entity.counterpartyName,
+                                counterpartyPhone = entity.counterpartyPhone,
+                                note = entity.note,
+                                dueDate = entity.dueAt?.let { formatRfc3339(it) },
+                                reminderOffsets = entity.reminderOffsets,
+                            ),
+                        )
+                    OutboxOperation.DELETE -> error("Unreachable: handled above")
+                }
+            when {
+                response.isSuccessful ->
+                    finishDebtCreditPush(current, debtCreditDao, outboxDao, dispatchUpdatedAt, response.body()?.id?.ifBlank { null })
+                isPermanentFailureCode(response.code()) -> {
+                    markDebtCreditPermanentFailure(
+                        current,
+                        entity,
+                        debtCreditDao,
+                        outboxDao,
+                        "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                    )
+                    PushResult.PermanentFailure
+                }
+                else -> {
+                    markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
+                    PushResult.TransientFailure
+                }
+            }
+        } catch (e: IOException) {
+            markTransientFailure(current, outboxDao, e.message ?: "network error")
+            PushResult.TransientFailure
+        }
+    }
+
+    private suspend fun finishDebtCreditPush(
+        current: OutboxEntry,
+        debtCreditDao: DebtCreditDao,
+        outboxDao: OutboxDao,
+        dispatchUpdatedAt: Long,
+        responseServerId: String?,
+    ): PushResult {
+        val now = System.currentTimeMillis()
+        val latest = debtCreditDao.getById(current.entityId) ?: return PushResult.Skipped
+        return when (
+            val decision = PushCompletionResolver.resolve(current.operation, dispatchUpdatedAt, latest.updatedAt, responseServerId)
+        ) {
+            is PushCompletionDecision.ClearAndSync -> {
+                val resolvedServerId = decision.serverId ?: latest.serverId
+                debtCreditDao.update(
+                    latest.copy(serverId = resolvedServerId, dirty = false, syncStatus = SyncStatus.SYNCED, updatedAt = now),
+                )
+                outboxDao.delete(current.id)
+                PushResult.Success(resolvedServerId)
+            }
+            is PushCompletionDecision.RequeueDirty -> {
+                debtCreditDao.update(
+                    latest.copy(serverId = decision.serverId ?: latest.serverId, syncStatus = SyncStatus.PENDING, updatedAt = now),
+                )
+                outboxDao.update(
+                    current.copy(
+                        operation = decision.nextOperation,
+                        status = SyncStatus.PENDING,
+                        attempts = 0,
+                        lastError = null,
+                        updatedAt = now,
+                    ),
+                )
+                PushResult.Skipped
+            }
+        }
+    }
+
+    private suspend fun markDebtCreditPermanentFailure(
+        current: OutboxEntry,
+        entity: DebtCreditEntity,
+        debtCreditDao: DebtCreditDao,
+        outboxDao: OutboxDao,
+        error: String,
+    ) {
+        val now = System.currentTimeMillis()
+        Log.w(TAG, "Debt/credit ${entity.id} push permanently failed: $error")
+        debtCreditDao.update(entity.copy(syncStatus = SyncStatus.FAILED, updatedAt = now))
+        outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
+    }
+
+    // ── Saving Goals ────────────────────────────────────────────────────────────
+
+    /** Mirrors [pushDebtCreditEntry] exactly. */
+    suspend fun pushSavingGoalEntry(entityId: String): PushResult {
+        val outboxDao = database.outboxDao()
+        val savingGoalDao = database.savingGoalDao()
+
+        val current = outboxDao.findFor(OutboxEntityType.SAVING_GOAL, entityId) ?: return PushResult.Skipped
+        if (current.status != SyncStatus.PENDING) return PushResult.Skipped
+
+        val entity = savingGoalDao.getById(entityId)
+        if (entity == null) {
+            outboxDao.delete(current.id)
+            return PushResult.Skipped
+        }
+        if (current.operation != OutboxOperation.CREATE && entity.serverId == null) {
+            markSavingGoalPermanentFailure(
+                current,
+                entity,
+                savingGoalDao,
+                outboxDao,
+                "Invariant violation: ${current.operation} with no serverId",
+            )
+            return PushResult.PermanentFailure
+        }
+
+        val now = System.currentTimeMillis()
+        if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
+        val dispatchUpdatedAt = entity.updatedAt
+
+        return try {
+            if (current.operation == OutboxOperation.DELETE) {
+                val deleteResponse = api.deleteSavingGoal(entity.serverId!!)
+                return when {
+                    deleteResponse.isSuccessful -> {
+                        savingGoalDao.hardDelete(entity.id)
+                        outboxDao.delete(current.id)
+                        PushResult.Success(null)
+                    }
+                    isPermanentFailureCode(deleteResponse.code()) -> {
+                        markSavingGoalPermanentFailure(
+                            current,
+                            entity,
+                            savingGoalDao,
+                            outboxDao,
+                            "HTTP ${deleteResponse.code()}: ${deleteResponse.errorBody()?.string()}",
+                        )
+                        PushResult.PermanentFailure
+                    }
+                    else -> {
+                        markTransientFailure(current, outboxDao, "HTTP ${deleteResponse.code()}")
+                        PushResult.TransientFailure
+                    }
+                }
+            }
+            val response =
+                when (current.operation) {
+                    OutboxOperation.CREATE ->
+                        api.createSavingGoal(
+                            CreateSavingGoalRequest(
+                                id = entity.id,
+                                name = entity.name,
+                                targetAmount = entity.targetAmount,
+                                note = entity.note,
+                                targetDate = entity.targetAt?.let { formatRfc3339(it) },
+                                reminderOffsets = entity.reminderOffsets,
+                            ),
+                        )
+                    OutboxOperation.UPDATE ->
+                        api.updateSavingGoal(
+                            entity.serverId!!,
+                            UpdateSavingGoalRequest(
+                                name = entity.name,
+                                note = entity.note,
+                                targetDate = entity.targetAt?.let { formatRfc3339(it) },
+                                reminderOffsets = entity.reminderOffsets,
+                            ),
+                        )
+                    OutboxOperation.DELETE -> error("Unreachable: handled above")
+                }
+            when {
+                response.isSuccessful ->
+                    finishSavingGoalPush(current, savingGoalDao, outboxDao, dispatchUpdatedAt, response.body()?.id?.ifBlank { null })
+                isPermanentFailureCode(response.code()) -> {
+                    markSavingGoalPermanentFailure(
+                        current,
+                        entity,
+                        savingGoalDao,
+                        outboxDao,
+                        "HTTP ${response.code()}: ${response.errorBody()?.string()}",
+                    )
+                    PushResult.PermanentFailure
+                }
+                else -> {
+                    markTransientFailure(current, outboxDao, "HTTP ${response.code()}")
+                    PushResult.TransientFailure
+                }
+            }
+        } catch (e: IOException) {
+            markTransientFailure(current, outboxDao, e.message ?: "network error")
+            PushResult.TransientFailure
+        }
+    }
+
+    private suspend fun finishSavingGoalPush(
+        current: OutboxEntry,
+        savingGoalDao: SavingGoalDao,
+        outboxDao: OutboxDao,
+        dispatchUpdatedAt: Long,
+        responseServerId: String?,
+    ): PushResult {
+        val now = System.currentTimeMillis()
+        val latest = savingGoalDao.getById(current.entityId) ?: return PushResult.Skipped
+        return when (
+            val decision = PushCompletionResolver.resolve(current.operation, dispatchUpdatedAt, latest.updatedAt, responseServerId)
+        ) {
+            is PushCompletionDecision.ClearAndSync -> {
+                val resolvedServerId = decision.serverId ?: latest.serverId
+                savingGoalDao.update(
+                    latest.copy(serverId = resolvedServerId, dirty = false, syncStatus = SyncStatus.SYNCED, updatedAt = now),
+                )
+                outboxDao.delete(current.id)
+                PushResult.Success(resolvedServerId)
+            }
+            is PushCompletionDecision.RequeueDirty -> {
+                savingGoalDao.update(
+                    latest.copy(serverId = decision.serverId ?: latest.serverId, syncStatus = SyncStatus.PENDING, updatedAt = now),
+                )
+                outboxDao.update(
+                    current.copy(
+                        operation = decision.nextOperation,
+                        status = SyncStatus.PENDING,
+                        attempts = 0,
+                        lastError = null,
+                        updatedAt = now,
+                    ),
+                )
+                PushResult.Skipped
+            }
+        }
+    }
+
+    private suspend fun markSavingGoalPermanentFailure(
+        current: OutboxEntry,
+        entity: SavingGoalEntity,
+        savingGoalDao: SavingGoalDao,
+        outboxDao: OutboxDao,
+        error: String,
+    ) {
+        val now = System.currentTimeMillis()
+        Log.w(TAG, "Saving goal ${entity.id} push permanently failed: $error")
+        savingGoalDao.update(entity.copy(syncStatus = SyncStatus.FAILED, updatedAt = now))
+        outboxDao.update(current.copy(status = SyncStatus.FAILED, lastError = error, updatedAt = now))
+    }
+
     // ── Transactions ────────────────────────────────────────────────────────
 
     suspend fun pushTransactionEntry(entityId: String): PushResult {
@@ -404,6 +728,39 @@ class OutboxPusher(
         }
         val channelServerId = channelEntity?.serverId
 
+        // Same "wait for the parent's own serverId" guard as channelId above — a debt/goal link
+        // set at creation time must resolve to a *server* debt_credit_id/saving_goal_id, which
+        // only exists once that row's own outbox entry has drained. See SyncWorker's push
+        // ordering (debt/credit and saving-goal outboxes drain before transactions).
+        val debtCreditEntity = entity.debtCreditId?.let { database.debtCreditDao().getById(it) }
+        if (entity.debtCreditId != null && debtCreditEntity?.serverId == null) {
+            if (debtCreditEntity?.syncStatus == SyncStatus.FAILED) {
+                markTransactionPermanentFailure(
+                    current,
+                    entity,
+                    transactionDao,
+                    outboxDao,
+                    "Blocked: debt/credit ${entity.debtCreditId} failed to sync",
+                )
+                return PushResult.PermanentFailure
+            }
+            return PushResult.Skipped
+        }
+        val savingGoalEntity = entity.savingGoalId?.let { database.savingGoalDao().getById(it) }
+        if (entity.savingGoalId != null && savingGoalEntity?.serverId == null) {
+            if (savingGoalEntity?.syncStatus == SyncStatus.FAILED) {
+                markTransactionPermanentFailure(
+                    current,
+                    entity,
+                    transactionDao,
+                    outboxDao,
+                    "Blocked: saving goal ${entity.savingGoalId} failed to sync",
+                )
+                return PushResult.PermanentFailure
+            }
+            return PushResult.Skipped
+        }
+
         val now = System.currentTimeMillis()
         if (outboxDao.claimIfPending(current.id, now) == 0) return PushResult.Skipped
         val dispatchUpdatedAt = entity.updatedAt
@@ -417,6 +774,8 @@ class OutboxPusher(
                         type = entity.type,
                         note = entity.note,
                         channelId = channelServerId.orEmpty(),
+                        debtCreditServerId = debtCreditEntity?.serverId,
+                        savingGoalServerId = savingGoalEntity?.serverId,
                     ),
                 )
             when {
