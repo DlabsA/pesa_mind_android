@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.lentborrowed
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,9 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -97,16 +96,30 @@ fun LentBorrowedListScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            SecondaryTabRow(selectedTabIndex = tabIndex) {
-                Tab(
-                    selected = tabIndex == 0,
+            // ── Debt filter options with counts ──────────────────────────────
+            val lentCount = state.debts.count { it.direction == "lent" }
+            val borrowedCount = state.debts.count { it.direction == "borrowed" }
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                DebtFilterOption(
+                    label = PesaMindStrings.DebtCredit.LENT_LABEL,
+                    count = lentCount,
+                    isSelected = tabIndex == 0,
                     onClick = { tabIndex = 0 },
-                    text = { Text(PesaMindStrings.DebtCredit.OWED_TO_YOU_FILTER) },
+                    modifier = Modifier.weight(1f),
                 )
-                Tab(
-                    selected = tabIndex == 1,
+                DebtFilterOption(
+                    label = PesaMindStrings.DebtCredit.BORROWED_LABEL,
+                    count = borrowedCount,
+                    isSelected = tabIndex == 1,
                     onClick = { tabIndex = 1 },
-                    text = { Text(PesaMindStrings.DebtCredit.YOU_OWE_FILTER) },
+                    modifier = Modifier.weight(1f),
                 )
             }
 
@@ -269,6 +282,62 @@ private fun DebtCreditCard(
                     color = accentColor.copy(alpha = 0.55f),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DebtFilterOption(
+    label: String,
+    count: Int,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .height(80.dp)
+                .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color =
+            if (isSelected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            },
+        border =
+            if (isSelected) {
+                androidx.compose.foundation.BorderStroke(
+                    2.dp,
+                    MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                null
+            },
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
         }
     }
 }
