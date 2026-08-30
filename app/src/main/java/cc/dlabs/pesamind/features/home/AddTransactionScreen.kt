@@ -86,6 +86,7 @@ fun AddTransactionScreen(
             },
         )
     }
+    var purposeDropdownExpanded by remember { mutableStateOf(false) }
     var debtCreditId by remember { mutableStateOf(initialDebtCreditId) }
     var savingGoalId by remember { mutableStateOf(initialSavingGoalId) }
     var showDebtPicker by remember { mutableStateOf(false) }
@@ -391,29 +392,65 @@ fun AddTransactionScreen(
                             }
                         }
 
-                        // ── Purpose chip row (Lent & Borrowed / Saving Goals) ────────
+                        // ── Purpose dropdown (Lent & Borrowed / Saving Goals) ────────
                         // Premium-only feature — full hide, not a hint, since a free user has
                         // nothing to link to anyway (mirrors the mobile-money-channel-hiding
                         // precedent above, which uses a hint instead only because Cash/Bank
                         // remain usable for that feature).
                         if (channelState.isPremium) {
                             LabeledField(label = "Purpose") {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                val purposeOptions =
                                     listOf(
-                                        PurposeType.NONE to "None",
+                                        PurposeType.NONE to "Normal",
                                         PurposeType.LENT to PesaMindStrings.DebtCredit.LENT_LABEL,
                                         PurposeType.BORROWED to PesaMindStrings.DebtCredit.BORROWED_LABEL,
                                         PurposeType.SAVING_GOAL to PesaMindStrings.SavingGoal.FEATURE_NAME,
-                                    ).forEach { (value, label) ->
-                                        FilterChip(
-                                            selected = purpose == value,
-                                            onClick = {
-                                                purpose = value
-                                                debtCreditId = null
-                                                savingGoalId = null
-                                            },
-                                            label = { Text(label) },
-                                        )
+                                    )
+                                val selectedLabel = purposeOptions.find { it.first == purpose }?.second ?: "Normal"
+
+                                ExposedDropdownMenuBox(
+                                    expanded = purposeDropdownExpanded,
+                                    onExpandedChange = { purposeDropdownExpanded = !purposeDropdownExpanded },
+                                ) {
+                                    OutlinedTextField(
+                                        value = selectedLabel,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        trailingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowDropDown,
+                                                contentDescription = null,
+                                            )
+                                        },
+                                        modifier =
+                                            Modifier
+                                                .menuAnchor()
+                                                .fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors =
+                                            OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = accentColor,
+                                                cursorColor = accentColor,
+                                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            ),
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = purposeDropdownExpanded,
+                                        onDismissRequest = { purposeDropdownExpanded = false },
+                                    ) {
+                                        purposeOptions.forEach { (value, label) ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                onClick = {
+                                                    purpose = value
+                                                    debtCreditId = null
+                                                    savingGoalId = null
+                                                    purposeDropdownExpanded = false
+                                                },
+                                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                                            )
+                                        }
                                     }
                                 }
                             }
