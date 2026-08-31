@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Search
@@ -37,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.ShimmerBox
@@ -182,29 +182,13 @@ fun TransactionListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Transactions",
-                        style =
-                            MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.3).sp,
-                            ),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                        )
-                    }
-                },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                    ),
+            BackStyleHeader(
+                title = "Transactions",
+                onBack = { navController.popBackStack() },
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
         containerColor = MaterialTheme.colorScheme.background,

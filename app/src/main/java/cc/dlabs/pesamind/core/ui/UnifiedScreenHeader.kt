@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,14 +35,29 @@ fun UnifiedScreenHeader(
     isOffline: Boolean,
     streakDrawable: Int?,
     streakLabel: String,
+    // When set, a back arrow renders in place of [topLabel]/greeting-style top text — the
+    // sub-screen-with-back-button variant (BackStyleHeader) vs. the bottom-nav-tab-with-greeting
+    // variant (DashboardStyleHeader) used by Dashboard/Budget/Analytics.
+    onBack: (() -> Unit)? = null,
+    // Extra trailing content (e.g. a delete/refresh IconButton, a tier-badge pill) rendered
+    // after the refresh-spinner/offline-icon/streak slot above — same role as
+    // DetailScreenTopBar's own trailingContent param, for screens migrating off that component.
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = topLabel,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-            )
+            if (onBack == null && topLabel.isNotBlank()) {
+                Text(
+                    text = topLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                )
+            }
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
@@ -99,8 +117,39 @@ fun UnifiedScreenHeader(
                         }
                     }
             }
+            trailingContent?.invoke()
         }
     }
+}
+
+/** Same visual shape as [DashboardStyleHeader] (used by Dashboard/Budget/Analytics) but for a
+ * sub-screen reached via back-stack navigation: a back arrow instead of a greeting/top label.
+ * Unlike Dashboard/Budget/Analytics — which render inside `MainScreen`'s content area, itself
+ * already `.statusBarsPadding()`-wrapped once for every bottom-nav tab — a screen using this
+ * header is pushed as its own full-screen destination outside that host, so it applies the inset
+ * itself here rather than relying on a caller to remember to. */
+@Composable
+fun BackStyleHeader(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    bottomLabel: String? = null,
+    isRefreshing: Boolean = false,
+    isOffline: Boolean = false,
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
+    UnifiedScreenHeader(
+        title = title,
+        topLabel = "",
+        bottomLabel = bottomLabel,
+        onBack = onBack,
+        isRefreshing = isRefreshing,
+        isOffline = isOffline,
+        streakDrawable = null,
+        streakLabel = "",
+        trailingContent = trailingContent,
+        modifier = modifier.statusBarsPadding(),
+    )
 }
 
 @Composable

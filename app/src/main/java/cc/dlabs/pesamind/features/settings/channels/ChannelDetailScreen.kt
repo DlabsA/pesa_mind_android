@@ -58,8 +58,8 @@ import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.ConfirmDialog
-import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ShimmerBox
 import cc.dlabs.pesamind.core.ui.SkeletonCard
@@ -102,11 +102,11 @@ fun ChannelDetailScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             val channel = state.channel
-            DetailScreenTopBar(
+            BackStyleHeader(
                 title = channel?.name ?: "Account",
-                subtitle = channel?.let { displayChannelType(it.channelType) } ?: "",
-                badge = "",
+                bottomLabel = channel?.let { displayChannelType(it.channelType) },
                 onBack = { navController.popBackStack() },
+                isRefreshing = state.isLoading,
                 trailingContent = {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -121,6 +121,10 @@ fun ChannelDetailScreen(
                         }
                     }
                 },
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
     ) { padding ->

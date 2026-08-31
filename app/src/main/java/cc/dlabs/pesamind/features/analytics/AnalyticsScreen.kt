@@ -59,7 +59,6 @@ import cc.dlabs.pesamind.core.network.models.SummarySection
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.ui.AppCard
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
-import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.FinancialHealthCard
 import cc.dlabs.pesamind.core.ui.OfflineBanner
@@ -149,14 +148,6 @@ fun AnalyticsScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-
-                phase is AnalyticsPhase.Empty ->
-                    EmptyState(
-                        icon = Icons.Default.QueryStats,
-                        title = "No analytics yet",
-                        subtitle = "Add a transaction and your spending insights will show up here.",
-                        modifier = Modifier.fillMaxSize().padding(Spacing.Space6.dp),
-                    )
 
                 else ->
                     AnalyticsScrollBody(

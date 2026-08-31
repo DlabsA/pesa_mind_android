@@ -234,7 +234,16 @@ object DebtCreditRepository {
         if (debtServerId != null && txServerId != null && networkMonitor?.isConnectedNow == true) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ApiClient.api.linkDebtCreditTransaction(debtServerId, LinkTransactionRequest(txServerId))
+                    val response = ApiClient.api.linkDebtCreditTransaction(debtServerId, LinkTransactionRequest(txServerId))
+                    // The link endpoint returns the debt with outstanding/settledAt already
+                    // recomputed server-side — reconcile it immediately rather than leaving the
+                    // local cache stale until the next periodic sync pull picks it up.
+                    val details = response.body()
+                    if (response.isSuccessful && details != null) {
+                        reconcileFromServer(details)
+                    } else {
+                        Log.w(TAG, "Eager link-transaction call failed for debt $debtCreditId / tx $transactionId: HTTP ${response.code()}")
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Eager link-transaction call failed for debt $debtCreditId / tx $transactionId", e)
                 }
@@ -260,7 +269,18 @@ object DebtCreditRepository {
                     // transactionId here is the local id; the unlink endpoint only needs to know
                     // which server transaction to detach, so resolve its serverId fresh.
                     val txServerId = transactionDao.getById(transactionId)?.serverId ?: return@launch
-                    ApiClient.api.unlinkDebtCreditTransaction(debtServerId, LinkTransactionRequest(txServerId))
+                    val response = ApiClient.api.unlinkDebtCreditTransaction(debtServerId, LinkTransactionRequest(txServerId))
+                    // Same as linkTransaction above: reconcile the server-recomputed
+                    // outstanding/settledAt immediately instead of waiting on the next sync pull.
+                    val details = response.body()
+                    if (response.isSuccessful && details != null) {
+                        reconcileFromServer(details)
+                    } else {
+                        Log.w(
+                            TAG,
+                            "Eager unlink-transaction call failed for debt $debtCreditId / tx $transactionId: HTTP ${response.code()}",
+                        )
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Eager unlink-transaction call failed for debt $debtCreditId / tx $transactionId", e)
                 }

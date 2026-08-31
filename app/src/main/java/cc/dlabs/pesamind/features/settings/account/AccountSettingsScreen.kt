@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.ShimmerBox
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,13 +53,14 @@ fun AccountSettingsScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Account") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            BackStyleHeader(
+                title = "Account",
+                onBack = { navController.popBackStack() },
+                isRefreshing = state.isLoading,
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
     ) { padding ->

@@ -199,7 +199,15 @@ object SavingGoalRepository {
         if (goalServerId != null && txServerId != null && networkMonitor?.isConnectedNow == true) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ApiClient.api.linkSavingGoalTransaction(goalServerId, LinkTransactionRequest(txServerId))
+                    val response = ApiClient.api.linkSavingGoalTransaction(goalServerId, LinkTransactionRequest(txServerId))
+                    // See DebtCreditRepository.linkTransaction's identical comment — reconcile
+                    // the server-recomputed progress/achievedAt immediately.
+                    val details = response.body()
+                    if (response.isSuccessful && details != null) {
+                        reconcileFromServer(details)
+                    } else {
+                        Log.w(TAG, "Eager link-transaction call failed for goal $savingGoalId / tx $transactionId: HTTP ${response.code()}")
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Eager link-transaction call failed for goal $savingGoalId / tx $transactionId", e)
                 }
@@ -223,7 +231,18 @@ object SavingGoalRepository {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val txServerId = transactionDao.getById(transactionId)?.serverId ?: return@launch
-                    ApiClient.api.unlinkSavingGoalTransaction(goalServerId, LinkTransactionRequest(txServerId))
+                    val response = ApiClient.api.unlinkSavingGoalTransaction(goalServerId, LinkTransactionRequest(txServerId))
+                    // See DebtCreditRepository.unlinkTransaction's identical comment — reconcile
+                    // the server-recomputed progress/achievedAt immediately.
+                    val details = response.body()
+                    if (response.isSuccessful && details != null) {
+                        reconcileFromServer(details)
+                    } else {
+                        Log.w(
+                            TAG,
+                            "Eager unlink-transaction call failed for goal $savingGoalId / tx $transactionId: HTTP ${response.code()}",
+                        )
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Eager unlink-transaction call failed for goal $savingGoalId / tx $transactionId", e)
                 }

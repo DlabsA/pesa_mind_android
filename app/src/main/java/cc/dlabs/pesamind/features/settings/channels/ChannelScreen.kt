@@ -35,7 +35,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
@@ -76,8 +75,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -112,6 +109,7 @@ import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.ChoiceChipGroup
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ProviderDropdown
@@ -168,43 +166,25 @@ fun ChannelScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(
-                            text = "Accounts",
-                            style =
-                                MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.5).sp,
-                                ),
-                        )
-                        if (state.channels.isNotEmpty()) {
-                            Text(
-                                text = "${state.channels.size} account${if (state.channels.size != 1) "s" else ""}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                        )
-                    }
-                },
-                actions = {
+            BackStyleHeader(
+                title = "Accounts",
+                bottomLabel =
+                    if (state.channels.isNotEmpty()) {
+                        "${state.channels.size} account${if (state.channels.size != 1) "s" else ""}"
+                    } else {
+                        null
+                    },
+                onBack = { navController.popBackStack() },
+                isRefreshing = state.isLoading,
+                trailingContent = {
                     IconButton(onClick = { vm.loadChannels() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                     }
                 },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
         floatingActionButton = {

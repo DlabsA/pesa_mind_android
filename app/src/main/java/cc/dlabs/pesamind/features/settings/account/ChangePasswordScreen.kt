@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,13 +42,14 @@ fun ChangePasswordScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Change Password") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            BackStyleHeader(
+                title = "Change Password",
+                onBack = { navController.popBackStack() },
+                isRefreshing = state.isLoading,
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
     ) { padding ->

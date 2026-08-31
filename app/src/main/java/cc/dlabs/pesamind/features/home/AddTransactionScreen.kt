@@ -60,6 +60,7 @@ fun AddTransactionScreen(
     initialChannelId: String? = null,
     initialDebtCreditId: String? = null,
     initialSavingGoalId: String? = null,
+    initialTransactionType: String? = null,
     viewModel: TransactionViewModel = viewModel(),
     channelViewModel: ChannelViewModel = viewModel(),
     debtCreditViewModel: DebtCreditViewModel = viewModel(),
@@ -74,7 +75,7 @@ fun AddTransactionScreen(
     var channelDropdownExpanded by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var txType by remember { mutableStateOf(TYPE_EXPENSE) }
+    var txType by remember { mutableStateOf(initialTransactionType ?: TYPE_EXPENSE) }
 
     // ── "Choose a purpose" state — Lent & Borrowed / Saving Goals (Premium only) ─────
     var purpose by remember {

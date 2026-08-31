@@ -52,7 +52,7 @@ import cc.dlabs.pesamind.core.network.models.PlanResponse
 import cc.dlabs.pesamind.core.theme.Radius
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
-import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
 import cc.dlabs.pesamind.core.ui.asUgx
@@ -121,11 +121,28 @@ fun SubscriptionScreen(
 
     Scaffold(
         topBar = {
-            DetailScreenTopBar(
+            BackStyleHeader(
                 title = "Premium",
-                subtitle = headerSubtitle(state),
-                badge = tierBadge(state),
+                bottomLabel = headerSubtitle(state),
                 onBack = { navController.popBackStack() },
+                isRefreshing = state.isLoadingPlans,
+                trailingContent = {
+                    Surface(
+                        shape = RoundedCornerShape(70),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        Text(
+                            text = tierBadge(state),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    }
+                },
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
     ) { padding ->

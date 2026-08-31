@@ -252,6 +252,13 @@ data class TransactionDetails(
     val debtCreditServerId: String? = null,
     @SerializedName("saving_goal_id")
     val savingGoalServerId: String? = null,
+    // Local ids (not server ids) of the currently-linked debt/goal, if any — same @Transient
+    // pattern as [syncStatus]/[createdAt] above. Populated from TransactionEntity so the UI
+    // (TransactionDetailSheet's Purpose editor) can show/change the current link.
+    @Transient
+    val debtCreditId: String? = null,
+    @Transient
+    val savingGoalId: String? = null,
 )
 
 data class ProcessedMessageRequest(

@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Receipt
@@ -27,13 +26,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,14 +50,18 @@ import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.theme.Radius
+import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
+import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.PesaMindStrings
 import cc.dlabs.pesamind.core.ui.TransactionCard
 import cc.dlabs.pesamind.core.ui.TransactionDetailSheet
 import cc.dlabs.pesamind.core.ui.asUgxAmount
+import cc.dlabs.pesamind.features.home.TYPE_EXPENSE
+import cc.dlabs.pesamind.features.home.TYPE_INCOME
 import java.text.SimpleDateFormat
 import java.util.Locale as JavaLocale
 
@@ -83,13 +84,14 @@ fun LentBorrowedDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(debt?.counterpartyName ?: "") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            BackStyleHeader(
+                title = debt?.counterpartyName ?: "",
+                onBack = { navController.popBackStack() },
+                isRefreshing = state.isLoading,
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.Space4.dp)
+                        .padding(top = 8.dp),
             )
         },
     ) { padding ->
@@ -108,7 +110,13 @@ fun LentBorrowedDetailScreen(
         ) {
             item(key = "summary") {
                 DebtCreditSummaryCard(debt = debt) {
-                    navController.navigate(Routes.AddTransaction.createRoute(debtCreditId = debtCreditId))
+                    val transactionType = if (debt.direction == "lent") TYPE_INCOME else TYPE_EXPENSE
+                    navController.navigate(
+                        Routes.AddTransaction.createRoute(
+                            debtCreditId = debtCreditId,
+                            transactionType = transactionType,
+                        ),
+                    )
                 }
             }
 

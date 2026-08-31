@@ -526,6 +526,8 @@ internal fun TransactionEntity.toDetails() =
         username = username,
         syncStatus = syncStatus,
         createdAt = createdAt,
+        debtCreditId = debtCreditId,
+        savingGoalId = savingGoalId,
     )
 
 /** Go's `time.Time.String()` default format (e.g. "2026-07-12 19:51:33.525482 +0000 UTC") —
