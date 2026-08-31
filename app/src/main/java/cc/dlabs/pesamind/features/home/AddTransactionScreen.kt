@@ -79,13 +79,7 @@ fun AddTransactionScreen(
 
     // ── "Choose a purpose" state — Lent & Borrowed / Saving Goals (Premium only) ─────
     var purpose by remember {
-        mutableStateOf(
-            when {
-                initialDebtCreditId != null -> PurposeType.LENT // direction refined once the debt loads, see below
-                initialSavingGoalId != null -> PurposeType.SAVING_GOAL
-                else -> PurposeType.NONE
-            },
-        )
+        mutableStateOf(PurposeType.NONE)
     }
     var purposeDropdownExpanded by remember { mutableStateOf(false) }
     var debtCreditId by remember { mutableStateOf(initialDebtCreditId) }

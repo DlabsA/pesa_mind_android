@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.features.settings
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.navigation.Routes
@@ -260,6 +262,9 @@ fun SettingsScreen(rootNav: NavHostController) {
 
         SettingsDivider()
 
+        // ── Section: About ───────────────────────────────────
+        SettingsSectionHeader(title = "Financial Features")
+
         SettingsRow(
             icon = Icons.Filled.Money,
             iconTint = teal,
@@ -354,7 +359,23 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = Color.Gray,
             title = "Privacy Policy",
             subtitle = null,
-            onClick = { /* TODO */ },
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, "https://pesamind.dlabs.cc/privacy/".toUri())
+                context.startActivity(intent)
+            },
+        )
+
+        SettingsDivider()
+
+        SettingsRow(
+            icon = Icons.Filled.Policy,
+            iconTint = Color.Gray,
+            title = "Terms of Service",
+            subtitle = null,
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, "https://pesamind.dlabs.cc/terms/".toUri())
+                context.startActivity(intent)
+            },
         )
 
         SettingsDivider()
@@ -364,7 +385,16 @@ fun SettingsScreen(rootNav: NavHostController) {
             iconTint = Color.Gray,
             title = "Help & Support",
             subtitle = null,
-            onClick = { /* TODO */ },
+            onClick = {
+                val intent =
+                    Intent(Intent.ACTION_SENDTO).apply {
+                        data = "mailto:kakurucon1234@gmail.com".toUri()
+                        putExtra(Intent.EXTRA_SUBJECT, "PesaMind Support Request")
+                    }
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                }
+            },
         )
 
         Spacer(Modifier.height(16.dp))
