@@ -16,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cc.dlabs.pesamind.R
@@ -41,6 +42,8 @@ object SimSlotManager {
     private fun numberKey(slotIndex: Int) = stringPreferencesKey("slot_${slotIndex}_number")
 
     private fun carrierKey(slotIndex: Int) = stringPreferencesKey("slot_${slotIndex}_carrier")
+
+    private fun subscriptionIdKey(slotIndex: Int) = intPreferencesKey("slot_${slotIndex}_subscription_id")
 
     private val DriftDetected = booleanPreferencesKey("drift_detected")
 
@@ -77,7 +80,32 @@ object SimSlotManager {
         _driftBlocking.value = isDriftDetected()
     }
 
-    data class SimSlot(val slotIndex: Int, val carrierName: String)
+    /**
+     * @param subscriptionId The platform's per-SIM subscription ID, or `null` when the OS reports
+     *   no valid one. This — not [carrierName] — is what makes a SIM *identifiable*: the platform
+     *   keys it off the SIM's ICCID and re-issues the same value for the same physical SIM across
+     *   reboots and re-insertions, so it changes exactly when the SIM in a tray is a different
+     *   card. ICCID itself is unavailable here: `SubscriptionInfo.getIccId()` returns an empty
+     *   string on API 30+ without carrier privileges or `READ_PRIVILEGED_PHONE_STATE`, neither of
+     *   which a normal app can hold.
+     */
+    data class SimSlot(
+        val slotIndex: Int,
+        val carrierName: String,
+        val subscriptionId: Int? = null,
+    )
+
+    /**
+     * The persisted "this is the SIM that was in this tray when the user confirmed the mapping"
+     * snapshot, compared against the live slots by [detectDrift].
+     *
+     * [subscriptionId] is nullable because installs predating identity-based drift detection only
+     * stored a carrier name — see [detectDrift] for how that legacy state is handled.
+     */
+    internal data class SlotBaseline(
+        val carrierName: String,
+        val subscriptionId: Int?,
+    )
 
     /**
      * Live read of the device's currently active SIM slots. Empty on a single-SIM device with
@@ -97,7 +125,16 @@ object SimSlotManager {
                     info.carrierName?.toString()?.ifBlank { null }
                         ?: info.displayName?.toString()?.ifBlank { null }
                         ?: "SIM ${info.simSlotIndex + 1}"
-                SimSlot(slotIndex = info.simSlotIndex, carrierName = carrierName)
+                SimSlot(
+                    slotIndex = info.simSlotIndex,
+                    carrierName = carrierName,
+                    // Normalised to null here so nothing downstream has to know the platform's
+                    // sentinel — an unusable ID and an absent one are the same thing to the
+                    // drift comparison.
+                    subscriptionId =
+                        info.subscriptionId
+                            .takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID },
+                )
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "Missing permission to read active SIM slots: ${e.message}")
@@ -127,8 +164,9 @@ object SimSlotManager {
 
     /**
      * Persists the user-entered number for each active slot and (re)captures that slot's
-     * current carrier name as the drift-detection baseline. Only writes entries present in
-     * [numbersBySlot] — a slot the device doesn't currently have is never written.
+     * current carrier name *and* subscription ID as the drift-detection baseline. Only writes
+     * entries present in [numbersBySlot] — a slot the device doesn't currently have is never
+     * written.
      */
     suspend fun saveSlotNumbers(
         context: Context,
@@ -139,7 +177,18 @@ object SimSlotManager {
         appContext.simSlotDataStore.edit { prefs ->
             numbersBySlot.forEach { (slotIndex, number) ->
                 prefs[numberKey(slotIndex)] = number
-                activeSlots[slotIndex]?.let { prefs[carrierKey(slotIndex)] = it.carrierName }
+                activeSlots[slotIndex]?.let { slot ->
+                    prefs[carrierKey(slotIndex)] = slot.carrierName
+                    // A slot whose subscription ID the OS won't report keeps no stale ID from a
+                    // previous save — that would compare a fresh carrier snapshot against an old
+                    // identity and flag drift that didn't happen.
+                    val subscriptionId = slot.subscriptionId
+                    if (subscriptionId != null) {
+                        prefs[subscriptionIdKey(slotIndex)] = subscriptionId
+                    } else {
+                        prefs.remove(subscriptionIdKey(slotIndex))
+                    }
+                }
             }
             prefs[DriftDetected] = false
         }
@@ -147,11 +196,11 @@ object SimSlotManager {
     }
 
     /**
-     * Compares each stored slot's carrier snapshot against the live carrier reported for that
-     * slot right now. Any mismatch means the physical SIM in that tray changed since the mapping
-     * was last saved. Sets (and leaves set) [DriftDetected] until the user re-saves via
-     * [saveSlotNumbers] — this is also the flag `SmsReceiver` checks before trusting the mapping,
-     * so a detected drift immediately stops the fallback from being used.
+     * Compares each stored slot's baseline against the SIM sitting in that tray right now. Any
+     * mismatch means the physical SIM changed since the mapping was last saved. Sets (and leaves
+     * set) [DriftDetected] until the user re-saves via [saveSlotNumbers] — this is also the flag
+     * `SmsReceiver` checks before trusting the mapping, so a detected drift immediately stops the
+     * fallback from being used.
      *
      * Returns whether drift was newly found this call, so the caller (an app-startup check) knows
      * whether to fire a fresh alert rather than re-notifying every launch.
@@ -164,27 +213,91 @@ object SimSlotManager {
         val alreadyFlagged = data[DriftDetected] ?: false
         if (alreadyFlagged) return false
 
-        val driftFound =
+        val baselines =
             data.asMap().keys
                 .mapNotNull { key ->
                     val name = key.name
                     if (!name.startsWith("slot_") || !name.endsWith("_carrier")) return@mapNotNull null
                     name.removePrefix("slot_").removeSuffix("_carrier").toIntOrNull()
                 }
-                .any { slotIndex ->
-                    // liveCarrier == null covers the SIM having been removed entirely from
-                    // that slot, not just swapped for a different carrier — either way the
-                    // stored number is no longer trustworthy.
-                    val storedCarrier = data[carrierKey(slotIndex)] ?: return@any false
-                    val liveCarrier = liveSlots[slotIndex]?.carrierName
-                    storedCarrier != liveCarrier
+                .mapNotNull { slotIndex ->
+                    val carrierName = data[carrierKey(slotIndex)] ?: return@mapNotNull null
+                    slotIndex to
+                        SlotBaseline(
+                            carrierName = carrierName,
+                            subscriptionId = data[subscriptionIdKey(slotIndex)],
+                        )
                 }
+                .toMap()
+
+        val driftFound = detectDrift(baselines, liveSlots)
 
         if (driftFound) {
             appContext.simSlotDataStore.edit { it[DriftDetected] = true }
+            return true
         }
-        return driftFound
+
+        // Backfill the identity baseline for installs that saved their mapping before this check
+        // existed (carrier name only). Safe precisely because drift was not found: the carrier
+        // still matches, so this captures the SIM the user already confirmed rather than silently
+        // blessing a swapped one. Without it those installs would stay identity-blind until the
+        // user happened to re-save.
+        //
+        // Computed before opening `edit` so the common case — every baseline already carries an
+        // ID — skips the write entirely: this runs on every launch *and* resume, and DataStore
+        // rewrites the file even for an edit block that changes nothing.
+        val backfill =
+            baselines
+                .filterValues { it.subscriptionId == null }
+                .mapNotNull { (slotIndex, _) ->
+                    liveSlots[slotIndex]?.subscriptionId?.let { slotIndex to it }
+                }
+        if (backfill.isNotEmpty()) {
+            appContext.simSlotDataStore.edit { prefs ->
+                backfill.forEach { (slotIndex, subscriptionId) ->
+                    prefs[subscriptionIdKey(slotIndex)] = subscriptionId
+                }
+            }
+        }
+        return false
     }
+
+    /**
+     * The pure comparison behind [checkForDrift], split out so the swap cases can be tested
+     * without standing up a live `SubscriptionManager`.
+     *
+     * A slot drifts when *either* signal changes:
+     * - **Subscription ID** — the real identity check. Catches a same-carrier swap (two Safaricom
+     *   lines trading trays), which a carrier-name comparison alone cannot see: both slots still
+     *   report "Safaricom" while their numbers have silently traded places. That case matters most
+     *   here, because the mapping this guards is only ever *used* when the carrier didn't
+     *   provision an MSISDN — and a carrier that doesn't provision one for the first SIM won't for
+     *   the second either.
+     * - **Carrier name** — the fallback for the legacy/unavailable-ID cases below, and a
+     *   belt-and-braces check if the platform ever reissues an ID across different SIMs.
+     *
+     * A missing ID on *either* side degrades to carrier-only comparison rather than counting as a
+     * mismatch: a `null` baseline ID means an install that predates this check, and a `null` live
+     * ID means the OS won't tell us. Treating either as drift would block every upgrading user on
+     * first launch. That leaves one uncovered window — a same-carrier swap performed *before*
+     * upgrading, whose baseline is backfilled as though nothing moved — which is the pre-existing
+     * behaviour, not a regression, and closes as soon as [checkForDrift] backfills the ID.
+     */
+    internal fun detectDrift(
+        baselines: Map<Int, SlotBaseline>,
+        liveSlots: Map<Int, SimSlot>,
+    ): Boolean =
+        baselines.any { (slotIndex, baseline) ->
+            // A slot that's gone entirely (SIM removed, not swapped) is drift too — the stored
+            // number is no longer backed by anything in that tray.
+            val live = liveSlots[slotIndex] ?: return@any true
+
+            val baselineId = baseline.subscriptionId
+            val liveId = live.subscriptionId
+            if (baselineId != null && liveId != null && baselineId != liveId) return@any true
+
+            baseline.carrierName != live.carrierName
+        }
 
     /**
      * Local "your SIM cards may have changed" alert, fired once per newly-detected drift.

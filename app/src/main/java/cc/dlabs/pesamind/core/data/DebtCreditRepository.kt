@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 /**
@@ -442,9 +443,18 @@ internal fun parseRfc3339Millis(raw: String?): Long? {
     }
 }
 
-/** Formats epoch millis as RFC3339, for request bodies. */
-internal fun formatRfc3339(millis: Long): String =
-    OffsetDateTime.ofInstant(Instant.ofEpochMilli(millis), java.time.ZoneOffset.UTC).toString()
+/**
+ * Formats epoch millis as RFC3339, for request bodies.
+ *
+ * `ISO_INSTANT`, not `OffsetDateTime.toString()`: the latter emits the *shortest* valid ISO-8601
+ * form, dropping the seconds field entirely when it is zero (`2026-09-30T00:00Z`). RFC3339 makes
+ * seconds mandatory, so the backend's `time.Parse(time.RFC3339, ...)` rejects that with
+ * `"<field> must be RFC3339"`. It only ever bit the date-picker fields — `due_date`/`target_date`
+ * land on exact midnight, so their seconds are always zero, while `occurred_at`/`created_at` come
+ * from `System.currentTimeMillis()` and essentially never do. `ISO_INSTANT` always writes the
+ * seconds field and still preserves sub-second precision where it exists.
+ */
+internal fun formatRfc3339(millis: Long): String = DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(millis))
 
 internal fun DebtCreditEntity.toDetails() =
     DebtCreditResponse(

@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
@@ -36,13 +35,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -54,7 +50,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,7 +62,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -73,12 +70,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.network.models.BudgetTransactionResponse
 import cc.dlabs.pesamind.core.theme.Spacing
+import cc.dlabs.pesamind.core.ui.AddTransactionSheet
 import cc.dlabs.pesamind.core.ui.DetailScreenTopBar
 import cc.dlabs.pesamind.core.ui.EmptyState
 import cc.dlabs.pesamind.core.ui.ShimmerBox
 import cc.dlabs.pesamind.core.ui.SkeletonCard
 import cc.dlabs.pesamind.core.ui.StatsRowsSkeleton
 import cc.dlabs.pesamind.core.ui.rememberShimmerAlpha
+import cc.dlabs.pesamind.core.ui.typeColor
+import cc.dlabs.pesamind.core.ui.typeIcon
 import cc.dlabs.pesamind.core.utils.TransactionTypes
 import java.text.NumberFormat
 import java.util.Locale
@@ -91,23 +91,6 @@ private fun Long.toUgx() = ugxFmt.format(this)
 
 private fun Double.toUgx() = ugxFmt.format(this.toLong())
 
-@Composable
-private fun typeColor(type: String): Color =
-    when (type) {
-        TransactionTypes.INCOME -> MaterialTheme.colorScheme.tertiary
-        TransactionTypes.EXPENSE -> MaterialTheme.colorScheme.error
-        TransactionTypes.SAVINGS -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-private fun typeIcon(type: String): ImageVector =
-    when (type) {
-        TransactionTypes.INCOME -> Icons.AutoMirrored.Outlined.TrendingUp
-        TransactionTypes.EXPENSE -> Icons.AutoMirrored.Outlined.TrendingDown
-        TransactionTypes.SAVINGS -> Icons.Outlined.Savings
-        else -> Icons.Outlined.Payments
-    }
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,6 +102,7 @@ fun YearlyBudgetDetailScreen(
 ) {
     val state by vm.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showAddSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(year) { vm.init(year) }
 
@@ -145,6 +129,11 @@ fun YearlyBudgetDetailScreen(
                 badge = year.toString(),
                 onBack = { navController.popBackStack() },
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddSheet = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "Add transaction")
+            }
         },
     ) { padding ->
         PullToRefreshBox(
@@ -177,22 +166,6 @@ fun YearlyBudgetDetailScreen(
                         balance = state.balance,
                         isDeficit = state.isDeficit,
                         isLoading = state.isLoading,
-                    )
-                }
-
-                // ── Add transaction form
-                item {
-                    AddTransactionCard(
-                        name = state.formName,
-                        amount = state.formAmount,
-                        type = state.formType,
-                        nameError = state.formNameError,
-                        amountError = state.formAmountError,
-                        isSaving = state.isAddingTransaction,
-                        onNameChange = vm::onNameChange,
-                        onAmountChange = vm::onAmountChange,
-                        onTypeChange = vm::onTypeChange,
-                        onAdd = vm::addTransaction,
                     )
                 }
 
@@ -292,6 +265,23 @@ fun YearlyBudgetDetailScreen(
             dismissButton = {
                 TextButton(onClick = { vm.cancelDeleteTransaction() }) { Text("Cancel") }
             },
+        )
+    }
+
+    // ── Add transaction sheet
+    if (showAddSheet) {
+        AddTransactionSheet(
+            name = state.formName,
+            amount = state.formAmount,
+            type = state.formType,
+            nameError = state.formNameError,
+            amountError = state.formAmountError,
+            isSaving = state.isAddingTransaction,
+            onNameChange = vm::onNameChange,
+            onAmountChange = vm::onAmountChange,
+            onTypeChange = vm::onTypeChange,
+            onAdd = vm::addTransaction,
+            onDismiss = { showAddSheet = false },
         )
     }
 }
@@ -485,171 +475,6 @@ private fun SummaryDivider() {
                 .height(1.dp)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
     )
-}
-
-// ─── Add Transaction Card ─────────────────────────────────────────────────────
-
-@Composable
-private fun AddTransactionCard(
-    name: String,
-    amount: String,
-    type: String,
-    nameError: String?,
-    amountError: String?,
-    isSaving: Boolean,
-    onNameChange: (String) -> Unit,
-    onAmountChange: (String) -> Unit,
-    onTypeChange: (String) -> Unit,
-    onAdd: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = "Add a Transaction",
-                style =
-                    MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.2).sp,
-                    ),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            // Name field
-            OutlinedTextField(
-                value = name,
-                onValueChange = onNameChange,
-                label = { Text("Name") },
-                placeholder = { Text("e.g. Monthly Salary", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                singleLine = true,
-                isError = nameError != null,
-                supportingText = nameError?.let { { Text(it) } },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors =
-                    OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        cursorColor = MaterialTheme.colorScheme.primary,
-                    ),
-            )
-
-            // Amount field
-            OutlinedTextField(
-                value = amount,
-                onValueChange = onAmountChange,
-                label = { Text("Amount (UGX)") },
-                placeholder = { Text("0", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                singleLine = true,
-                isError = amountError != null,
-                supportingText = amountError?.let { { Text(it) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                prefix = {
-                    Text(
-                        "UGX  ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                colors =
-                    OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        cursorColor = MaterialTheme.colorScheme.primary,
-                    ),
-            )
-
-            // Type chips
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Type",
-                    style =
-                        MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TransactionTypes.valid.forEach { t ->
-                        val selected = type == t
-                        val color = typeColor(t)
-                        FilterChip(
-                            selected = selected,
-                            onClick = { onTypeChange(t) },
-                            label = {
-                                Text(
-                                    TransactionTypes.displayName(t),
-                                    style =
-                                        MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                        ),
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    typeIcon(t),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            },
-                            colors =
-                                FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = color,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                ),
-                        )
-                    }
-                }
-            }
-
-            // Add button
-            Button(
-                onClick = onAdd,
-                enabled = !isSaving,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                contentPadding = PaddingValues(vertical = 13.dp),
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Adding…",
-                        style =
-                            MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                    )
-                } else {
-                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Add Transaction",
-                        style =
-                            MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                            ),
-                    )
-                }
-            }
-        }
-    }
 }
 
 // ─── Transaction Row ──────────────────────────────────────────────────────────
