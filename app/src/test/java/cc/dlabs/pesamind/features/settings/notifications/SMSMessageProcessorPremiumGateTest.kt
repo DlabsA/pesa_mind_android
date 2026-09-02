@@ -173,6 +173,12 @@ class SMSMessageProcessorPremiumGateTest {
                     note = any(),
                     smsSourceKey = anyOrNull(),
                     providerTransactionId = anyOrNull(),
+                    // SMS-ingested transactions never carry a purpose link, but every parameter
+                    // still needs a matcher — Mockito counts them positionally and fails the
+                    // whole stubbing with InvalidUseOfMatchersException if any is left to its
+                    // Kotlin default.
+                    debtCreditId = anyOrNull(),
+                    savingGoalId = anyOrNull(),
                 ),
             ).thenReturn(TransactionCreationResult.Failure("stubbed failure — see class doc comment"))
             val processor = SMSMessageProcessor(context, viewModel)
@@ -198,6 +204,11 @@ class SMSMessageProcessorPremiumGateTest {
                 note = eq(content),
                 smsSourceKey = eq(expectedSmsSourceKey),
                 providerTransactionId = isNull(),
+                // Asserted as null, not merely matched: an SMS-ingested transaction must never
+                // arrive pre-linked to a debt or goal — that link is only ever chosen by the
+                // user, in the "choose a purpose" flow.
+                debtCreditId = isNull(),
+                savingGoalId = isNull(),
             )
             Unit
         }

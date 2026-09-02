@@ -1,5 +1,6 @@
 package cc.dlabs.pesamind.core.network
 import android.util.Log
+import cc.dlabs.pesamind.BuildConfig
 import cc.dlabs.pesamind.core.network.ApiClient.BASE_URL
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.storage.AccountManager
@@ -190,11 +191,22 @@ class TokenRefreshInterceptor : Interceptor {
     private fun createRefreshApiService(): ApiService {
         val refreshClient =
             okhttp3.OkHttpClient.Builder()
-                .addInterceptor(
-                    okhttp3.logging.HttpLoggingInterceptor().apply {
-                        level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
-                    },
-                )
+                .apply {
+                    // Debug-gated and routed through RedactingLogger, matching ApiClient. This
+                    // client is built by hand rather than reusing ApiClient's (it must not carry
+                    // the auth interceptor, or refreshing would recurse), and it previously used
+                    // a bare HttpLoggingInterceptor at Level.BODY with neither guard — so every
+                    // refresh printed the full request and response bodies, which on this exact
+                    // endpoint means the refresh token going out and both fresh tokens coming
+                    // back, in release builds too.
+                    if (BuildConfig.DEBUG) {
+                        addInterceptor(
+                            okhttp3.logging.HttpLoggingInterceptor(RedactingLogger()).apply {
+                                level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
+                            },
+                        )
+                    }
+                }
                 .build()
 
         return retrofit2.Retrofit.Builder()
