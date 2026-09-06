@@ -43,6 +43,7 @@ import cc.dlabs.pesamind.core.network.models.ProcessedMessageResponse
 import cc.dlabs.pesamind.core.network.models.RefreshRequest
 import cc.dlabs.pesamind.core.network.models.RegisterRequest
 import cc.dlabs.pesamind.core.network.models.SavingGoalResponse
+import cc.dlabs.pesamind.core.network.models.StatementImportSummary
 import cc.dlabs.pesamind.core.network.models.SubscriptionResponse
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.network.models.TransactionRequest
@@ -55,12 +56,15 @@ import cc.dlabs.pesamind.core.network.models.UpdateYearlyBudgetRequest
 import cc.dlabs.pesamind.core.network.models.UserResponse
 import cc.dlabs.pesamind.core.network.models.VerifyPlayPurchaseRequest
 import cc.dlabs.pesamind.core.network.models.YearlyBudgetResponse
+import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -149,6 +153,24 @@ interface ApiService {
     suspend fun deleteChannel(
         @Path("id") id: String,
     ): Response<ApiMessageResponse>
+
+    /**
+     * Upload one PDF/CSV bank or mobile-money statement for a channel; the server parses it and
+     * creates the transactions, returning a summary. [channelId] is the channel's **server** id
+     * (`ChannelEntity.serverId`, not the local Room id) — resolve it via
+     * `ChannelRepository.serverIdFor` before calling.
+     *
+     * [confirmAccountSync] must go on the query string, not in the form: the backend only parses
+     * a `confirm_account_sync` form field reliably when it precedes the file part, so the query
+     * param is the order-independent option. Pass null to omit it entirely.
+     */
+    @Multipart
+    @POST("categories/{channelId}/statements/import")
+    suspend fun importStatement(
+        @Path("channelId") channelId: String,
+        @Part file: MultipartBody.Part,
+        @Query("confirm_account_sync") confirmAccountSync: Boolean? = null,
+    ): Response<StatementImportSummary>
 
     @GET("transactions")
     suspend fun getTransactions(): Response<List<TransactionDetails>>

@@ -145,6 +145,17 @@ object ChannelRepository {
      * `GET /categories/:id` on the backend, so this is Room-only, no network fallback needed. */
     suspend fun getById(id: String): ChannelDetails? = channelDao.getById(id)?.toDetails()
 
+    /**
+     * The server-side id for a local channel row — the value any `categories/{id}` API path
+     * needs. [toDetails] maps the *local* Room UUID onto `ChannelDetails.id` and drops
+     * [ChannelEntity.serverId], and the two only coincide for channels this device created (the
+     * backend honours the client-supplied id on create). A channel pulled from the server gets a
+     * fresh local UUID, so anything addressing the API by id must resolve through here.
+     *
+     * Null means the row's CREATE hasn't synced yet — there is no server-side channel to address.
+     */
+    suspend fun serverIdFor(localId: String): String? = channelDao.getById(localId)?.serverId
+
     suspend fun getByChannelType(channelType: String): List<ChannelDetails> =
         channelDao.getByChannelType(
             currentUserId(),

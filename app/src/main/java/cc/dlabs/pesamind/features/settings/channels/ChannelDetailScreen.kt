@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -143,6 +145,14 @@ fun ChannelDetailScreen(
                         onAddTransaction = {
                             navController.navigate(Routes.AddTransaction.createRoute(channel.id))
                         },
+                        // Premium-only, and only for the providers the backend can actually
+                        // parse — a full hide rather than a disabled button, since there's
+                        // nothing the user could do on this screen to make it work.
+                        canImportStatement =
+                            state.isPremium && StatementImportSupport.isSupported(channel.channelDesc),
+                        onImportStatement = {
+                            navController.navigate(Routes.ImportStatement.createRoute(channel.id))
+                        },
                     )
                 }
             }
@@ -232,6 +242,8 @@ fun ChannelDetailScreen(
 private fun ChannelSummaryCard(
     channel: ChannelDetails,
     onAddTransaction: () -> Unit,
+    canImportStatement: Boolean,
+    onImportStatement: () -> Unit,
 ) {
     val typeColor = channelTypeColor(channel.channelType)
     val statusDotColor = if (channel.status) getTertiaryColor() else getErrorColor()
@@ -348,6 +360,24 @@ private fun ChannelSummaryCard(
                     "Add Transaction",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 )
+            }
+
+            // Secondary weight deliberately — logging one transaction is the everyday action;
+            // importing a statement is the occasional backfill.
+            if (canImportStatement) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onImportStatement,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(Icons.Outlined.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Import statement",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
             }
         }
     }

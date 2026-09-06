@@ -113,6 +113,12 @@ sealed class Routes(val route: String) {
         fun createRoute(channelId: String) = "channel_detail/$channelId"
     }
 
+    /** [channelId] is the local Room id, as everywhere else in navigation — the import screen
+     * resolves the server id itself. */
+    object ImportStatement : Routes("import_statement/{channelId}") {
+        fun createRoute(channelId: String) = "import_statement/$channelId"
+    }
+
     object TransactionList : Routes("transaction_list")
 
     object SetMonthlyBudget : Routes("set_monthly_budget/{month}/{year}") {

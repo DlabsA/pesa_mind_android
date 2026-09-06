@@ -63,6 +63,7 @@ import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
 import cc.dlabs.pesamind.features.settings.account.ChangePasswordScreen
 import cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen
 import cc.dlabs.pesamind.features.settings.channels.ChannelScreen
+import cc.dlabs.pesamind.features.settings.channels.statementimport.ImportStatementScreen
 import cc.dlabs.pesamind.features.settings.notifications.TransactionListScreen
 import cc.dlabs.pesamind.features.settings.security.SecuritySettingsScreen
 import cc.dlabs.pesamind.features.settings.security.SetPatternScreen
@@ -209,6 +210,15 @@ fun PesaMindNavGraph(navController: NavHostController) {
                 val channelId = backStackEntry.arguments?.getString("channelId")
                 if (channelId != null) {
                     ChannelDetailScreen(navController, channelId)
+                }
+            }
+            composable(
+                route = Routes.ImportStatement.route,
+                arguments = listOf(navArgument("channelId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val channelId = backStackEntry.arguments?.getString("channelId")
+                if (channelId != null) {
+                    ImportStatementScreen(navController, channelId)
                 }
             }
 

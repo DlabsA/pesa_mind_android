@@ -1142,3 +1142,38 @@ data class SavingGoalResponse(
 data class LinkTransactionRequest(
     @SerializedName("transaction_id") val transactionId: String,
 )
+
+// ─── Statement import ─────────────────────────────────────────────────────────
+// Response of POST categories/{id}/statements/import. Every field carries a default
+// because the server marks most of them `omitempty` — a summary with nothing to report
+// simply omits the key rather than sending a zero value.
+
+data class StatementImportSummary(
+    @SerializedName("imported_count") val importedCount: Int = 0,
+    @SerializedName("duplicate_count") val duplicateCount: Int = 0,
+    @SerializedName("unresolved_count") val unresolvedCount: Int = 0,
+    @SerializedName("reconciliation_warnings") val reconciliationWarnings: List<ReconciliationWarning> = emptyList(),
+    @SerializedName("category_breakdown") val categoryBreakdown: Map<String, Int> = emptyMap(),
+    // Null means the balance was deliberately left alone — see [balanceUpdateSkipped] for why.
+    @SerializedName("channel_balance_updated_to") val channelBalanceUpdatedTo: Double? = null,
+    @SerializedName("balance_update_skipped") val balanceUpdateSkipped: String? = null,
+    @SerializedName("account_number_synced") val accountNumberSynced: Boolean = false,
+    // True when the statement's account number differs from the channel's and the caller
+    // hasn't confirmed a sync: the transactions still imported, only the balance was held
+    // back. Re-uploading with confirm_account_sync=true finishes the job.
+    @SerializedName("account_sync_required") val accountSyncRequired: Boolean = false,
+    @SerializedName("account_mismatch") val accountMismatch: AccountMismatch? = null,
+)
+
+/** A non-fatal balance-chain discrepancy the parser found while reading the statement. */
+data class ReconciliationWarning(
+    @SerializedName("row_index") val rowIndex: Int = 0,
+    val expected: Double = 0.0,
+    val actual: Double = 0.0,
+    val message: String = "",
+)
+
+data class AccountMismatch(
+    @SerializedName("statement_account") val statementAccount: String = "",
+    @SerializedName("channel_account") val channelAccount: String = "",
+)

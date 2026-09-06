@@ -7,6 +7,7 @@ import cc.dlabs.pesamind.core.data.ChannelRepository
 import cc.dlabs.pesamind.core.data.TransactionRepository
 import cc.dlabs.pesamind.core.network.models.ChannelDetails
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
+import cc.dlabs.pesamind.core.storage.AccountManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +20,10 @@ data class ChannelDetailState(
     val isDeleting: Boolean = false,
     val error: String? = null,
     val channelDeleted: Boolean = false,
+    // Read once at init (same pattern and reasoning as [ChannelState.isPremium]) — gates the
+    // "Import statement" button. Defaults true so the button doesn't flash as absent then appear
+    // once the real value loads.
+    val isPremium: Boolean = true,
 )
 
 /**
@@ -33,6 +38,12 @@ class ChannelDetailViewModel : UnifiedViewModel() {
     val state: StateFlow<ChannelDetailState> = _state.asStateFlow()
 
     private var channelId: String? = null
+
+    init {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isPremium = AccountManager.isPremium())
+        }
+    }
 
     fun load(channelId: String) {
         this.channelId = channelId
