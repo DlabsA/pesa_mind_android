@@ -29,6 +29,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +50,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.data.TransactionRepository
-import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.models.SavingGoalResponse
 import cc.dlabs.pesamind.core.network.models.TransactionDetails
 import cc.dlabs.pesamind.core.theme.Radius
@@ -55,10 +57,18 @@ import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
 import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.EmptyState
+import cc.dlabs.pesamind.core.ui.HIDDEN_MOBILE_MONEY_HINT
+import cc.dlabs.pesamind.core.ui.QuickPaymentDialog
 import cc.dlabs.pesamind.core.ui.SectionHeader
 import cc.dlabs.pesamind.core.ui.TransactionCard
 import cc.dlabs.pesamind.core.ui.TransactionDetailSheet
 import cc.dlabs.pesamind.core.ui.asUgxAmount
+import cc.dlabs.pesamind.core.ui.hasHiddenMobileMoneyChannels
+import cc.dlabs.pesamind.core.ui.typeColor
+import cc.dlabs.pesamind.core.ui.visibleChannels
+import cc.dlabs.pesamind.core.utils.TransactionViewModel
+import cc.dlabs.pesamind.features.home.TYPE_SAVING
+import cc.dlabs.pesamind.features.settings.channels.ChannelViewModel
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,18 +77,35 @@ fun SavingGoalDetailScreen(
     navController: NavHostController,
     savingGoalId: String,
     viewModel: SavingGoalViewModel = viewModel(),
+    transactionViewModel: TransactionViewModel = viewModel(),
+    channelViewModel: ChannelViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val goal = state.goals.find { it.id == savingGoalId }
 
     var transactions by remember { mutableStateOf<List<TransactionDetails>>(emptyList()) }
     var selectedTx by remember { mutableStateOf<TransactionDetails?>(null) }
+    var showContributionDialog by remember { mutableStateOf(false) }
+
+    val txState by transactionViewModel.state.collectAsStateWithLifecycle()
+    val channelState by channelViewModel.state.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(savingGoalId) {
         TransactionRepository.observeBySavingGoal(savingGoalId).collect { transactions = it }
     }
 
+    // Close the dialog only on a real success; a failure keeps it open so the entered amount
+    // isn't lost. Either way the message is cleared so it can't re-fire on the next open.
+    LaunchedEffect(txState.message, txState.error) {
+        val message = txState.message ?: txState.error ?: return@LaunchedEffect
+        if (txState.message != null) showContributionDialog = false
+        transactionViewModel.clearMessages()
+        snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             BackStyleHeader(
                 title = goal?.name ?: "",
@@ -102,9 +129,7 @@ fun SavingGoalDetailScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.Space2.dp),
         ) {
             item(key = "summary") {
-                SavingGoalSummaryCard(goal = goal) {
-                    navController.navigate(Routes.AddTransaction.createRoute(savingGoalId = savingGoalId))
-                }
+                SavingGoalSummaryCard(goal = goal, onAddContribution = { showContributionDialog = true })
             }
 
             item(key = "contributions_header") {
@@ -133,6 +158,29 @@ fun SavingGoalDetailScreen(
 
             item(key = "bottom_spacer") { Spacer(Modifier.height(Spacing.Space6.dp)) }
         }
+    }
+
+    // Quick "Add contribution" dialog — always a savings transaction, so the user never picks a type.
+    if (showContributionDialog && goal != null) {
+        QuickPaymentDialog(
+            title = "Add contribution",
+            subtitle = "Toward ${goal.name}",
+            channels = visibleChannels(channelState),
+            channelSupportingText = HIDDEN_MOBILE_MONEY_HINT.takeIf { hasHiddenMobileMoneyChannels(channelState) },
+            defaultNote = "Contribution · ${goal.name}",
+            isSaving = txState.isSaving,
+            accentColor = typeColor(TYPE_SAVING),
+            onConfirm = { channelId, amount, note ->
+                transactionViewModel.createTransaction(
+                    channelID = channelId,
+                    amount = amount,
+                    type = TYPE_SAVING,
+                    note = note,
+                    savingGoalId = savingGoalId,
+                )
+            },
+            onDismiss = { showContributionDialog = false },
+        )
     }
 
     selectedTx?.let { tx ->

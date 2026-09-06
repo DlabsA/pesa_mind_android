@@ -44,26 +44,24 @@ sealed class Routes(val route: String) {
 
     // Sub-screens
     object AddTransaction : Routes(
-        "add_transaction?channelId={channelId}&debtCreditId={debtCreditId}&savingGoalId={savingGoalId}&transactionType={transactionType}",
+        "add_transaction?channelId={channelId}&debtCreditId={debtCreditId}&savingGoalId={savingGoalId}",
     ) {
         /** [channelId] pre-selects a channel (e.g. the "Add Transaction" pill on a channel
          * card) — omit for the plain, empty-picker entry point used elsewhere. [debtCreditId]/
-         * [savingGoalId] pre-select a Purpose (the "Add payment"/"Add contribution" entry
-         * points from a debt/goal detail screen) — at most one of these two is ever passed.
-         * [transactionType] pre-selects the transaction type (income/expense/saving) when
-         * navigating from a debt screen or other source. */
+         * [savingGoalId] pre-select a Purpose — at most one of these two is ever passed. The
+         * "Add payment"/"Add contribution" buttons on the debt/goal detail screens no longer
+         * come through here; they use `QuickPaymentDialog` in place, so these two currently
+         * have no caller and are kept only as the route's deep-link surface. */
         fun createRoute(
             channelId: String? = null,
             debtCreditId: String? = null,
             savingGoalId: String? = null,
-            transactionType: String? = null,
         ): String {
             val params =
                 listOfNotNull(
                     channelId?.takeIf { it.isNotBlank() }?.let { "channelId=$it" },
                     debtCreditId?.takeIf { it.isNotBlank() }?.let { "debtCreditId=$it" },
                     savingGoalId?.takeIf { it.isNotBlank() }?.let { "savingGoalId=$it" },
-                    transactionType?.takeIf { it.isNotBlank() }?.let { "transactionType=$it" },
                 )
             return if (params.isEmpty()) "add_transaction" else "add_transaction?${params.joinToString("&")}"
         }

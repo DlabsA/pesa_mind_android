@@ -34,13 +34,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import cc.dlabs.pesamind.core.theme.*
+import cc.dlabs.pesamind.core.ui.ChannelDropdown
+import cc.dlabs.pesamind.core.ui.HIDDEN_MOBILE_MONEY_HINT
 import cc.dlabs.pesamind.core.ui.PesaMindStrings
+import cc.dlabs.pesamind.core.ui.hasHiddenMobileMoneyChannels
+import cc.dlabs.pesamind.core.ui.visibleChannels
 import cc.dlabs.pesamind.core.utils.TransactionViewModel
 import cc.dlabs.pesamind.features.lentborrowed.DebtCreditPicker
 import cc.dlabs.pesamind.features.lentborrowed.DebtCreditViewModel
 import cc.dlabs.pesamind.features.savinggoals.SavingGoalPicker
 import cc.dlabs.pesamind.features.savinggoals.SavingGoalViewModel
-import cc.dlabs.pesamind.features.settings.channels.ChannelTypes
 import cc.dlabs.pesamind.features.settings.channels.ChannelViewModel
 import java.text.NumberFormat
 
@@ -72,7 +75,6 @@ fun AddTransactionScreen(
 
     // ── Form state ────────────────────────────────────────────────────────────
     var channelId by remember { mutableStateOf(initialChannelId ?: "") }
-    var channelDropdownExpanded by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var txType by remember { mutableStateOf(initialTransactionType ?: TYPE_EXPENSE) }
@@ -109,14 +111,8 @@ fun AddTransactionScreen(
     // Mobile money accounts (M-Pesa, Airtel Money, etc.) are a Premium feature — free-tier
     // users can still log transactions against Cash/Bank accounts, just not mobile money ones.
     val channelState by channelViewModel.state.collectAsStateWithLifecycle()
-    val channelList =
-        if (channelState.isPremium) {
-            channelState.channels
-        } else {
-            channelState.channels.filterNot { it.channelType == ChannelTypes.MOBILE_MONEY }
-        }
-    val hasHiddenMobileMoneyChannels =
-        !channelState.isPremium && channelState.channels.any { it.channelType == ChannelTypes.MOBILE_MONEY }
+    val channelList = visibleChannels(channelState)
+    val hasHiddenMobileMoney = hasHiddenMobileMoneyChannels(channelState)
 
     // Clear a selection that resolves to a channel hidden from the free tier (e.g. an
     // initialChannelId deep-linked from an SMS notification for a mobile money channel).
@@ -332,59 +328,19 @@ fun AddTransactionScreen(
 
                         // ── Channel ID dropdown ──────────────────────────────────
                         LabeledField(label = "Account") {
-                            ExposedDropdownMenuBox(
-                                expanded = channelDropdownExpanded,
-                                onExpandedChange = { channelDropdownExpanded = !channelDropdownExpanded },
-                            ) {
-                                OutlinedTextField(
-                                    value = channelList.find { it.id == channelId }?.name ?: "",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    placeholder = { Text("Select a Account") },
-                                    isError = channelError,
-                                    supportingText =
-                                        if (channelError) {
-                                            { Text("Account ID cannot be blank") }
-                                        } else if (hasHiddenMobileMoneyChannels) {
-                                            { Text("Mobile money accounts require Premium") }
-                                        } else {
-                                            null
-                                        },
-                                    trailingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowDropDown,
-                                            contentDescription = null,
-                                        )
+                            ChannelDropdown(
+                                channels = channelList,
+                                selectedId = channelId,
+                                onSelect = { channelId = it },
+                                isError = channelError,
+                                supportingText =
+                                    when {
+                                        channelError -> "Account ID cannot be blank"
+                                        hasHiddenMobileMoney -> HIDDEN_MOBILE_MONEY_HINT
+                                        else -> null
                                     },
-                                    modifier =
-                                        Modifier
-                                            .menuAnchor()
-                                            .fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors =
-                                        OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = accentColor,
-                                            cursorColor = accentColor,
-                                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = channelDropdownExpanded,
-                                    onDismissRequest = { channelDropdownExpanded = false },
-                                ) {
-                                    channelList.forEach { channel ->
-                                        DropdownMenuItem(
-                                            text = { Text(channel.name) },
-                                            onClick = {
-                                                channelId = channel.id
-                                                channelDropdownExpanded = false
-                                            },
-                                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                                        )
-                                    }
-                                }
-                            }
+                                accentColor = accentColor,
+                            )
                         }
 
                         // ── Purpose dropdown (Lent & Borrowed / Saving Goals) ────────
