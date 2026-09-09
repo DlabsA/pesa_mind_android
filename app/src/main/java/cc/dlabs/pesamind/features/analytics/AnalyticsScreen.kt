@@ -317,18 +317,20 @@ private fun AnalyticsScrollBody(
                     }
 
                     // Anomalies
-                    val anomalyData = a.anomalies?.data
-                    if (anomalyData != null && (anomalyData.anomaliesDetected ?: 0) > 0) {
+                    //
+                    // anomalies is Premium-gated and comes back as null for Free tier.
+                    // data field is non-null within AnomalySection when section exists.
+                    val anomalies = a.anomalies
+                    if (anomalies != null && anomalies.data.anomaliesDetected > 0) {
                         item {
                             StaggeredCard(index = 4, visible = cardsVisible) {
                                 AnomaliesCard(
-                                    // Now safely smart-cast to non-null 'AnomalyData'
-                                    section = a.anomalies,
+                                    section = anomalies,
                                     modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                                 )
                             }
                         }
-                    } else if (a.anomalies == null && state.isPremium) {
+                    } else if (anomalies == null && state.isPremium) {
                         a.errors["anomalies"]?.let { err ->
                             item {
                                 StaggeredCard(index = 4, visible = cardsVisible) {
@@ -392,11 +394,16 @@ private fun AnalyticsScrollBody(
                 }
 
                 // Spending Velocity
-                if (a.spendingVelocity != null) {
+                //
+                // spendingVelocity is Premium-gated and comes back as null for Free tier.
+                // Additionally, its data field CAN be null even when the section exists, so
+                // we must guard against both the section being null AND data being null.
+                val spendingVelocity = a.spendingVelocity
+                if (spendingVelocity != null && spendingVelocity.data != null) {
                     item {
                         StaggeredCard(index = 6, visible = cardsVisible) {
                             SpendingVelocityCard(
-                                section = a.spendingVelocity,
+                                section = spendingVelocity,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }
@@ -440,11 +447,15 @@ private fun AnalyticsScrollBody(
                 }
 
                 // Financial Health (composite score)
-                if (a.financialHealth != null) {
+                //
+                // financialHealth is Premium-gated and comes back as null for Free tier.
+                // Strictly guard against null before rendering.
+                val financialHealth = a.financialHealth
+                if (financialHealth != null) {
                     item {
                         StaggeredCard(index = 8, visible = cardsVisible) {
                             FinancialHealthCard(
-                                health = a.financialHealth.data,
+                                health = financialHealth.data,
                                 modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
                             )
                         }

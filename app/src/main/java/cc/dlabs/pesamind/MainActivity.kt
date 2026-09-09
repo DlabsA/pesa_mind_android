@@ -1,20 +1,12 @@
 package cc.dlabs.pesamind
 
-import android.Manifest
-import android.app.AlertDialog
 import android.app.Application
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.compose.rememberNavController
 import androidx.work.Configuration
@@ -128,17 +120,6 @@ class MainActivity : FragmentActivity() {
         private const val TAG = "PESAMIND"
     }
 
-    private val permissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-            val denied = results.filterValues { !it }.keys
-            if (denied.isNotEmpty()) {
-                handleDeniedPermissions(denied)
-            } else {
-                Log.d(TAG, "All permissions granted")
-                // Permissions granted – continue with SMS monitoring
-            }
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -162,10 +143,10 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // Start the message monitoring service to ensure SMS monitoring runs in the background
+        // Start the message monitoring service to ensure SMS monitoring runs in the background.
+        // No permission is requested here — see SmsTracingPermissions for why the SMS/phone
+        // prompts live in the screens that explain them instead.
         startMessageMonitoringService()
-
-        requestRequiredPermissions()
     }
 
     /**
@@ -217,133 +198,4 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun requestRequiredPermissions() {
-        val permissionsToRequest =
-            buildRequiredPermissions().filter { permission ->
-                ContextCompat.checkSelfPermission(this, permission) !=
-                    PackageManager.PERMISSION_GRANTED
-            }
-
-        if (permissionsToRequest.isEmpty()) {
-            Log.d(TAG, "All permissions already granted")
-            return
-        }
-
-        // Check if we should show rationale for any of the not-granted permissions
-        val needsRationale =
-            permissionsToRequest.any { permission ->
-                shouldShowRequestPermissionRationale(permission)
-            }
-
-        if (needsRationale) {
-            // Show a rationale dialog before launching the permission request
-            showRationaleDialog {
-                // User clicked "Continue" – launch the request
-                permissionLauncher.launch(permissionsToRequest.toTypedArray())
-            }
-        } else {
-            // No rationale needed – request directly
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
-        }
-    }
-
-    /**
-     * Build the list of permissions your app needs.
-     * On API 33+ (Tiramisu), `SubscriptionManager.getPhoneNumber()` — used by
-     * `SmsReceiver.getReceivingSimInfo()` to record which MSISDN a mobile money SMS
-     * arrived on — requires READ_PHONE_NUMBERS specifically; READ_PHONE_STATE alone
-     * throws SecurityException there and the number silently falls back to "Unknown".
-     * Both are requested so the pre-33 (`subscriptionInfo.number`) and 33+ paths both work.
-     * POST_NOTIFICATIONS is also API 33+-only (a no-op permission before that) — without it
-     * being requested here, `SMSMessageProcessor.showLocalNotification` silently skips every
-     * transaction notification, same "declared in the manifest but never actually requested"
-     * gap as READ_PHONE_NUMBERS had.
-     */
-    private fun buildRequiredPermissions(): List<String> {
-        val permissions = mutableListOf(Manifest.permission.RECEIVE_SMS)
-        permissions.add(Manifest.permission.READ_PHONE_STATE)
-        permissions.add(Manifest.permission.READ_PHONE_NUMBERS)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        return permissions
-    }
-
-    private fun handleDeniedPermissions(denied: Set<String>) {
-        when {
-            Manifest.permission.RECEIVE_SMS in denied -> {
-                // Core feature is broken – show a non-dismissible dialog
-                Log.e(TAG, "RECEIVE_SMS denied — app cannot monitor transactions")
-                showMandatorySettingsDialog()
-            }
-            Manifest.permission.READ_PHONE_STATE in denied || Manifest.permission.READ_PHONE_NUMBERS in denied -> {
-                // SIM/MSISDN identification will fail – optional, just log and continue
-                Log.w(TAG, "READ_PHONE_STATE/READ_PHONE_NUMBERS denied — SIM number identification disabled")
-            }
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                Manifest.permission.POST_NOTIFICATIONS in denied -> {
-                // Transaction/alert notifications will fail – optional, just log and continue
-                Log.w(TAG, "POST_NOTIFICATIONS denied — transaction notifications disabled")
-            }
-        }
-    }
-
-    /**
-     * Non-dismissible dialog that forces the user to go to Settings
-     * to grant the permission manually.
-     */
-    private fun showMandatorySettingsDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Permission Required")
-            .setMessage(
-                "To receive and identify SMS transactions, you must grant the " +
-                    "'Receive SMS' permission. Please enable it in the app settings.",
-            )
-            .setCancelable(false) // Cannot be dismissed by back button
-            .setPositiveButton("Go to Settings") { _, _ ->
-                openAppSettings()
-            }
-            // Optional negative button that does nothing (keeps the dialog up)
-            .setNegativeButton("Cancel") { _, _ -> }
-            .create()
-            .apply {
-                setCanceledOnTouchOutside(false) // Cannot be dismissed by tapping outside
-                show()
-            }
-    }
-
-    /**
-     * Opens the app's detail settings screen where the user can grant permissions.
-     */
-    private fun openAppSettings() {
-        val intent =
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-        startActivity(intent)
-    }
-
-    /**
-     * Rationale dialog that explains why we need certain permissions.
-     * @param onContinue callback invoked when the user agrees to proceed.
-     */
-    private fun showRationaleDialog(onContinue: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle("Permissions Needed")
-            .setMessage(
-                "This app needs access to incoming SMS to monitor transactions, " +
-                    "and phone state permission to identify the SIM card that " +
-                    "received the message. These permissions are essential for " +
-                    "the app to function correctly.",
-            )
-            .setCancelable(true)
-            .setPositiveButton("Continue") { _, _ ->
-                onContinue()
-            }
-            .setNegativeButton("Cancel") { _, _ ->
-                // User cancelled – permission request will not be launched
-                Log.d(TAG, "User cancelled the permission request from rationale dialog")
-            }
-            .show()
-    }
 }

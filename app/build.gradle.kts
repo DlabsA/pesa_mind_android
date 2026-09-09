@@ -7,6 +7,10 @@ plugins {
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
     id("com.google.gms.google-services")
+    // Required by the Crashlytics SDK, not optional: this is the step that generates the
+    // build-id resource and uploads mapping files. Declaring it in the root build file only
+    // puts it on the classpath — it does nothing until the app module applies it.
+    id("com.google.firebase.crashlytics")
     alias(libs.plugins.ktlint)
 }
 
@@ -100,8 +104,8 @@ android {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
         targetSdk = 36
-        versionCode = 37
-        versionName = "37"
+        versionCode = 39
+        versionName = "39"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -269,6 +273,10 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.hilt:hilt-work:1.2.0")
     kapt("androidx.hilt:hilt-compiler:1.2.0")
+
+    // Firebase (Crashlytics + Analytics)
+    implementation("com.google.firebase:firebase-crashlytics:20.1.0")
+    implementation("com.google.firebase:firebase-analytics:23.2.0")
 
     // Testing
     testImplementation(libs.mockito.core)

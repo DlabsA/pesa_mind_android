@@ -278,49 +278,59 @@ private fun DashboardScrollBody(
                 }
 
                 // ── Financial Health
-                item {
-                    StaggeredCard(index = 2, visible = cardsVisible) {
-                        val financialHealth = state.dashboard?.financialHealth
-                        if (financialHealth != null) {
-                            FinancialHealthCard(
-                                health = financialHealth.data,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        } else if (state.isPremium) {
-                            UnavailableFeatureOverlay(
-                                onNavigate = {
-                                    navController?.navigate(Routes.SetYearlyBudget.route)
-                                },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp)
-                                        .padding(horizontal = Spacing.Space4.dp),
-                            )
+                //
+                // financialHealth is Premium-gated server-side and comes back as null
+                // for Free tier. Only render if Premium and data is present.
+                if (state.isPremium) {
+                    item {
+                        StaggeredCard(index = 2, visible = cardsVisible) {
+                            val financialHealth = d.financialHealth
+                            if (financialHealth != null) {
+                                FinancialHealthCard(
+                                    health = financialHealth.data,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            } else {
+                                UnavailableFeatureOverlay(
+                                    onNavigate = {
+                                        navController?.navigate(Routes.SetYearlyBudget.route)
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(200.dp)
+                                            .padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
 
                 // ── Spending Velocity
-                item {
-                    StaggeredCard(index = 3, visible = cardsVisible) {
-                        val spendingVelocity = state.dashboard?.spendingVelocity
-                        if (spendingVelocity != null) {
-                            DashboardVelocityCard(
-                                data = spendingVelocity.data,
-                                modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
-                            )
-                        } else if (state.isPremium) {
-                            UnavailableFeatureOverlay(
-                                onNavigate = {
-                                    navController?.navigate(Routes.SetYearlyBudget.route)
-                                },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(180.dp)
-                                        .padding(horizontal = Spacing.Space4.dp),
-                            )
+                //
+                // spendingVelocity is Premium-gated server-side and comes back as null
+                // for Free tier. Only render if Premium and data is present.
+                if (state.isPremium) {
+                    item {
+                        StaggeredCard(index = 3, visible = cardsVisible) {
+                            val spendingVelocity = d.spendingVelocity
+                            if (spendingVelocity != null) {
+                                DashboardVelocityCard(
+                                    data = spendingVelocity.data,
+                                    modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                                )
+                            } else {
+                                UnavailableFeatureOverlay(
+                                    onNavigate = {
+                                        navController?.navigate(Routes.SetYearlyBudget.route)
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(180.dp)
+                                            .padding(horizontal = Spacing.Space4.dp),
+                                )
+                            }
                         }
                     }
                 }
