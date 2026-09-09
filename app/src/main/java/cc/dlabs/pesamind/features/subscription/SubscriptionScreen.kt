@@ -71,7 +71,7 @@ import java.time.OffsetDateTime
 private val benefits =
     listOf(
         "Unlimited channels (cash, mobile money, bank)",
-        "Automatic SMS capture",
+        "Automatic Digital transactions monitoring",
         "Manual entries for mobile money channels",
         "Full transaction history",
         "Advanced budgeting (next-month planning)",

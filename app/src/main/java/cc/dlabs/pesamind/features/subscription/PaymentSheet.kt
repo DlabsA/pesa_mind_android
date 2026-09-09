@@ -150,12 +150,12 @@ private fun ColumnScope.PaymentForm(
         modifier = Modifier.padding(top = Spacing.Space2.dp),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Space2.dp)) {
-        FilterChip(
-            selected = state.method == PaymentMethod.MOBILE_MONEY,
-            onClick = { onSelectMethod(PaymentMethod.MOBILE_MONEY) },
-            label = { Text("Mobile Money") },
-            leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, contentDescription = null) },
-        )
+//        FilterChip(
+//            selected = state.method == PaymentMethod.MOBILE_MONEY,
+//            onClick = { onSelectMethod(PaymentMethod.MOBILE_MONEY) },
+//            label = { Text("Mobile Money") },
+//            leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, contentDescription = null) },
+//        )
         FilterChip(
             selected = state.method == PaymentMethod.GOOGLE_PLAY,
             onClick = { onSelectMethod(PaymentMethod.GOOGLE_PLAY) },
@@ -165,10 +165,10 @@ private fun ColumnScope.PaymentForm(
     }
 
     when (state.method) {
-        PaymentMethod.MOBILE_MONEY ->
-            MobileMoneyFields(state, onSelectNetwork, onPhoneChange)
         PaymentMethod.GOOGLE_PLAY ->
             GooglePlayNotice()
+        PaymentMethod.MOBILE_MONEY ->
+            MobileMoneyFields(state, onSelectNetwork, onPhoneChange)
     }
 
     state.error?.let { message ->

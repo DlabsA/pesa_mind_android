@@ -69,7 +69,7 @@ class MessageMonitoringService : Service() {
                 "Message Monitoring",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Monitors incoming SMS transactions"
+                description = "Monitors incoming digital transactions"
                 setShowBadge(false)
             }
 
