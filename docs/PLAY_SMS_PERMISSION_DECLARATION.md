@@ -188,13 +188,39 @@ YouTube, no cuts, on a physical device:
 
 Put the URL in the declaration form's video field and in the appeal note.
 
-## 7. Checklist before resubmitting
+## 7. Console state as of 2026-09-09
 
-- [ ] Upload v40 (`versionCode` 40) to the same track.
-- [ ] Update the store listing short + full description (§5).
-- [ ] Replace/add a screenshot showing automatic SMS capture (§5).
-- [ ] Re-check the Data safety form (§5).
-- [ ] Submit the Permissions Declaration Form with the §3 answers and the §4 reviewer steps.
-- [ ] Attach the demo-video URL (§6).
-- [ ] Confirm the privacy policy at https://pesamind.dlabs.cc/privacy/ describes SMS handling in
-      the same terms as the in-app disclosure.
+Done in Play Console (Dlabs Agency / cc.dlabs.pesamind):
+
+- **Permissions Declaration Form — saved.** Core functionality reduced to **"SMS based money
+  management"** only. The box "SMS-based financial transactions ... (for example, 5-digit
+  messages)" was **unticked**: its permitted use covers OTP account verification and fraud
+  detection, which Pesa Mind does not do, so declaring it was itself a mismatch. Instructions for
+  review replaced with the 4-step verification recipe (the field caps at **500 characters**, so the
+  long version in §3/§4 above does not fit — it is kept here as the reference text). Video
+  instructions field set to the demo video link. All four attestations ticked.
+- **Store listing — saved and staged** in Publishing overview (saving does not submit).
+  Short description is now "Auto-track MTN, Airtel & bank transactions from your SMS alerts."
+  (64/80). Full description gained an "Automatic SMS Transaction Tracking" section as the third
+  block, above the fold, and "Log expenses in seconds" became "Digital transactions arrive on their
+  own from your SMS alerts. Cash you log in seconds." (3889/4000).
+
+Still open:
+
+- [ ] **Upload the v40 AAB.** `app/build/outputs/bundle/release/app-release.aab` (21 MB, signed).
+      A draft Production release is already created and waiting at the Production track's
+      "Create production release" page — drag the file onto it. It could not be uploaded through
+      browser automation (10 MB bridge limit).
+- [ ] **`READ_SMS` is still declared** in the console's permission list. It comes from release
+      **34 on the Closed testing – Alpha track**, which is still live and predates the manifest
+      cleanup; v40 does not declare it. Retire or supersede release 34 so no active bundle declares
+      a permission nothing uses.
+- [ ] **Screenshots.** All 3 phone screenshots show the dashboard and analytics. At least one must
+      show automatic SMS capture (the onboarding disclosure step, or the transaction list with
+      SMS-captured entries) — a listing showing only budgets and charts is what "listing does not
+      match the declared use case" means.
+- [ ] **Data safety form** — confirm SMS messages: collected **No**, shared **No**, processed
+      ephemerally on device. Must stay consistent with the in-app disclosure.
+- [ ] **Privacy policy** at https://pesamind.dlabs.cc/privacy/ must describe SMS handling in the
+      same terms as the in-app disclosure. Not verified.
+- [ ] **Send for review** from Publishing overview, once the bundle is up.
