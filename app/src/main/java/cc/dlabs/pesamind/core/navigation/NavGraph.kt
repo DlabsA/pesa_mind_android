@@ -325,8 +325,7 @@ fun PesaMindNavGraph(navController: NavHostController) {
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "Confirm your SIM numbers below to keep transactions matching the " +
-                                "right account. The app is locked until this is resolved.",
+                            "Enter the number on each SIM to continue.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -335,6 +334,9 @@ fun PesaMindNavGraph(navController: NavHostController) {
                             onNumberChange = simSlotsVm::onNumberChange,
                             onCountryChange = simSlotsVm::onCountryChange,
                             onSave = { simSlotsVm.save(context) },
+                            // Title + line above already say this; the fields are what the user
+                            // needs here.
+                            showIntro = false,
                         )
                     }
                 }

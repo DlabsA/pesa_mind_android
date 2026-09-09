@@ -13,7 +13,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SimSlotsState(
-    val activeSimSlots: List<SimSlotManager.SimSlot> = emptyList(),
+    /**
+     * The slots the form renders a number field for. Normally the device's live active slots, but
+     * falls back to previously-saved slots (and finally to slot 1) so there is always somewhere to
+     * type a number — a removed SIM or a denied phone-state permission must not leave the
+     * drift-blocking dialog with no way to resolve itself.
+     */
+    val displaySlots: List<SimSlotManager.SimSlot> = emptyList(),
     val simSlotNumbers: Map<Int, String> = emptyMap(),
     val simSlotCountries: Map<Int, CountryCode> = emptyMap(),
     val driftDetected: Boolean = false,
@@ -39,9 +45,23 @@ class SimSlotsViewModel : UnifiedViewModel() {
     fun load(context: Context) {
         viewModelScope.launch {
             val activeSlots = SimSlotManager.getActiveSlots(context)
+            val slots =
+                activeSlots.ifEmpty {
+                    SimSlotManager.getStoredSlotIndices()
+                        .ifEmpty { listOf(0) }
+                        .map { index ->
+                            SimSlotManager.SimSlot(
+                                slotIndex = index,
+                                // Blank rather than a guessed carrier: the OS isn't telling us
+                                // what's in this tray, and the field header renders "SIM n" alone
+                                // when there's no name to show.
+                                carrierName = SimSlotManager.getCarrierForSlot(index).orEmpty(),
+                            )
+                        }
+                }
             val numbers = mutableMapOf<Int, String>()
             val countries = mutableMapOf<Int, CountryCode>()
-            activeSlots.forEach { slot ->
+            slots.forEach { slot ->
                 val stored = SimSlotManager.getNumberForSlot(slot.slotIndex) ?: ""
                 val match = COUNTRY_CODES.firstOrNull { stored.startsWith(it.code) }
                 if (match != null) {
@@ -53,7 +73,7 @@ class SimSlotsViewModel : UnifiedViewModel() {
             }
             _state.update {
                 it.copy(
-                    activeSimSlots = activeSlots,
+                    displaySlots = slots,
                     simSlotNumbers = numbers,
                     simSlotCountries = countries,
                     driftDetected = SimSlotManager.isDriftDetected(),

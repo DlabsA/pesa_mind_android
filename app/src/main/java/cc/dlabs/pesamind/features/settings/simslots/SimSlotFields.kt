@@ -40,17 +40,22 @@ fun SimSlotFields(
     onNumberChange: (Int, String) -> Unit,
     onCountryChange: (Int, CountryCode) -> Unit,
     onSave: () -> Unit,
+    // The drift dialog states the same thing in its own title/body, so it turns the explanation
+    // and the warning banner off and shows nothing above the number fields.
+    showIntro: Boolean = true,
 ) {
     val teal = getPrimaryColor()
 
-    Text(
-        "Some phones can't tell us a SIM's own number automatically. If a mobile money SMS " +
-            "shows an unresolved number, enter it here so we know which SIM slot it belongs to.",
-        fontSize = 12.sp,
-        color = Color.Gray,
-    )
+    if (showIntro) {
+        Text(
+            "Some phones can't tell us a SIM's own number automatically. If a mobile money SMS " +
+                "shows an unresolved number, enter it here so we know which SIM slot it belongs to.",
+            fontSize = 12.sp,
+            color = Color.Gray,
+        )
+    }
 
-    if (state.driftDetected) {
+    if (showIntro && state.driftDetected) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -75,9 +80,14 @@ fun SimSlotFields(
         }
     }
 
-    state.activeSimSlots.forEach { slot ->
+    state.displaySlots.forEach { slot ->
         Text(
-            text = "SIM ${slot.slotIndex + 1} — ${slot.carrierName}",
+            text =
+                if (slot.carrierName.isBlank()) {
+                    "SIM ${slot.slotIndex + 1}"
+                } else {
+                    "SIM ${slot.slotIndex + 1} — ${slot.carrierName}"
+                },
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

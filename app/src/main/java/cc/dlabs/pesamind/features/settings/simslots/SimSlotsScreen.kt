@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,18 +60,9 @@ fun SimSlotsScreen(
             )
         },
     ) { padding ->
-        if (state.activeSimSlots.isEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(Spacing.Space6.dp),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "We didn't detect more than one active SIM on this device — nothing to set up here.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
+        // Empty only until [SimSlotsViewModel.load] finishes — it always resolves to at least one
+        // slot to type into — so render nothing rather than flashing a "no SIMs" message.
+        if (state.displaySlots.isNotEmpty()) {
             Column(
                 modifier =
                     Modifier

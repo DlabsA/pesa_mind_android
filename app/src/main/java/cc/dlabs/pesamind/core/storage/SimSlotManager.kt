@@ -145,6 +145,31 @@ object SimSlotManager {
         }
     }
 
+    /**
+     * Slot indices this device has ever persisted a mapping for, regardless of whether the OS
+     * currently reports that slot as active. The SIM-slot form falls back to these when
+     * [getActiveSlots] comes back empty — a removed/swapped SIM or a denied `READ_PHONE_STATE`
+     * would otherwise leave the drift dialog with no number fields at all, i.e. no way to resolve
+     * the very block it puts up.
+     */
+    suspend fun getStoredSlotIndices(): List<Int> {
+        if (!isInitialized()) return emptyList()
+        return appContext.simSlotDataStore.data.first().asMap().keys
+            .mapNotNull { key ->
+                val name = key.name
+                if (!name.startsWith("slot_")) return@mapNotNull null
+                name.removePrefix("slot_").substringBefore('_').toIntOrNull()
+            }
+            .distinct()
+            .sorted()
+    }
+
+    /** The carrier name captured for [slotIndex] the last time its mapping was saved. */
+    suspend fun getCarrierForSlot(slotIndex: Int): String? {
+        if (!isInitialized()) return null
+        return appContext.simSlotDataStore.data.first()[carrierKey(slotIndex)]?.ifBlank { null }
+    }
+
     /** The fallback lookup `SmsReceiver` uses when the OS-resolved number is a placeholder. */
     suspend fun getNumberForSlot(slotIndex: Int): String? {
         if (!isInitialized()) return null
@@ -163,10 +188,22 @@ object SimSlotManager {
     }
 
     /**
-     * Persists the user-entered number for each active slot and (re)captures that slot's
-     * current carrier name *and* subscription ID as the drift-detection baseline. Only writes
-     * entries present in [numbersBySlot] — a slot the device doesn't currently have is never
-     * written.
+     * Persists the user-entered number for each slot in [numbersBySlot] and re-captures the
+     * drift-detection baseline as *the whole live device state right now* — saving is the user
+     * declaring "this is the current truth", so afterwards the stored baseline must describe
+     * exactly the SIMs sitting in the trays at this moment, with nothing left over.
+     *
+     * That means two things beyond writing numbers:
+     * - every currently-active slot gets its carrier/subscription baseline rewritten, whether or
+     *   not the user typed a number for it;
+     * - every *stored* slot the device no longer reports gets its baseline dropped.
+     *
+     * The second is what stops the app-wide drift block from becoming unresolvable. [detectDrift]
+     * treats a baselined slot that's missing from the live list as drift, so a removed SIM (or a
+     * denied `READ_PHONE_STATE`, which makes [getActiveSlots] come back empty) used to leave that
+     * slot's stale baseline in place through every save — `MainActivity`'s next resume re-ran
+     * [checkForDrift], found the same missing slot, and re-raised the block. Forever. The saved
+     * *number* is kept either way; only the identity snapshot behind it is cleared.
      */
     suspend fun saveSlotNumbers(
         context: Context,
@@ -175,9 +212,26 @@ object SimSlotManager {
         if (!isInitialized()) return
         val activeSlots = getActiveSlots(context).associateBy { it.slotIndex }
         appContext.simSlotDataStore.edit { prefs ->
-            numbersBySlot.forEach { (slotIndex, number) ->
-                prefs[numberKey(slotIndex)] = number
-                activeSlots[slotIndex]?.let { slot ->
+            numbersBySlot.forEach { (slotIndex, number) -> prefs[numberKey(slotIndex)] = number }
+
+            // Snapshot before mutating — the key set is live over the edit block.
+            val storedSlotIndices =
+                prefs.asMap().keys
+                    .mapNotNull { key ->
+                        val name = key.name
+                        if (!name.startsWith("slot_")) return@mapNotNull null
+                        name.removePrefix("slot_").substringBefore('_').toIntOrNull()
+                    }
+                    .distinct()
+
+            (storedSlotIndices + activeSlots.keys).distinct().forEach { slotIndex ->
+                val slot = activeSlots[slotIndex]
+                if (slot == null) {
+                    // Not in any tray right now: drop the identity snapshot so it can't keep
+                    // re-triggering drift against a slot we can no longer see.
+                    prefs.remove(carrierKey(slotIndex))
+                    prefs.remove(subscriptionIdKey(slotIndex))
+                } else {
                     prefs[carrierKey(slotIndex)] = slot.carrierName
                     // A slot whose subscription ID the OS won't report keeps no stale ID from a
                     // previous save — that would compare a fresh carrier snapshot against an old

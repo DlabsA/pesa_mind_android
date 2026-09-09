@@ -197,5 +197,4 @@ class MainActivity : FragmentActivity() {
             Log.e(TAG, "Failed to start MessageMonitoringService: ${e.message}", e)
         }
     }
-
 }
