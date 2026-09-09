@@ -57,6 +57,7 @@ import cc.dlabs.pesamind.features.onboarding.OnboardingIntroScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingMoMoScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingReviewScreen
 import cc.dlabs.pesamind.features.onboarding.OnboardingSimSlotsScreen
+import cc.dlabs.pesamind.features.onboarding.OnboardingSmsAccessScreen
 import cc.dlabs.pesamind.features.savinggoals.SavingGoalDetailScreen
 import cc.dlabs.pesamind.features.savinggoals.SavingGoalListScreen
 import cc.dlabs.pesamind.features.settings.account.AccountSettingsScreen
@@ -176,6 +177,7 @@ fun PesaMindNavGraph(navController: NavHostController) {
                         viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })
                     OnboardingBankScreen(navController, vm)
                 }
+                composable(Routes.OnboardingSmsAccess.route) { OnboardingSmsAccessScreen(navController) }
                 composable(Routes.OnboardingReview.route) { backStackEntry ->
                     val vm: ChannelOnboardingViewModel =
                         viewModel(remember(backStackEntry) { navController.getBackStackEntry(ONBOARDING_GRAPH_ROUTE) })

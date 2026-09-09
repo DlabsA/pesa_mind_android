@@ -29,8 +29,8 @@ fun OnboardingCashScreen(
     OnboardingStepScaffold(
         title = "Cash",
         subtitle = "Track cash you spend or receive outside mobile money and bank transfers.",
-        stepIndex = 2,
-        totalSteps = 6,
+        stepIndex = 3,
+        totalSteps = 7,
         onBack = { navController.popBackStack() },
         onSkip = {
             vm.setCashIncluded(false)

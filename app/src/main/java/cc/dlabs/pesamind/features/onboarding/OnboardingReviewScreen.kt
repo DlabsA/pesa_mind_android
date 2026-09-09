@@ -52,8 +52,8 @@ fun OnboardingReviewScreen(
             } else {
                 "These channels will be created:"
             },
-        stepIndex = 6,
-        totalSteps = 6,
+        stepIndex = 7,
+        totalSteps = 7,
         onBack = { navController.popBackStack() },
         onSkip = null,
         onNext = vm::finish,

@@ -51,8 +51,8 @@ fun OnboardingSimSlotsScreen(
         subtitle =
             "Some phones can't tell us a SIM's own number automatically. Enter it here so " +
                 "mobile money SMS always match the right account.",
-        stepIndex = 1,
-        totalSteps = 6,
+        stepIndex = 2,
+        totalSteps = 7,
         onBack = { navController.popBackStack() },
         onSkip = { navController.navigate(Routes.OnboardingCash.route) },
         onNext = {

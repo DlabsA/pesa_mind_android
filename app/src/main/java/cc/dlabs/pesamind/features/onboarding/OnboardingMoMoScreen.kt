@@ -34,8 +34,8 @@ fun OnboardingMoMoScreen(
     OnboardingStepScaffold(
         title = "MTN Mobile Money",
         subtitle = "Add your MTN MoMo number(s) to track transactions on them.",
-        stepIndex = 3,
-        totalSteps = 6,
+        stepIndex = 4,
+        totalSteps = 7,
         onBack = { navController.popBackStack() },
         onSkip = {
             state.momo.indices.forEach { vm.setMomoIncluded(it, false) }

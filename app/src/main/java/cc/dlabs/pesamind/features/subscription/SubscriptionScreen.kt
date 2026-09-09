@@ -367,7 +367,7 @@ private fun PlanButton(
     val label = "Pay ${intervalWord(plan.interval)} · ${plan.amount.asUgx()}"
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Space1.dp)) {
-        if (isPrimary) {
+        if (!isPrimary) {
             Button(
                 onClick = onClick,
                 modifier = Modifier.fillMaxWidth().height(Spacing.Space12.dp),
@@ -375,6 +375,25 @@ private fun PlanButton(
                 colors = ButtonDefaults.buttonColors(containerColor = getPrimaryColor()),
             ) {
                 Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                savingPercent?.let {
+                    Spacer(Modifier.width(Spacing.Space2.dp))
+                    Surface(
+                        shape = RoundedCornerShape(Radius.Full.dp),
+                        color = MaterialTheme.colorScheme.secondary,
+                    ) {
+                        Text(
+                            text = "Save $it%",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondary,
+                            modifier =
+                                Modifier.padding(
+                                    horizontal = Spacing.Space2.dp,
+                                    vertical = Spacing.Space1.dp,
+                                ),
+                        )
+                    }
+                }
             }
         } else {
             OutlinedButton(

@@ -27,6 +27,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.network.analytics.*
+import cc.dlabs.pesamind.core.permissions.SmsTracingBanner
+import cc.dlabs.pesamind.core.permissions.SmsTracingPermissionHost
+import cc.dlabs.pesamind.core.permissions.rememberSmsTracingPermissionState
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.theme.DarkColors
 import cc.dlabs.pesamind.core.theme.LightColors
@@ -194,6 +197,11 @@ private fun DashboardScrollBody(
     var cardsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { cardsVisible = true }
 
+    // Re-read on every resume (see rememberSmsTracingPermissionState), so the banner disappears
+    // the moment the user grants SMS — including a grant made in system Settings.
+    val smsPermissions = rememberSmsTracingPermissionState()
+    SmsTracingPermissionHost(smsPermissions)
+
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
         onRefresh = onRefresh,
@@ -215,6 +223,18 @@ private fun DashboardScrollBody(
                             .padding(horizontal = Spacing.Space4.dp)
                             .padding(top = 8.dp),
                 )
+            }
+
+            // ── Automatic tracing off. Above the offline banner deliberately: an app that
+            // silently records nothing is a worse surprise than stale numbers.
+            if (!smsPermissions.isGranted) {
+                item {
+                    SmsTracingBanner(
+                        onEnable = smsPermissions::request,
+                        isPermanentlyDenied = smsPermissions.isPermanentlyDenied,
+                        modifier = Modifier.padding(horizontal = Spacing.Space4.dp),
+                    )
+                }
             }
 
             // ── Offline banner

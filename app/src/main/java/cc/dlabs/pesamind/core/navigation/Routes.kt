@@ -29,6 +29,8 @@ sealed class Routes(val route: String) {
 
     object OnboardingBank : Routes("onboarding_bank")
 
+    object OnboardingSmsAccess : Routes("onboarding_sms_access")
+
     object OnboardingReview : Routes("onboarding_review")
 
     // Main (bottom nav)

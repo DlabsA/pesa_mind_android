@@ -34,8 +34,8 @@ fun OnboardingAirtelScreen(
     OnboardingStepScaffold(
         title = "Airtel Money",
         subtitle = "Add your Airtel Money number(s) to track transactions on them.",
-        stepIndex = 4,
-        totalSteps = 6,
+        stepIndex = 5,
+        totalSteps = 7,
         onBack = { navController.popBackStack() },
         onSkip = {
             state.airtel.indices.forEach { vm.setAirtelIncluded(it, false) }

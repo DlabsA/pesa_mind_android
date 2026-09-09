@@ -62,7 +62,7 @@ data class SubscriptionUiState(
     val subscription: SubscriptionResponse? = null,
     val selectedPlanCode: String = "",
     val stage: CheckoutStage = CheckoutStage.FORM,
-    val method: PaymentMethod = PaymentMethod.MOBILE_MONEY,
+    val method: PaymentMethod = PaymentMethod.GOOGLE_PLAY,
     // Mobile money form
     val phoneNumber: String = "",
     val network: String = CheckoutValidator.NETWORK_MTN,
