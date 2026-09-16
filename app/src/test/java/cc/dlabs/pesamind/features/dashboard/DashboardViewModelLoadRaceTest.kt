@@ -105,20 +105,20 @@ class DashboardViewModelLoadRaceTest {
         val health = Health(score = 80, status = "good", trend = "stable")
         val summaryData =
             SummaryData(
-                totalIncome = 100_000L,
-                totalExpense = 40_000L,
-                totalSavings = 10_000L,
-                netMovement = 50_000L,
+                totalIncome = 100_000.0,
+                totalExpense = 40_000.0,
+                totalSavings = 10_000.0,
+                netMovement = 50_000.0,
                 transactionCount = 5,
                 activeCategories = 2,
                 currentMonth = "2026-08",
             )
         val contextData =
             ContextData(
-                totalIncome = 90_000L,
-                totalExpense = 35_000L,
-                totalSavings = 8_000L,
-                netMovement = 47_000L,
+                totalIncome = 90_000.0,
+                totalExpense = 35_000.0,
+                totalSavings = 8_000.0,
+                netMovement = 47_000.0,
                 transactionCount = 4,
                 activeCategories = 2,
                 previousMonth = "2026-07",
@@ -128,7 +128,7 @@ class DashboardViewModelLoadRaceTest {
                 period = "month",
                 daysElapsed = 4,
                 daysRemaining = 27,
-                totalSpent = 40_000L,
+                totalSpent = 40_000.0,
                 dailyAverage = 10_000.0,
                 projectedMonthEnd = 300_000.0,
                 budgetLimit = 500_000.0,
@@ -140,9 +140,9 @@ class DashboardViewModelLoadRaceTest {
         val budgetActualData =
             BudgetActualData(
                 period = "month",
-                budgetTotal = 500_000L,
-                actualTotal = 40_000L,
-                variance = 460_000L,
+                budgetTotal = 500_000.0,
+                actualTotal = 40_000.0,
+                variance = 460_000.0,
                 variancePercent = 8.0,
                 status = "on_budget",
                 categoriesOnTrack = 2,

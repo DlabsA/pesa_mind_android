@@ -10,36 +10,36 @@ data class CashFlowWaterfallResponse(
 
 data class WaterfallData(
     @SerializedName("opening_balance")
-    val openingBalance: Long,
+    val openingBalance: Double,
     val income: IncomeBreakdown,
     val expenses: ExpenseBreakdown,
     @SerializedName("savings_transfers")
-    val savingsTransfers: Long,
+    val savingsTransfers: Double,
     @SerializedName("closing_balance")
-    val closingBalance: Long,
+    val closingBalance: Double,
 )
 
 data class IncomeBreakdown(
-    val total: Long,
+    val total: Double,
     val sources: List<IncomeSource> = emptyList(),
 )
 
 data class IncomeSource(
     val channel: String,
-    val amount: Long,
+    val amount: Double,
     val percent: Double,
     @SerializedName("transaction_count")
     val transactionCount: Int,
 )
 
 data class ExpenseBreakdown(
-    val total: Long,
+    val total: Double,
     val categories: List<ExpenseCategory> = emptyList(),
 )
 
 data class ExpenseCategory(
     val channel: String,
-    val amount: Long,
+    val amount: Double,
     val percent: Double,
     @SerializedName("transaction_count")
     val transactionCount: Int,

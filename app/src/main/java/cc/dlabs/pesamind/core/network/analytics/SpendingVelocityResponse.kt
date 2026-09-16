@@ -16,7 +16,7 @@ data class VelocityData(
     @SerializedName("days_remaining")
     val daysRemaining: Int,
     @SerializedName("total_spent")
-    val totalSpent: Long,
+    val totalSpent: Double,
     @SerializedName("daily_average")
     val dailyAverage: Double,
     @SerializedName("projected_month_end")

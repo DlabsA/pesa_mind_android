@@ -56,6 +56,7 @@ import cc.dlabs.pesamind.core.network.models.MonthSummary
 import cc.dlabs.pesamind.core.network.models.MonthlyTrendsSection
 import cc.dlabs.pesamind.core.network.models.SpendingVelocitySection
 import cc.dlabs.pesamind.core.network.models.SummarySection
+import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.theme.*
 import cc.dlabs.pesamind.core.ui.AppCard
 import cc.dlabs.pesamind.core.ui.DashboardStyleHeader
@@ -1939,23 +1940,6 @@ private object ForecastColors {
     val Actual = LightColors.Savings // savings blue — actual bar
     val BudgetBar = Color(0xFFBDBDBD) // neutral grey — budget reference bar
 
-    // Severity → alert chip colours
-    fun alertBg(severity: String) =
-        when (severity) {
-            "critical" -> Color(0xFFFFEBEE)
-            "warning" -> Color(0xFFFFF8E1)
-            "success" -> Color(0xFFE8F5E9)
-            else -> Color(0xFFE3F2FD) // info / default
-        }
-
-    fun alertText(severity: String) =
-        when (severity) {
-            "critical" -> Color(0xFFC62828)
-            "warning" -> Color(0xFFE65100)
-            "success" -> Color(0xFF1B5E20)
-            else -> Color(0xFF0D47A1)
-        }
-
     fun alertIcon(severity: String) =
         when (severity) {
             "critical" -> Icons.Default.Cancel
@@ -1964,6 +1948,39 @@ private object ForecastColors {
             else -> Icons.Default.Info
         }
 }
+
+/**
+ * Severity → alert chip background/content colour, shared by [ForecastAlert] and [AnomalyAlert]
+ * (previously two copies of literal hex maps with no dark-mode branching at all — always the pale
+ * light-mode background/dark text combo regardless of theme, so with the app's dark mode on these
+ * rendered as washed-out pale boxes in an otherwise dark screen). Sourced from
+ * [MaterialTheme.colorScheme] (already theme-correct, flips with [ThemeManager]'s
+ * dark-mode flag) except "warning", which has no Material3 container role and falls back to the
+ * app's own [LightColors.Warning]/[DarkColors.Warning] tokens.
+ */
+@Composable
+private fun severityContainerColor(
+    severity: String,
+    isDark: Boolean,
+): Color =
+    when (severity) {
+        "critical" -> MaterialTheme.colorScheme.errorContainer
+        "warning" -> if (isDark) DarkColors.WarningBg else LightColors.WarningBg
+        "success" -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> MaterialTheme.colorScheme.primaryContainer
+    }
+
+@Composable
+private fun severityContentColor(
+    severity: String,
+    isDark: Boolean,
+): Color =
+    when (severity) {
+        "critical" -> MaterialTheme.colorScheme.onErrorContainer
+        "warning" -> if (isDark) DarkColors.Warning else LightColors.Warning
+        "success" -> MaterialTheme.colorScheme.onTertiaryContainer
+        else -> MaterialTheme.colorScheme.onPrimaryContainer
+    }
 
 // ---------------------------------------------------------------------------
 //  Top-level composable
@@ -2365,8 +2382,9 @@ private fun ForecastVarianceChip(
 /** Severity-aware recommendation chip */
 @Composable
 private fun ForecastAlert(rec: ForecastRecommendation) {
-    val bgColor = ForecastColors.alertBg(rec.severity)
-    val textColor = ForecastColors.alertText(rec.severity)
+    val isDark by ThemeManager.darkModeFlow.collectAsState()
+    val bgColor = severityContainerColor(rec.severity, isDark)
+    val textColor = severityContentColor(rec.severity, isDark)
     val icon = ForecastColors.alertIcon(rec.severity)
 
     Surface(
@@ -3070,8 +3088,9 @@ private fun AnomalyEmptyState() {
 
 @Composable
 private fun AnomalyAlert(rec: AnomalyRecommendation) {
-    val bgColor = alertBg(rec.severity)
-    val textColor = alertText(rec.severity)
+    val isDark by ThemeManager.darkModeFlow.collectAsState()
+    val bgColor = severityContainerColor(rec.severity.lowercase(), isDark)
+    val textColor = severityContentColor(rec.severity.lowercase(), isDark)
     val icon = alertIcon(rec.severity)
 
     Surface(
@@ -3112,25 +3131,9 @@ private fun AnomalyAlert(rec: AnomalyRecommendation) {
 }
 
 // ---------------------------------------------------------------------------
-//  Shared alert colour helpers (duplicate from ForecastAlert — move to
-//  a shared AlertColors.kt in your common module)
+//  Shared alert icon helper (bg/content colours now come from
+//  severityContainerColor/severityContentColor above, next to ForecastColors)
 // ---------------------------------------------------------------------------
-
-private fun alertBg(severity: String) =
-    when (severity.lowercase()) {
-        "critical" -> Color(0xFFFFEBEE)
-        "warning" -> Color(0xFFFFF8E1)
-        "success" -> Color(0xFFE8F5E9)
-        else -> Color(0xFFE3F2FD)
-    }
-
-private fun alertText(severity: String) =
-    when (severity.lowercase()) {
-        "critical" -> Color(0xFFC62828)
-        "warning" -> Color(0xFFE65100)
-        "success" -> Color(0xFF1B5E20)
-        else -> Color(0xFF0D47A1)
-    }
 
 private fun alertIcon(severity: String) =
     when (severity.lowercase()) {

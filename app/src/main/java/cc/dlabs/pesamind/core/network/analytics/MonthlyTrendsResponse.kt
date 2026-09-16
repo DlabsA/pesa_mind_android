@@ -18,10 +18,10 @@ data class TrendsData(
 
 data class MonthlyData(
     val date: String,
-    val income: Long,
-    val expense: Long,
-    val savings: Long,
-    val net: Long,
+    val income: Double,
+    val expense: Double,
+    val savings: Double,
+    val net: Double,
     @SerializedName("transaction_count")
     val transactionCount: Int,
 )

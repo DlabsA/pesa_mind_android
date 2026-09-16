@@ -64,6 +64,11 @@ internal fun TransactionInsertOutcome.details(): TransactionDetails =
 object TransactionRepository {
     private const val TAG = "TransactionRepository"
 
+    // See findRecentManualDuplicate's doc comment. Wide enough to catch a double-tap or an
+    // immediate resubmit-after-interruption, narrow enough that two deliberately-identical
+    // manual entries (same channel/amount/type/note) added minutes apart are never blocked.
+    private const val MANUAL_DUPLICATE_WINDOW_MILLIS = 5_000L
+
     // internal, not private: lets a JVM test inject a mocked PesaMindDatabase/DAO directly
     // (no Android runtime / device available to run a real Room in-memory-database test).
     internal lateinit var database: PesaMindDatabase
@@ -305,7 +310,7 @@ object TransactionRepository {
         val userId = AccountManager.currentUserIdOrEmpty()
         val outcome =
             database.withTransaction {
-                existingDuplicate(userId, channelId, smsSourceKey, providerTransactionId)
+                existingDuplicate(userId, channelId, smsSourceKey, providerTransactionId, amount, type, note, now)
                     ?.let { return@withTransaction TransactionInsertOutcome.DuplicateDiscarded(it.toDetails()) }
 
                 val channelName = database.channelDao().getById(channelId)?.name.orEmpty()
@@ -335,7 +340,7 @@ object TransactionRepository {
                     // Lost a race against a concurrent insert sharing this smsSourceKey or
                     // (channelId, providerTransactionId) — surface the row that actually won.
                     val winner =
-                        existingDuplicate(userId, channelId, smsSourceKey, providerTransactionId)
+                        existingDuplicate(userId, channelId, smsSourceKey, providerTransactionId, amount, type, note, now)
                             ?: error("insertIgnore reported a conflict but no matching row was found")
                     return@withTransaction TransactionInsertOutcome.DuplicateDiscarded(winner.toDetails())
                 }
@@ -365,9 +370,21 @@ object TransactionRepository {
         channelId: String,
         smsSourceKey: String?,
         providerTransactionId: String?,
+        amount: Double,
+        type: String,
+        note: String,
+        now: Long,
     ): TransactionEntity? {
         smsSourceKey?.let { transactionDao.findBySmsSourceKey(userId, it) }?.let { return it }
         providerTransactionId?.let { transactionDao.findByChannelAndProviderTransactionId(channelId, it) }?.let { return it }
+        // Neither SMS-derived key applies to a manual "Add Transaction" entry — fall back to a
+        // short-window content match so a double-tap of Save (or a re-submitted form) doesn't
+        // insert a second genuine row. See findRecentManualDuplicate's doc comment for the
+        // confirmed production bug this closes.
+        if (smsSourceKey == null && providerTransactionId == null) {
+            transactionDao.findRecentManualDuplicate(userId, channelId, amount, type, note, now, MANUAL_DUPLICATE_WINDOW_MILLIS)
+                ?.let { return it }
+        }
         return null
     }
 
@@ -378,6 +395,15 @@ object TransactionRepository {
      * [resolvedChannelId] is the best-effort name-matched local channel id (see
      * `PrefsToRoomMigrator.toEntity` for the exact matching logic this mirrors), or null if
      * unresolved.
+     *
+     * On an already-existing row, [resolvedChannelId] is only ever used to *fill in* a
+     * still-null `channelId` — never to overwrite one that's already set. The existing value
+     * came from the creating code, which always knows the real local channel (see
+     * [createTransaction]'s doc comment); [resolvedChannelId] is a name-match guess against
+     * `TransactionDetails.channelDetailsName` (the backend has no real channel id on this DTO),
+     * and that guess is unreliable exactly when 2+ local channels share a name/description —
+     * letting it win over a known-good id was silently reassigning transactions to the wrong
+     * channel on every background sync.
      */
     suspend fun reconcileFromServer(
         details: TransactionDetails,
@@ -402,7 +428,7 @@ object TransactionRepository {
                 ReconcileDecision.UpdateExisting -> {
                     val updated =
                         existing!!.copy(
-                            channelId = resolvedChannelId ?: existing.channelId,
+                            channelId = existing.channelId ?: resolvedChannelId,
                             channelDetailsName = details.channelDetailsName,
                             amount = details.amount,
                             type = details.type,
@@ -501,19 +527,25 @@ private fun List<TransactionEntity>.topChannelsBySpend(
     limit: Int,
 ): List<ChannelSpend> {
     data class Acc(var total: Double, var count: Int)
+    // Grouped by channelId (falling back to the name only for rows never resolved to a real
+    // channel) rather than channelDetailsName — two channels can share a name/description, and
+    // grouping by that free-text name merged their totals into a single bar on this chart.
     val byChannel = LinkedHashMap<String, Acc>()
+    val nameByKey = LinkedHashMap<String, String>()
     for (tx in this) {
         if (tx.type != TransactionTypes.EXPENSE) continue
         if (startInclusive != null && tx.createdAt < startInclusive) continue
         if (endExclusive != null && tx.createdAt >= endExclusive) continue
-        val acc = byChannel.getOrPut(tx.channelDetailsName) { Acc(0.0, 0) }
+        val key = tx.channelId ?: tx.channelDetailsName
+        nameByKey.putIfAbsent(key, tx.channelDetailsName)
+        val acc = byChannel.getOrPut(key) { Acc(0.0, 0) }
         acc.total += tx.amount
         acc.count += 1
     }
     return byChannel.entries
         .sortedByDescending { it.value.total }
         .take(limit)
-        .map { (name, acc) -> ChannelSpend(channelName = name, totalExpense = acc.total, transactionCount = acc.count) }
+        .map { (key, acc) -> ChannelSpend(channelName = nameByKey[key] ?: key, totalExpense = acc.total, transactionCount = acc.count) }
 }
 
 internal fun TransactionEntity.toDetails() =
@@ -581,16 +613,16 @@ private fun List<TransactionEntity>.summarize(
     year: Int,
     month: Int,
 ): SummaryData {
-    var income = 0L
-    var expense = 0L
-    var savings = 0L
+    var income = 0.0
+    var expense = 0.0
+    var savings = 0.0
     var count = 0
     val activeChannelIds = mutableSetOf<String>()
     for (tx in this) {
         if (tx.createdAt < startInclusive || tx.createdAt >= endExclusive) continue
         count++
         tx.channelId?.let { activeChannelIds += it }
-        val amount = tx.amount.toLong()
+        val amount = tx.amount
         when (tx.type) {
             TransactionTypes.INCOME -> income += amount
             TransactionTypes.EXPENSE -> expense += amount

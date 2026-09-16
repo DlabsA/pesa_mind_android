@@ -1,6 +1,5 @@
 package cc.dlabs.pesamind.core.permissions
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,10 +17,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.theme.DarkColors
 import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.theme.Radius
@@ -43,7 +45,11 @@ fun SmsTracingBanner(
     modifier: Modifier = Modifier,
     isPermanentlyDenied: Boolean = false,
 ) {
-    val isDark = isSystemInDarkTheme()
+    // Keyed on the app's own theme setting (ThemeManager), not the OS's — MainActivity drives
+    // MaterialTheme the same way, so this banner can't fall out of sync with the rest of the
+    // screen when the system theme and the in-app theme setting disagree (e.g. system dark,
+    // app theme still light, the default until a user opts in).
+    val isDark by ThemeManager.darkModeFlow.collectAsState()
     val tint = if (isDark) DarkColors.Warning else LightColors.Warning
     val tintBg = if (isDark) DarkColors.WarningBg else LightColors.WarningBg
 

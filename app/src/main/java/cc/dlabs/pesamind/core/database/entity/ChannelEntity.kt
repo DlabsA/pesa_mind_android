@@ -34,11 +34,23 @@ import cc.dlabs.pesamind.core.database.SyncStatus
  * previous account's (even soft-deleted) channel silently block a different account from ever
  * creating its own channel under the same provider name — confirmed as a real bug on a
  * reused/shared device (see MIGRATION_5_6's doc comment).
+ *
+ * [serverId] is also uniquely indexed (nullable-safe the same way — every unsynced row's `NULL`
+ * is distinct from every other `NULL`), added by MIGRATION_9_10 after a confirmed production
+ * bug: [cc.dlabs.pesamind.core.sync.OutboxPusher.findExistingServerChannel] could, before that
+ * fix, match a brand-new local channel to an unrelated existing one sharing only its provider
+ * (not its number), stamping both local rows with the same `serverId`. With that shared id,
+ * [cc.dlabs.pesamind.core.database.dao.ChannelDao.findByServerId]'s unordered `LIMIT 1` could
+ * resolve to either row on any later pull, and
+ * [cc.dlabs.pesamind.core.data.ChannelRepository.reconcileFromServer] would then overwrite
+ * *that* row's name/description/balance with the other channel's server data — this constraint
+ * makes that specific corruption impossible to reintroduce, at the schema level, regardless of
+ * which application code writes [serverId] in the future.
  */
 @Entity(
     tableName = "channels",
     indices = [
-        Index(value = ["serverId"]),
+        Index(value = ["serverId"], unique = true),
         Index(value = ["syncStatus"]),
         Index(value = ["updatedAt"]),
         Index(value = ["userId", "normalizedSenderKey", "receivingNumber"], unique = true),

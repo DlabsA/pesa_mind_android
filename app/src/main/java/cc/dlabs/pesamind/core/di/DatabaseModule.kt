@@ -15,14 +15,7 @@ import cc.dlabs.pesamind.core.database.dao.SavingGoalDao
 import cc.dlabs.pesamind.core.database.dao.TombstoneDao
 import cc.dlabs.pesamind.core.database.dao.TransactionDao
 import cc.dlabs.pesamind.core.database.dao.YearlyBudgetDao
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_1_2
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_2_3
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_3_4
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_4_5
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_5_6
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_6_7
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_7_8
-import cc.dlabs.pesamind.core.database.migration.MIGRATION_8_9
+import cc.dlabs.pesamind.core.database.migration.ALL_MIGRATIONS
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,16 +32,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
     ): PesaMindDatabase =
         Room.databaseBuilder(context, PesaMindDatabase::class.java, DATABASE_NAME)
-            .addMigrations(
-                MIGRATION_1_2,
-                MIGRATION_2_3,
-                MIGRATION_3_4,
-                MIGRATION_4_5,
-                MIGRATION_5_6,
-                MIGRATION_6_7,
-                MIGRATION_7_8,
-                MIGRATION_8_9,
-            )
+            .addMigrations(*ALL_MIGRATIONS)
             .apply {
                 // Debug builds only: a dev device can end up with a local schema *ahead* of
                 // whatever branch is currently checked out (e.g. after testing a newer build) —

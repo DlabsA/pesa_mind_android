@@ -56,6 +56,33 @@ interface TransactionDao {
         providerTransactionId: String,
     ): TransactionEntity?
 
+    /**
+     * Manual-entry dedup: catches two [cc.dlabs.pesamind.core.data.TransactionRepository.createTransaction]
+     * calls for the same real action landing within [windowMillis] of each other — a manual
+     * "Add Transaction" save has neither [TransactionEntity.smsSourceKey] nor
+     * [TransactionEntity.providerTransactionId] to dedup against (both are SMS-only), so a
+     * double-tap of Save, or a form re-submitted after a process death mid-save, previously
+     * inserted two genuinely separate rows with distinct ids (confirmed: identical
+     * channelId/amount/type/note/createdAt-to-the-millisecond, two different local ids, each
+     * independently pushed and each independently decrementing the channel's server-side
+     * balance). Scoped to non-deleted rows only — a user who deliberately undoes then re-adds
+     * the exact same entry within the window must not be blocked.
+     */
+    @Query(
+        "SELECT * FROM transactions WHERE userId = :userId AND channelId = :channelId AND amount = :amount " +
+            "AND type = :type AND note = :note AND deletedAt IS NULL " +
+            "AND createdAt BETWEEN :now - :windowMillis AND :now + :windowMillis LIMIT 1",
+    )
+    suspend fun findRecentManualDuplicate(
+        userId: String,
+        channelId: String,
+        amount: Double,
+        type: String,
+        note: String,
+        now: Long,
+        windowMillis: Long,
+    ): TransactionEntity?
+
     /** Deliberately includes soft-deleted rows (no `deletedAt IS NULL` filter) — pull
      * reconciliation ([cc.dlabs.pesamind.core.data.TransactionRepository.reconcileFromServer])
      * must see a tombstoned row here to avoid resurrecting it as a duplicate live row. */

@@ -26,7 +26,7 @@ coil = "3.0.4"
 foundationLayout = "1.11.0"
 androidxFoundation = "1.11.1"
 uiGraphics = "1.11.2"
-googleSignIn = "21.0.0"
+googleSignIn = "21.6.0"
 # TODO(security): verify this is still the latest stable tink-android release before merging —
 # network tools were unavailable this session to confirm against
 # https://mvnrepository.com/artifact/com.google.crypto.tink/tink-android. A bad pin fails the
@@ -48,8 +48,17 @@ androidxBrowser = "1.8.0"
 uiVersion = "1.11.0"
 # Google Play Billing Library, for subscription purchases routed through Play's
 # own billing system as required by Play Store policy. Play Console requires
-# 8.0.0+ (enforced from Aug 31, 2026); 9.1.0 is the current stable release and
-# Google's own recommended version.
+# 8.0.0+ (enforced from Aug 31, 2026). 9.1.0 is Google's current recommended
+# release, but it's compiled against Kotlin 2.3.0 and reworks the -ktx
+# coroutine-extension surface PlayBillingManager.kt depends on
+# (acknowledgePurchase/queryProductDetails/queryPurchasesAsync stop resolving,
+# BillingResult/Purchase shapes change) — confirmed by a real build attempt
+# (2026-09-15) that failed on both a Kotlin metadata-version mismatch (this
+# repo pins kotlin = 2.1.0, see gradle/libs.versions.toml) and several
+# unresolved-reference/type-mismatch errors in PlayBillingManager.kt. Bumping
+# past 8.3.0 needs its own dedicated migration (Kotlin version bump plus
+# PlayBillingManager.kt rewritten against the 9.x API), not a version-only
+# change — do not bump this in isolation.
 billing = "8.3.0"
 
 [libraries]

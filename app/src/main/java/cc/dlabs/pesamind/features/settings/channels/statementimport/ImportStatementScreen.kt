@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,6 +38,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,7 +61,6 @@ import cc.dlabs.pesamind.core.theme.getErrorColor
 import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.theme.getTertiaryColor
 import cc.dlabs.pesamind.core.ui.BackStyleHeader
-import cc.dlabs.pesamind.core.ui.ConfirmDialog
 import cc.dlabs.pesamind.core.ui.asUgx
 import cc.dlabs.pesamind.features.settings.channels.StatementImportSupport
 
@@ -150,18 +151,46 @@ fun ImportStatementScreen(
     }
 
     state.pendingSync?.accountMismatch?.let { mismatch ->
-        ConfirmDialog(
-            title = "Different account number",
-            message =
-                "This statement is for account ${mismatch.statementAccount}, but this account is " +
-                    "set to ${mismatch.channelAccount}. Update it to match and finish the import?",
-            confirmLabel = "Update and finish",
-            confirmingLabel = "Finishing…",
-            isConfirming = state.isUploading,
-            onConfirm = { vm.confirmAccountSync() },
-            onDismiss = { vm.dismissSync() },
-            icon = Icons.Outlined.UploadFile,
-            tint = getPrimaryColor(),
+        val backToChannel: () -> Unit = {
+            vm.cancelPendingSync()
+            navController.popBackStack()
+        }
+        AlertDialog(
+            onDismissRequest = backToChannel,
+            icon = {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = getErrorColor().copy(alpha = 0.10f),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.WarningAmber,
+                            contentDescription = null,
+                            tint = getErrorColor(),
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            },
+            title = {
+                Text("Different account number", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+            },
+            text = {
+                Text(
+                    text =
+                        "This statement is for account ${mismatch.statementAccount}, but this " +
+                            "channel is set to ${mismatch.channelAccount}. Go to the channel to fix " +
+                            "the account number before importing this statement.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = backToChannel) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }

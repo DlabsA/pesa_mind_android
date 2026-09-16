@@ -89,23 +89,25 @@ class ImportStatementViewModel
             }
         }
 
-        fun upload(confirm: Boolean = false) {
+        fun upload() {
             val id = channelId ?: return
             val file = pickedFile ?: return
             viewModelScope.launch {
                 _state.value = _state.value.copy(isUploading = true, error = null)
-                when (val outcome = repo.import(channelId = id, file = file, confirmAccountSync = confirm)) {
+                when (val outcome = repo.import(channelId = id, file = file)) {
                     is ImportOutcome.Success -> {
                         _state.value =
                             _state.value.copy(isUploading = false, result = outcome.summary, pendingSync = null)
                         announceImport(id)
                     }
                     is ImportOutcome.NeedsAccountSync -> {
-                        // Rows landed; only the balance is held back. Refresh the rest of the app
-                        // either way, then ask — unless the server flagged the sync without
-                        // telling us which two numbers disagree, in which case there's no
-                        // question worth putting to the user; show the summary instead of a
-                        // dialog with blanks in it.
+                        // Rows landed; only the balance is held back. There is no "update and
+                        // finish"/"finish without updating" choice on this screen — a mismatched
+                        // account number is treated as an error the user must go resolve on the
+                        // channel itself (see ImportStatementScreen's mismatch dialog), not
+                        // something to reconcile from here. Still refresh the rest of the app,
+                        // since the rows themselves did land either way; only show the dialog
+                        // when the server actually named the two numbers, same as before.
                         _state.value =
                             if (outcome.summary.accountMismatch == null) {
                                 _state.value.copy(isUploading = false, result = outcome.summary, pendingSync = null)
@@ -120,12 +122,10 @@ class ImportStatementViewModel
             }
         }
 
-        fun confirmAccountSync() = upload(confirm = true)
-
-        /** Keep the transactions, decline the balance/account-number update. */
-        fun dismissSync() {
-            val summary = _state.value.pendingSync ?: return
-            _state.value = _state.value.copy(pendingSync = null, result = summary)
+        /** Clears the pending account-mismatch dialog — called right before navigating back to
+         * Channel Detail, the only action available once the mismatch dialog is showing. */
+        fun cancelPendingSync() {
+            _state.value = _state.value.copy(pendingSync = null)
         }
 
         fun clearError() {

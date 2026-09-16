@@ -17,6 +17,14 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): ChannelEntity?
 
+    /** Live single-channel read for [cc.dlabs.pesamind.features.settings.channels.ChannelDetailScreen]
+     * — the balance shown there must update the instant a sync pull writes a fresh
+     * [ChannelEntity.availableBalance] into Room, without waiting on any event or screen
+     * re-entry (a one-shot [getById] previously left that screen showing a stale balance until
+     * the user navigated away and back). */
+    @Query("SELECT * FROM channels WHERE id = :id LIMIT 1")
+    fun observeById(id: String): Flow<ChannelEntity?>
+
     /**
      * Best-effort match for transactions that only carry a channel *name*
      * (`TransactionDetails.channelDetailsName`, echoed from `ChannelDetails.name`) — see

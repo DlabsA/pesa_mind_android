@@ -90,6 +90,24 @@ network-layer types are currently provided via Hilt modules; storage managers an
 singleton objects, not injected — follow the existing pattern in a given file rather than introducing DI
 inconsistently.
 
+### Room database / migrations
+- `PesaMindDatabase` (`core/database/PesaMindDatabase.kt`) is a manually-migrated Room database — no
+  `fallbackToDestructiveMigration()` in release builds, so every version bump needs a real `Migration`
+  (see `core/database/migration/Migrations.kt`'s `MIGRATION_x_y` values and their doc comments for
+  precedent, including the rename/create/copy/drop pattern needed when a plain `ALTER TABLE ADD COLUMN`
+  can't express a new foreign key).
+- **`ALL_MIGRATIONS` (`core/database/migration/Migrations.kt`) is the single source of truth for the
+  migration chain** — `core/di/DatabaseModule.kt`'s `provideDatabase` builds the production database from
+  it (`.addMigrations(*ALL_MIGRATIONS)`), and `AllMigrationsTest`
+  (`app/src/androidTest/.../database/migration/AllMigrationsTest.kt`) chains every migration in it from a
+  real v1 baseline and validates the result against `PesaMindDatabase`'s current schema on every run. Any
+  new `MIGRATION_x_y` must be appended to `ALL_MIGRATIONS` (and `PesaMindDatabase.version` bumped) —
+  forgetting this either leaves the migration dead code (never actually applied) or, worse, leaves it
+  untested by `AllMigrationsTest` even though it *is* applied. This is how a real production crash was
+  caught: a migration test that only asserted against a schema-synthesized baseline
+  (`MigrationTestHelper.createDatabase(name, N)`) missed a broken `ALTER TABLE ADD COLUMN` that a
+  from-a-real-v1-baseline chain would have failed.
+
 ## Git workflow
 - `main` is protected by a local pre-commit hook (`.githooks/pre-commit`) that refuses commits made directly on
   `main` — always work on a feature branch (`git switch -c feature/...`). The hook only takes effect after running

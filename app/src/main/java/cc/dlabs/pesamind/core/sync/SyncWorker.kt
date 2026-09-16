@@ -1,10 +1,16 @@
 package cc.dlabs.pesamind.core.sync
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import cc.dlabs.pesamind.R
 import cc.dlabs.pesamind.core.coordinator.StateEvent
 import cc.dlabs.pesamind.core.coordinator.UnifiedStateCoordinator
 import cc.dlabs.pesamind.core.data.BudgetRepository
@@ -57,6 +63,11 @@ class SyncWorker
         private val database: PesaMindDatabase,
         private val api: ApiService,
     ) : CoroutineWorker(context, params) {
+        companion object {
+            private const val NOTIFICATION_ID = 1002
+            private const val CHANNEL_ID = "pesamind_sync"
+        }
+
         private val outboxPusher = OutboxPusher(database, api)
 
         private val justSyncedChannelServerIds = mutableSetOf<String>()
@@ -89,6 +100,43 @@ class SyncWorker
             // the worker run. Only a transient (network/5xx) failure asks WorkManager to retry
             // the whole run with backoff; PENDING rows are simply re-attempted then.
             return if (pushClean && pullClean) Result.success() else Result.retry()
+        }
+
+        /**
+         * [SyncScheduler.triggerSyncNow] runs this worker expedited, which on API 26-30
+         * requires WorkManager to wrap it in a foreground service — the system calls this to
+         * get that service's notification. `CoroutineWorker`'s default throws
+         * `IllegalStateException("Not implemented")` when left unoverridden; that was this
+         * worker's actual bug (crash reports on Android 11 devices) before this override
+         * existed.
+         */
+        override suspend fun getForegroundInfo(): ForegroundInfo {
+            createNotificationChannel()
+            val notification =
+                NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle("PesaMind")
+                    .setContentText("Syncing…")
+                    .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setOngoing(true)
+                    .setShowWhen(false)
+                    .build()
+            return ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        }
+
+        private fun createNotificationChannel() {
+            val channel =
+                NotificationChannel(
+                    CHANNEL_ID,
+                    "Background Sync",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Syncing transactions and budgets"
+                    setShowBadge(false)
+                }
+            val manager = applicationContext.getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
         }
 
         // ── Push: drain the outbox ─────────────────────────────────────────────

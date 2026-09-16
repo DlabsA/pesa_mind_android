@@ -32,6 +32,12 @@ data class ChannelDetailState(
  * [TransactionRepository.observeByChannel] renders instantly from the local, already-synced
  * cache, while [TransactionRepository.refreshByChannel] reconciles fresh server rows into Room
  * in the background — there's no direct network-to-UI path here.
+ *
+ * [ChannelRepository.observeById] (not the one-shot `getById`) is what makes the displayed
+ * "available balance" actually live: that field is server-computed and only ever written by
+ * `SyncWorker.pullChannels()` reconciling a background sync, which can land at any time after
+ * this screen is already open (e.g. seconds after adding a transaction here) — a one-shot read
+ * previously left the balance stale until the user left and re-opened this screen.
  */
 class ChannelDetailViewModel : UnifiedViewModel() {
     private val _state = MutableStateFlow(ChannelDetailState())
@@ -50,7 +56,9 @@ class ChannelDetailViewModel : UnifiedViewModel() {
         _state.value = _state.value.copy(isLoading = true, error = null)
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(channel = ChannelRepository.getById(channelId))
+            ChannelRepository.observeById(channelId).collect { channel ->
+                _state.value = _state.value.copy(channel = channel)
+            }
         }
 
         viewModelScope.launch {
@@ -85,16 +93,5 @@ class ChannelDetailViewModel : UnifiedViewModel() {
 
     fun clearError() {
         _state.value = _state.value.copy(error = null)
-    }
-
-    override fun onStateEvent(event: StateEvent) {
-        val id = channelId ?: return
-        when {
-            event is StateEvent.ChannelUpdated && event.channelId == id ->
-                viewModelScope.launch {
-                    _state.value = _state.value.copy(channel = ChannelRepository.getById(id))
-                }
-            else -> Unit
-        }
     }
 }

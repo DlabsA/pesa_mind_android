@@ -12,13 +12,13 @@ data class AnalyticsSummaryResponse(
 
 data class SummaryData(
     @SerializedName("total_income")
-    val totalIncome: Long,
+    val totalIncome: Double,
     @SerializedName("total_expense")
-    val totalExpense: Long,
+    val totalExpense: Double,
     @SerializedName("total_savings")
-    val totalSavings: Long,
+    val totalSavings: Double,
     @SerializedName("net_movement")
-    val netMovement: Long,
+    val netMovement: Double,
     @SerializedName("transaction_count")
     val transactionCount: Int,
     @SerializedName("active_categories")
@@ -37,13 +37,13 @@ data class Metadata(
 
 data class ContextData(
     @SerializedName("total_income")
-    val totalIncome: Long,
+    val totalIncome: Double,
     @SerializedName("total_expense")
-    val totalExpense: Long,
+    val totalExpense: Double,
     @SerializedName("total_savings")
-    val totalSavings: Long,
+    val totalSavings: Double,
     @SerializedName("net_movement")
-    val netMovement: Long,
+    val netMovement: Double,
     @SerializedName("transaction_count")
     val transactionCount: Int,
     @SerializedName("active_categories")

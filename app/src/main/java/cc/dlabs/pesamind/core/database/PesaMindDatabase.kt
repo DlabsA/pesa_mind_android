@@ -41,7 +41,7 @@ const val DATABASE_NAME = "pesamind.db"
         DebtCreditEntity::class,
         SavingGoalEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

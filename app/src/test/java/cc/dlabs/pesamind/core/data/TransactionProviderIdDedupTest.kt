@@ -171,6 +171,80 @@ class TransactionProviderIdDedupTest {
         }
 
     @Test
+    fun `a manual double-tap of Save within the dedup window is discarded, not inserted twice`() =
+        runBlocking {
+            val first =
+                TransactionRepository.createTransaction(
+                    channelId = channelId,
+                    amount = 30000.0,
+                    type = "income",
+                    note = "Testing these different",
+                    username = "jane",
+                    // Manual entry — no smsSourceKey/providerTransactionId to dedup against,
+                    // matching AddTransactionScreen's real call shape.
+                    smsSourceKey = null,
+                    providerTransactionId = null,
+                )
+            val second =
+                TransactionRepository.createTransaction(
+                    channelId = channelId,
+                    amount = 30000.0,
+                    type = "income",
+                    note = "Testing these different",
+                    username = "jane",
+                    smsSourceKey = null,
+                    providerTransactionId = null,
+                )
+
+            assertTrue("first call must insert a new row", first is TransactionInsertOutcome.Inserted)
+            assertTrue(
+                "second call for the same channel/amount/type/note within the window must be discarded",
+                second is TransactionInsertOutcome.DuplicateDiscarded,
+            )
+            assertEquals(
+                (first as TransactionInsertOutcome.Inserted).transaction.id,
+                (second as TransactionInsertOutcome.DuplicateDiscarded).existing.id,
+            )
+
+            val rowCount = db.transactionDao().getAllIncludingDeleted().count { it.channelId == channelId && it.amount == 30000.0 }
+            assertEquals("exactly one row must exist for the double-tapped entry, not two", 1, rowCount)
+        }
+
+    @Test
+    fun `two genuinely distinct manual entries for the same channel and amount both insert`() =
+        runBlocking {
+            val first =
+                TransactionRepository.createTransaction(
+                    channelId = channelId,
+                    amount = 5000.0,
+                    type = "expense",
+                    note = "Lunch",
+                    username = "jane",
+                    smsSourceKey = null,
+                    providerTransactionId = null,
+                )
+            val second =
+                TransactionRepository.createTransaction(
+                    channelId = channelId,
+                    amount = 5000.0,
+                    type = "expense",
+                    // Different note — a genuinely different transaction, not a resubmit.
+                    note = "Transport",
+                    username = "jane",
+                    smsSourceKey = null,
+                    providerTransactionId = null,
+                )
+
+            assertTrue(first is TransactionInsertOutcome.Inserted)
+            assertTrue(
+                "a different note must not be treated as a duplicate of an unrelated entry",
+                second is TransactionInsertOutcome.Inserted,
+            )
+            val rowCount = db.transactionDao().getAllIncludingDeleted().count { it.channelId == channelId && it.amount == 5000.0 }
+            assertEquals(2, rowCount)
+        }
+
+    @Test
     fun `two near-simultaneous creates for the same TID leave exactly one row after the race`() =
         runBlocking {
             // Both coroutines run on Dispatchers.IO's real thread pool (not a single test

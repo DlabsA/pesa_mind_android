@@ -252,18 +252,30 @@ class OutboxPusher(
      *
      * Matches on [ChannelRepository.normalizeSenderKey] of [ChannelDetails.channelDesc] — the
      * same case-insensitive provider key [ChannelRepository.findByNormalizedSenderKey] already
-     * uses for the equivalent local-only lookup — disambiguated by [ChannelDetails.description]
-     * when more than one server channel shares the provider, NOT `account_number`: the backend
-     * has no real account-number field of its own — every channel-create call site (this one
-     * included; see `CreateChannelRequest.accountNumber`'s doc comment) sends the phone/account
-     * number through `description`, and that's what the server actually stores and echoes back.
-     * Compared via [PhoneNumberNormalizer.normalize] against [ChannelEntity.receivingNumber]
-     * (already normalized the same way) rather than a raw string match, since two devices can
-     * format the same number differently (leading zero, country code, ...). Returns null (falls
-     * through to a normal create) rather than ever guessing, same as the local resolution's own
-     * ambiguity rule. Skipped entirely for CASH channels ([ChannelEntity.normalizedSenderKey] is
-     * null for those — see [ChannelRepository]'s doc comment on why CASH is exempt from this
-     * uniqueness key), since many legitimately share the same "Cash" description.
+     * uses for the equivalent local-only lookup — then, regardless of how many server channels
+     * share that provider, disambiguated by [ChannelDetails.description] (NOT `account_number`:
+     * the backend has no real account-number field of its own — every channel-create call site
+     * (this one included; see `CreateChannelRequest.accountNumber`'s doc comment) sends the
+     * phone/account number through `description`, and that's what the server actually stores
+     * and echoes back). Compared via [PhoneNumberNormalizer.normalize] against
+     * [ChannelEntity.receivingNumber] (already normalized the same way) rather than a raw
+     * string match, since two devices can format the same number differently (leading zero,
+     * country code, ...). Returns null (falls through to a normal create) rather than ever
+     * guessing.
+     *
+     * The receiving-number check applies even when there is exactly one same-provider
+     * candidate: a lone candidate proves only that nothing *else* on the server shares this
+     * provider, not that it's *this* channel — e.g. creating a second Airtel channel for a
+     * different number while the server only has one (unrelated) Airtel channel must not treat
+     * that one as a match. An earlier version of this function skipped the number check
+     * whenever there was exactly one candidate, which let a brand-new channel silently borrow
+     * an unrelated existing channel's `serverId` — see [finishChannelPush] and
+     * [cc.dlabs.pesamind.core.data.ChannelRepository.reconcileFromServer]'s doc comments for how
+     * that then let two local rows fight over which one's data actually gets written on a pull.
+     *
+     * Skipped entirely for CASH channels ([ChannelEntity.normalizedSenderKey] is null for those
+     * — see [ChannelRepository]'s doc comment on why CASH is exempt from this uniqueness key),
+     * since many legitimately share the same "Cash" description.
      */
     private suspend fun findExistingServerChannel(entity: ChannelEntity): ChannelDetails? {
         val key = entity.normalizedSenderKey ?: return null
@@ -275,21 +287,16 @@ class OutboxPusher(
             }
         if (!response.isSuccessful) return null
         val candidates = response.body().orEmpty().filter { ChannelRepository.normalizeSenderKey(it.channelDesc) == key }
-        return when (candidates.size) {
-            0 -> null
-            1 -> candidates.first()
-            else -> {
-                val match = candidates.firstOrNull { PhoneNumberNormalizer.normalize(it.description) == entity.receivingNumber }
-                if (match == null) {
-                    Log.w(
-                        TAG,
-                        "Ambiguous server channel match for provider key '$key': ${candidates.size} server " +
-                            "channels, none matched receiving number '${entity.receivingNumber}' — falling through to create",
-                    )
-                }
-                match
-            }
+        if (candidates.isEmpty()) return null
+        val match = candidates.firstOrNull { PhoneNumberNormalizer.normalize(it.description) == entity.receivingNumber }
+        if (match == null) {
+            Log.w(
+                TAG,
+                "No server channel candidate matched receiving number '${entity.receivingNumber}' for provider " +
+                    "key '$key' (${candidates.size} candidate(s)) — falling through to create",
+            )
         }
+        return match
     }
 
     private suspend fun finishChannelPush(

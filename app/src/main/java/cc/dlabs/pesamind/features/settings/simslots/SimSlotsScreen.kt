@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import cc.dlabs.pesamind.core.navigation.Routes
 import cc.dlabs.pesamind.core.theme.Spacing
 import cc.dlabs.pesamind.core.ui.BackStyleHeader
 
@@ -44,6 +45,10 @@ fun SimSlotsScreen(
         state.successMessage?.let {
             snackbarHostState.showSnackbar(it)
             vm.clearMessage()
+            // Saving is the terminal action on this screen (reachable from Settings or the
+            // drift-notification deep link) — land the user back on the dashboard rather than
+            // leaving them stranded on a now-stale form.
+            navController.popBackStack(Routes.Dashboard.route, inclusive = false)
         }
     }
 

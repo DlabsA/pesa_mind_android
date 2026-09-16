@@ -11,6 +11,10 @@ plugins {
     // build-id resource and uploads mapping files. Declaring it in the root build file only
     // puts it on the classpath — it does nothing until the app module applies it.
     id("com.google.firebase.crashlytics")
+    // Required by Performance Monitoring's automatic instrumentation: this bytecode-instruments
+    // HTTP/S network calls and enables @AddTrace, same "classpath-only until applied here" caveat
+    // as the Crashlytics plugin above.
+    id("com.google.firebase.firebase-perf")
     alias(libs.plugins.ktlint)
 }
 
@@ -104,8 +108,8 @@ android {
         applicationId = "cc.dlabs.pesamind"
         minSdk = 26
         targetSdk = 36
-        versionCode = 40
-        versionName = "40"
+        versionCode = 42
+        versionName = "42"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -274,9 +278,12 @@ dependencies {
     implementation("androidx.hilt:hilt-work:1.2.0")
     kapt("androidx.hilt:hilt-compiler:1.2.0")
 
-    // Firebase (Crashlytics + Analytics)
+    // Firebase (Crashlytics + Analytics + Performance Monitoring). No BoM — explicit versions
+    // per-library, matching this repo's existing convention (avoids the BoM platform artifact
+    // pulling in version-resolution metadata for every Firebase library, not just the ones used).
     implementation("com.google.firebase:firebase-crashlytics:20.1.0")
     implementation("com.google.firebase:firebase-analytics:23.2.0")
+    implementation("com.google.firebase:firebase-perf:22.0.6")
 
     // Testing
     testImplementation(libs.mockito.core)

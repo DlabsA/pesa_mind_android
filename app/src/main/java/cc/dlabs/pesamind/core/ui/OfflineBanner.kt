@@ -1,6 +1,5 @@
 package cc.dlabs.pesamind.core.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +16,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cc.dlabs.pesamind.core.storage.ThemeManager
 import cc.dlabs.pesamind.core.theme.DarkColors
 import cc.dlabs.pesamind.core.theme.LightColors
 import cc.dlabs.pesamind.core.theme.Radius
@@ -39,7 +41,10 @@ fun OfflineBanner(
     caption: String,
     modifier: Modifier = Modifier,
 ) {
-    val isDark = isSystemInDarkTheme()
+    // Keyed on the app's own theme setting (ThemeManager), not the OS's — see SmsTracingBanner's
+    // matching comment for why: the two must stay in sync with MaterialTheme, which is itself
+    // driven by ThemeManager, not the system theme.
+    val isDark by ThemeManager.darkModeFlow.collectAsState()
     val tint = if (isDark) DarkColors.Warning else LightColors.Warning
     val tintBg = if (isDark) DarkColors.WarningBg else LightColors.WarningBg
 

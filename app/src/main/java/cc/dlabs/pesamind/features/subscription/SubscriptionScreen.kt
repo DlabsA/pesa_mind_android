@@ -55,7 +55,6 @@ import cc.dlabs.pesamind.core.theme.getPrimaryColor
 import cc.dlabs.pesamind.core.ui.BackStyleHeader
 import cc.dlabs.pesamind.core.ui.ErrorState
 import cc.dlabs.pesamind.core.ui.SkeletonColumn
-import cc.dlabs.pesamind.core.ui.asUgx
 import java.time.OffsetDateTime
 
 /**
@@ -364,7 +363,7 @@ private fun PlanButton(
     coversUntil: OffsetDateTime,
     onClick: () -> Unit,
 ) {
-    val label = "Pay ${intervalWord(plan.interval)} · ${plan.amount.asUgx()}"
+    val label = "Pay ${intervalWord(plan.interval).replaceFirstChar { it.uppercase() }}"
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Space1.dp)) {
         if (!isPrimary) {

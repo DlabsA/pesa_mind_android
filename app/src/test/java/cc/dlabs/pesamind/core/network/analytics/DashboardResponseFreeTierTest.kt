@@ -45,7 +45,7 @@ class DashboardResponseFreeTierTest {
           },
           "summary": {
             "data": {
-              "total_income": 4057400,
+              "total_income": 4057400.5,
               "total_expense": 403859,
               "total_savings": 30000,
               "net_movement": 3623541,
@@ -85,7 +85,9 @@ class DashboardResponseFreeTierTest {
         // Summary and streak are available to every tier — a Free user must still
         // get a usable dashboard, not an empty one.
         assertNotNull(response.summary)
-        assertEquals(4057400L, response.summary.data.totalIncome)
+        // A decimal amount is exactly what crashed Gson before totalIncome was Double —
+        // see AnalyticsSummaryResponse.SummaryData's doc history.
+        assertEquals(4057400.5, response.summary.data.totalIncome, 0.0)
         assertEquals(27, response.summary.data.transactionCount)
         assertNotNull(response.streak)
         assertEquals(3, response.streak?.currentStreak)

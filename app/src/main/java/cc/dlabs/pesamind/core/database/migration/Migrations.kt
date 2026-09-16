@@ -335,3 +335,148 @@ val MIGRATION_8_9 =
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_savingGoalId` ON `transactions` (`savingGoalId`)")
         }
     }
+
+/**
+ * v9 -> v10: `channels.serverId` becomes uniquely indexed — closes a confirmed production bug
+ * where two distinct local channel rows could end up sharing one `serverId`.
+ *
+ * Root cause (now fixed in [cc.dlabs.pesamind.core.sync.OutboxPusher.findExistingServerChannel]):
+ * creating a channel for a provider you already have one of (e.g. a second Airtel Money channel
+ * for a different SIM) could, when the server had exactly one same-provider channel, accept that
+ * unrelated channel as "the same one" without ever checking its phone number — stamping the
+ * brand-new local row with the *existing* channel's `serverId` instead of creating its own.
+ * `serverId` only had a plain (non-unique) index, and
+ * [cc.dlabs.pesamind.core.database.dao.ChannelDao.findByServerId] is an unordered `LIMIT 1`, so
+ * once two rows shared a `serverId`, any later pull's
+ * [cc.dlabs.pesamind.core.data.ChannelRepository.reconcileFromServer] could non-deterministically
+ * overwrite *either* colliding row's name/channelDesc/description/availableBalance with the
+ * other's server data — exactly the "created a new Airtel channel and it renamed my MTN channel
+ * / doubled my balance" bug this migration repairs and, at the schema level, makes impossible to
+ * reintroduce.
+ *
+ * Three steps, in order:
+ * 1. Repair any device already in this corrupted state: for every `serverId` currently shared by
+ *    2+ rows, keep exactly one (deterministically, the row with the lexicographically smallest
+ *    `id`) and detach every other row in that group — `serverId = NULL`, `dirty = 1`,
+ *    `syncStatus = 'PENDING'` — since its `serverId` can no longer be trusted to be genuinely
+ *    its own, and its cached fields may already have been overwritten by the other row's data.
+ * 2. Requeue every such newly-detached row (and, harmlessly/idempotently, any other row that is
+ *    `serverId IS NULL AND dirty = 1 AND syncStatus = 'PENDING'`) with a `CHANNEL`/`CREATE`
+ *    outbox entry, `INSERT OR IGNORE` against the outbox table's own unique
+ *    `(entityType, entityId)` index so a row that already legitimately has a pending create
+ *    entry (e.g. created offline, never yet pushed) is left untouched. With
+ *    `findExistingServerChannel` now checking the receiving number unconditionally, this push
+ *    will resolve correctly next time.
+ * 3. Drop and recreate `index_channels_serverId` as `UNIQUE` — nullable-safe (SQLite treats
+ *    every `NULL` as distinct in a unique index), so every still-unsynced row is unaffected.
+ *
+ * A fourth, unrelated step also rides along here: [MIGRATION_8_9] added
+ * `transactions.debtCreditId`/`savingGoalId` via plain `ALTER TABLE ADD COLUMN`, which cannot
+ * attach a `FOREIGN KEY` constraint to an existing table in SQLite — so every device that
+ * actually ran that migration is left with only `transactions`'s original `channelId → channels`
+ * FK, missing the `debtCreditId → debt_credits`/`savingGoalId → saving_goals` FKs that
+ * [cc.dlabs.pesamind.core.database.entity.TransactionEntity] declares. Room's full-database
+ * schema validation (which runs on every app open, not just for tables the current migration
+ * touches) then throws `IllegalStateException: Migration didn't properly handle: transactions(...)`
+ * the moment any migration bumps the version — confirmed via a production crash. Fixed here via
+ * SQLite's rename/create/copy/drop pattern, since that's the only way to add a table-level FK to
+ * an existing table's columns.
+ */
+val MIGRATION_9_10 =
+    object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val now = System.currentTimeMillis()
+
+            db.execSQL(
+                """
+                UPDATE `channels`
+                SET `serverId` = NULL, `dirty` = 1, `syncStatus` = 'PENDING', `updatedAt` = $now
+                WHERE `serverId` IS NOT NULL
+                  AND `serverId` IN (
+                      SELECT `serverId` FROM `channels` WHERE `serverId` IS NOT NULL
+                      GROUP BY `serverId` HAVING COUNT(*) > 1
+                  )
+                  AND `id` NOT IN (
+                      SELECT MIN(`id`) FROM `channels` WHERE `serverId` IS NOT NULL
+                      GROUP BY `serverId` HAVING COUNT(*) > 1
+                  )
+                """.trimIndent(),
+            )
+
+            db.execSQL(
+                """
+                INSERT OR IGNORE INTO `outbox`
+                    (`id`, `entityType`, `entityId`, `operation`, `status`, `attempts`, `lastError`, `createdAt`, `updatedAt`)
+                SELECT lower(hex(randomblob(16))), 'CHANNEL', `id`, 'CREATE', 'PENDING', 0, NULL, `updatedAt`, `updatedAt`
+                FROM `channels`
+                WHERE `serverId` IS NULL AND `dirty` = 1 AND `syncStatus` = 'PENDING'
+                """.trimIndent(),
+            )
+
+            db.execSQL("DROP INDEX IF EXISTS `index_channels_serverId`")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_channels_serverId` ON `channels` (`serverId`)")
+
+            // ── transactions: repair the FKs MIGRATION_8_9's ALTER TABLE couldn't attach ──
+            db.execSQL("PRAGMA foreign_keys=OFF")
+            db.execSQL("ALTER TABLE `transactions` RENAME TO `transactions_old`")
+            db.execSQL(
+                """
+                CREATE TABLE `transactions` (
+                    `id` TEXT NOT NULL, `serverId` TEXT, `userId` TEXT NOT NULL, `channelId` TEXT,
+                    `channelDetailsName` TEXT NOT NULL, `amount` REAL NOT NULL, `type` TEXT NOT NULL,
+                    `note` TEXT NOT NULL, `username` TEXT NOT NULL, `smsSourceKey` TEXT,
+                    `providerTransactionId` TEXT, `syncStatus` TEXT NOT NULL, `dirty` INTEGER NOT NULL,
+                    `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER,
+                    `debtCreditId` TEXT, `savingGoalId` TEXT,
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`channelId`) REFERENCES `channels`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+                    FOREIGN KEY(`debtCreditId`) REFERENCES `debt_credits`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+                    FOREIGN KEY(`savingGoalId`) REFERENCES `saving_goals`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO `transactions`
+                    (`id`,`serverId`,`userId`,`channelId`,`channelDetailsName`,`amount`,`type`,`note`,
+                     `username`,`smsSourceKey`,`providerTransactionId`,`syncStatus`,`dirty`,`createdAt`,
+                     `updatedAt`,`deletedAt`,`debtCreditId`,`savingGoalId`)
+                SELECT
+                    `id`,`serverId`,`userId`,`channelId`,`channelDetailsName`,`amount`,`type`,`note`,
+                    `username`,`smsSourceKey`,`providerTransactionId`,`syncStatus`,`dirty`,`createdAt`,
+                    `updatedAt`,`deletedAt`,`debtCreditId`,`savingGoalId`
+                FROM `transactions_old`
+                """.trimIndent(),
+            )
+            db.execSQL("DROP TABLE `transactions_old`")
+
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_serverId` ON `transactions` (`serverId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_channelId` ON `transactions` (`channelId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_syncStatus` ON `transactions` (`syncStatus`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_updatedAt` ON `transactions` (`updatedAt`)")
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_transactions_userId_smsSourceKey` " +
+                    "ON `transactions` (`userId`, `smsSourceKey`)",
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_transactions_channelId_providerTransactionId` " +
+                    "ON `transactions` (`channelId`, `providerTransactionId`)",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_debtCreditId` ON `transactions` (`debtCreditId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_savingGoalId` ON `transactions` (`savingGoalId`)")
+            db.execSQL("PRAGMA foreign_keys=ON")
+        }
+    }
+
+/**
+ * Single source of truth for the full migration chain, in order — both
+ * [cc.dlabs.pesamind.core.di.DatabaseModule.provideDatabase] and
+ * [AllMigrationsTest] build from this same array, so a migration only needs to be appended
+ * here once: the production database picks it up automatically, and so does the standing
+ * full-chain schema-validation test.
+ */
+val ALL_MIGRATIONS: Array<Migration> =
+    arrayOf(
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+    )

@@ -141,9 +141,18 @@ object ChannelRepository {
      * prefer [observeChannels] for live updates. */
     suspend fun getAllChannels(): List<ChannelDetails> = channelDao.getAllActive(currentUserId()).map { it.toDetails() }
 
-    /** One-shot single-channel lookup for `ChannelDetailViewModel` — there's no
-     * `GET /categories/:id` on the backend, so this is Room-only, no network fallback needed. */
+    /** One-shot single-channel lookup — there's no `GET /categories/:id` on the backend, so this
+     * is Room-only, no network fallback needed. Prefer [observeById] in a screen that stays
+     * open across a background sync (e.g. `ChannelDetailScreen`'s balance), since this only
+     * reflects whatever was in Room at the moment it was called. */
     suspend fun getById(id: String): ChannelDetails? = channelDao.getById(id)?.toDetails()
+
+    /** Live single-channel read — see [cc.dlabs.pesamind.core.database.dao.ChannelDao.observeById]'s
+     * doc comment for why `ChannelDetailViewModel` needs this instead of the one-shot [getById]. */
+    fun observeById(id: String): Flow<ChannelDetails?> =
+        flow {
+            emitAll(channelDao.observeById(id).map { it?.toDetails() })
+        }
 
     /**
      * The server-side id for a local channel row — the value any `categories/{id}` API path

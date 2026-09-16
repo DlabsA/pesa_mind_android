@@ -24,6 +24,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <uses-feature
         android:name="android.hardware.telephony"
@@ -87,6 +88,16 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
+
+        <!-- WorkManager's own foreground-promotion service (SystemForegroundService) — declared
+             here only to add the dataSync type SyncWorker.getForegroundInfo() requests
+             (ForegroundInfo(..., ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)). WorkManager
+             already declares this service itself; this entry merges in just the type, which lint's
+             SpecifyForegroundServiceType check requires be present in the merged manifest. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- SMS Broadcast Receiver -->
         <receiver

@@ -100,10 +100,10 @@ class TransactionMonthlySummaryTest {
 
             val summary = TransactionRepository.observeMonthlySummary(2026, 7).first()
 
-            assertEquals(1000L, summary.totalIncome)
-            assertEquals(300L, summary.totalExpense)
-            assertEquals(100L, summary.totalSavings)
-            assertEquals("income - expense - savings, matching the backend's own formula", 600L, summary.netMovement)
+            assertEquals(1000.0, summary.totalIncome, 0.0)
+            assertEquals(300.0, summary.totalExpense, 0.0)
+            assertEquals(100.0, summary.totalSavings, 0.0)
+            assertEquals("income - expense - savings, matching the backend's own formula", 600.0, summary.netMovement, 0.0)
             assertEquals(3, summary.transactionCount)
             assertEquals("2026-07", summary.currentMonth)
         }
@@ -121,7 +121,7 @@ class TransactionMonthlySummaryTest {
 
             val summary = TransactionRepository.observeMonthlySummary(2026, 7).first()
 
-            assertEquals(1000L, summary.totalIncome)
+            assertEquals(1000.0, summary.totalIncome, 0.0)
             assertEquals(1, summary.transactionCount)
         }
 
@@ -164,10 +164,10 @@ class TransactionMonthlySummaryTest {
         runBlocking {
             val summary = TransactionRepository.observeMonthlySummary(2026, 7).first()
 
-            assertEquals(0L, summary.totalIncome)
-            assertEquals(0L, summary.totalExpense)
-            assertEquals(0L, summary.totalSavings)
-            assertEquals(0L, summary.netMovement)
+            assertEquals(0.0, summary.totalIncome, 0.0)
+            assertEquals(0.0, summary.totalExpense, 0.0)
+            assertEquals(0.0, summary.totalSavings, 0.0)
+            assertEquals(0.0, summary.netMovement, 0.0)
             assertEquals(0, summary.transactionCount)
             assertEquals(0, summary.activeCategories)
         }
